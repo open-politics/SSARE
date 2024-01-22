@@ -2,7 +2,9 @@ version: '3.9'
 
 services:
   main_core_app:
-    build: SSARE/postgres_service
+    build: 
+      context: .
+      dockerfile: SSARE/app/Dockerfile
     ports:
       - "8000:8000"
     volumes:
@@ -18,13 +20,16 @@ services:
       - postgres_service
 
   scraper_service:
-    build: SSARE/postgres_service
+    build: 
+      context: .
+      dockerfile: SSARE/scraper_service/Dockerfile
     networks:
       - app_network
 
-
   postgres_service:
-    build: SSARE/postgres_service
+    build: 
+      context: .
+      dockerfile: SSARE/postgres_service/Dockerfile
     environment:
       POSTGRES_DB: root
       POSTGRES_USER: admin
@@ -38,7 +43,7 @@ services:
 
 networks:
   app_network:
-    
+
 volumes:
   core_volume:
   db_volume:
