@@ -1,0 +1,50 @@
+version: '3.9'
+
+services:
+  main_core_app:
+    build: ./path_to_main_core_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - core_volume:/app
+    networks:
+      - app_network
+    environment:
+      - SCRAPER_SERVICE_URL=http://scraper_service:8000/scrape
+      - PROCESSOR_SERVICE_URL=http://processor_service:8001/process
+      - DATABASE_SERVICE_URL=http://postgres_service:8002/receive_raw_articles
+    depends_on:
+      - scraper_service
+      - processor_service
+      - postgres
+
+  scraper_service:
+    build: ./path_to_scraper_service
+    networks:
+      - app_network
+
+  processor_service:
+    build: ./path_to_processor_service
+    networks:
+      - app_network
+
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_DB: root
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    
+volumes:
+  core_volume:
+  db_volume:
+  postgres_data:

@@ -1,0 +1,8 @@
+{
+    "scrapers": {
+        "cnn": {
+            "location": "/scrapers/cnn.py",
+            "last_run": "2024-01-22 12:44:56"
+        }
+    }
+}
