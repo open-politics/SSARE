@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   main_core_app:
-    build: ./app
+    build: SSARE/postgres_service
     ports:
       - "8000:8000"
     volumes:
@@ -15,17 +15,16 @@ services:
       - DATABASE_SERVICE_URL=http://postgres_service:8002/receive_raw_articles
     depends_on:
       - scraper_service
-      - processor_service
-      - postgres
+      - postgres_service
 
   scraper_service:
-    build: ./scraper_service
+    build: SSARE/postgres_service
     networks:
       - app_network
 
 
   postgres_service:
-    build: ./postgres_service
+    build: SSARE/postgres_service
     environment:
       POSTGRES_DB: root
       POSTGRES_USER: admin
