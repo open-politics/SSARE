@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   main_core_app:
-    build: ./path_to_main_core_app
+    build: ./app
     ports:
       - "8000:8000"
     volumes:
@@ -19,17 +19,13 @@ services:
       - postgres
 
   scraper_service:
-    build: ./path_to_scraper_service
+    build: ./scraper_service
     networks:
       - app_network
 
-  processor_service:
-    build: ./path_to_processor_service
-    networks:
-      - app_network
 
-  postgres:
-    image: postgres:latest
+  postgres_service:
+    build: ./postgres_service
     environment:
       POSTGRES_DB: root
       POSTGRES_USER: admin
