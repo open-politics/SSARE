@@ -1,5 +1,7 @@
 uvicorn
 sqlalchemy
 fastapi
-uvicorn[standard]
 pandas
+requests
+alembic
+psycopg2-binary
