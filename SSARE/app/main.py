@@ -68,3 +68,9 @@ async def get_articles():
             return response.json()
         except httpx.HTTPError as e:
             raise HTTPException(status_code=e.response.status_code, detail=str(e))
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint"""
+    return {"status": "ok"}
+

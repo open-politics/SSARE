@@ -54,3 +54,8 @@ def scrape_data(flags: List[str]):
         config[flag]['last_run'] = "now"
         update_scraper_config(config)
 
+@app.get("/health")
+def health_check():
+    """Health check endpoint"""
+    return {"status": "ok"}
+
