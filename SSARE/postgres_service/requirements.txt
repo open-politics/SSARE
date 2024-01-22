@@ -1,3 +1,5 @@
 uvicorn
 sqlalchemy
 fastapi
+uvicorn[standard]
+pandas
