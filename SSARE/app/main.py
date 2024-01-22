@@ -7,10 +7,15 @@ app = FastAPI()
 
 config = load_config()["postgresql"]
 
+url_scraper_flags = "http://scraper_service:8000/flags"
+
+url_scraper_recieve_articles = "http://scraper_service:8000/flag"
+
 DATABASE_SERVICE_URL = os.getenv("DATABASE_SERVICE_URL")
 SCRAPER_SERVICE_URL = os.getenv("SCRAPER_SERVICE_URL")
 PROCESSOR_SERVICE_URL = os.getenv("PROCESSOR_SERVICE_URL")
 
+check_health = lambda url: httpx.get(url).status_code == 200
 
 
 @app.post("/trigger_scraping")
@@ -51,4 +56,15 @@ async def save_processed_articles(articles: list):
             response.raise_for_status()
             return {"message": "Processed articles saved successfully."}
         except httpx.HTTPError as e:
-            raise HTTPException(status_code=e.response.status_code, detail=str(e
+            raise HTTPException(status_code=e.response.status_code, detail=str(e))
+        
+@app.get("/get_articles")
+async def get_articles():
+    async with httpx.AsyncClient() as client:
+        try:
+            # Get the articles from the database
+            response = await client.get(DATABASE_SERVICE_URL)
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=e.response.status_code, detail=str(e))
