@@ -24,7 +24,7 @@ def produce_flags():
     # check if postgres entries have been older than 24 hours
     # if yes, return the flags
     return {"flags": ["cnn", "zdf", "fox"]}
-,  
+    
 @app.get('/receive_raw_articles')
 def save_raw_articles(data):
     import pandas as pd
