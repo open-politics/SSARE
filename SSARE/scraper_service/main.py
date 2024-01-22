@@ -13,17 +13,12 @@ class Article(BaseModel):
 
 
 @app.get("/scrape")
-def scrape_data():
+def scrape_data(flags: List[str]):
     from importlib import import_module
     import requests
     import json
-    
 
-    response = requests.get("http://scraper_service:8000/scrape")
-    data = response.json()['data']
-
-    def call_postgres_for_flags(data):
-        flags = []
+    def call_postgres_for_flags(flags):
         response = requests.get("http://postgres_service:8000/flags")
         flags = response.json()['flags']
         # [cnn, zdf, fox]
@@ -50,11 +45,12 @@ def scrape_data():
 
     config = get_scraper_config()
 
-    for scraper_name, scraper_details in config["scrapers"].items():
-        if scraper_name in call_postgres_for_flags(data):
-            print(f"Scraper {scraper_name} needs to be run")
-            dataframe = run_scraper(scraper_name, scraper_details["location"])
-            send_to_postgres(dataframe)
-            update_scraper_config(config)
-            return True
+    for flag in flags:
+        scraper_name = config[flag]['scraper_name']
+        scraper_location = config[flag]['scraper_location']
+        dataframe = run_scraper(scraper_name, scraper_location)
+        data = dataframe.to_dict(orient="records")
+        send_to_postgres(data)
+        config[flag]['last_run'] = "now"
+        update_scraper_config(config)
 

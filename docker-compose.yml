@@ -11,10 +11,7 @@ services:
       - core_volume:/app
     networks:
       - app_network
-    environment:
-      - SCRAPER_SERVICE_URL=http://scraper_service:8000/scrape
-      - PROCESSOR_SERVICE_URL=http://processor_service:8001/process
-      - DATABASE_SERVICE_URL=http://postgres_service:8002/receive_raw_articles
+
     depends_on:
       - scraper_service
       - postgres_service
