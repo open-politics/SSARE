@@ -12,19 +12,25 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Login to Docker Hub
-      uses: docker/login-action@v1 /
+      uses: docker/login-action@v1
       with:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_PASSWORD }}
-    - name: Build and Push Docker Image for Main Core App
+    - name: Build and Push Docker Image for App
       run: |
-          docker build -t JimVincetW/core_app:${{ github.sha }} ./scraper
-          docker push JimVincetW/core_app:${{ github.sha }}
+          docker build -t jimvincetw/app:${{ github.sha }} ./SSARE/app
+          docker push jimvincetw/app:${{ github.sha }}
+          docker tag jimvincetw/app:${{ github.sha }} jimvincetw/app:latest
+          docker push jimvincetw/app:latest
     - name: Build and Push Docker Image for Scraper Service
       run: |
-        docker build -t JimVincetW/scraper_service:${{ github.sha }} ./scraper
-        docker push JimVincetW/scraper_service:${{ github.sha }}
-    - name: Build and Push Docker Image for Processor Service
+        docker build -t jimvincetw/scraper:${{ github.sha }} ./SSARE/scraper
+        docker push jimvincetw/scraper:${{ github.sha }}
+        docker tag jimvincetw/scraper:${{ github.sha }} jimvincetw/scraper:latest
+        docker push jimvincetw/scraper:latest
+    - name: Build and Push Docker Image for Postgres Service
       run: |
-        docker build -t JimVincetW/postgres_service:${{ github.sha }} ./processor
-        docker push JimVincetW/postgres_service:${{ github.sha }}
+        docker build -t jimvincetw/postgres_service:${{ github.sha }} ./SSARE/postgres_service
+        docker push jimvincetw/postgres_service:${{ github.sha }}
+        docker tag jimvincetw/postgres_service:${{ github.sha }} jimvincetw/postgres_service:latest
+        docker push jimvincetw/postgres_service:latest
