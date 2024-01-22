@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException
 import httpx
-from dotenv import load_dotenv
 import os
 from core.utils import load_config
 
