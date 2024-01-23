@@ -16,7 +16,7 @@ class Article(BaseModel):
     headline: str
     paragraphs: List[str]
 
-
+# port 8000
 
 @app.get("/flags")
 def produce_flags():
