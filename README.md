@@ -1,5 +1,5 @@
 # SSARE
 Semantic Search Article Recommendation Engine
 
-![Alt text](image.png)
+![Alt text](media/image.png)
 Documentation upcoming!
