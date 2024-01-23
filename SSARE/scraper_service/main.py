@@ -28,7 +28,7 @@ def get_scraper_config():
 @app.post("/scrape")
 def scrape_data(flags: List[str] = Body(...)):
 
-    for flag in flags:
+    return {"message": "Scraping started"}
         
 
 @app.get("/health")
@@ -38,4 +38,5 @@ def health_check():
 
 @app.get("/hi")
 def hi():
-    return {"message": "Na"}
+    return {"message": "Na auch hier?"}
+

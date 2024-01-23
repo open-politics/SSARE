@@ -2,13 +2,13 @@ FROM python:3.9
 
 WORKDIR /app
 
-COPY SSARE/app/requirements.txt .
+COPY /app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY SSARE/core ./core
-COPY SSARE/app/main.py .
-COPY SSARE/app/config.ini .
+COPY /core ./core
+COPY /app/main.py .
+COPY /app/config.ini .
 
-EXPOSE 8000
+EXPOSE 8080
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
