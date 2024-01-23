@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy import inspect
 from core.utils import load_config
 
-config = load_config()["postgresql"]
+config = load_config()['postgresql']
 
 app = FastAPI()
 
