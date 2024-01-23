@@ -1,15 +1,12 @@
-import configparser
+from configparser import ConfigParser
 import os
 from typing import Optional
 
 
 
-def load_config(config_dir: Optional[str] = None) -> configparser.ConfigParser:
-    """Load the configuration file."""
-    config = configparser.ConfigParser()
-    if not config_dir:
-        config_dir = get_data_path()
-    config.read(os.path.join(config_dir, "config.ini"))
+def load_config():
+    config = ConfigParser()
+    config.read('config.ini')
     return config
 
 

@@ -7,8 +7,6 @@ services:
       dockerfile: SSARE/app/Dockerfile
     ports:
       - "8000:8000"
-    volumes:
-      - core_volume:/app
     networks:
       - app_network
 
@@ -38,8 +36,7 @@ services:
     networks:
       - app_network
 
-networks:
-  app_network:
+
 
 volumes:
   core_volume:
