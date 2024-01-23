@@ -20,21 +20,21 @@ jobs:
 
       - name: Build and Push Docker Image for App
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/app:${{ github.sha }} -f ./SSARE/app/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/app:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/app:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/app:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/app:latest
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }} -f ./app/Dockerfile .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/app:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:latest
 
       - name: Build and Push Docker Image for Scraper Service
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/scraper:${{ github.sha }} -f ./SSARE/scraper_service/Dockerfile .
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/scraper:${{ github.sha }} -f ./scraper_service/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/scraper:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/scraper:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper:latest
 
       - name: Build and Push Docker Image for Postgres Service
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }} -f ./SSARE/postgres_service/Dockerfile .
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }} -f ./postgres_service/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:latest
