@@ -1,17 +1,24 @@
 {
-    "cnn": {
-        "scraper_name": "CNN Scraper",
-        "scraper_location": "scrapers.cnn_scraper",
-        "last_run": "2022-01-01T00:00:00Z"
-    },
-    "zdf": {
-        "scraper_name": "ZDF Scraper",
-        "scraper_location": "scrapers.zdf_scraper",
-        "last_run": "2022-01-01T00:00:00Z"
-    },
-    "fox": {
-        "scraper_name": "Fox Scraper",
-        "scraper_location": "scrapers.fox_scraper",
-        "last_run": "2022-01-01T00:00:00Z"
-    }
+    "scrapers": [
+        {
+            "scraper_name": "BBC Scraper",
+            "scraper_location": "scrapers.bbc_scraper",
+            "last_run": "2022-01-01T00:00:00Z"
+        },
+        {
+            "scraper_name": "CNN Scraper",
+            "scraper_location": "scrapers.cnn_scraper",
+            "last_run": "2022-01-01T00:00:00Z"
+        },
+        {
+            "scraper_name": "ZDF Scraper",
+            "scraper_location": "scrapers.zdf_scraper",
+            "last_run": "2022-01-01T00:00:00Z"
+        },
+        {
+            "scraper_name": "Fox Scraper",
+            "scraper_location": "scrapers.fox_scraper",
+            "last_run": "2022-01-01T00:00:00Z"
+        }
+    ]
 }
