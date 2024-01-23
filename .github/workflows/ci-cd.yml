@@ -11,26 +11,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
       - name: Login to Docker Hub
         uses: docker/login-action@v1
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
       - name: Build and Push Docker Image for App
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/app:${{ github.sha }} ./SSARE/app
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/app:${{ github.sha }} -f ./SSARE/app/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/app:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/app:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/app:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/app:latest
+
       - name: Build and Push Docker Image for Scraper Service
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/scraper:${{ github.sha }} ./SSARE/scraper
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/scraper:${{ github.sha }} -f ./SSARE/scraper_service/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/scraper:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/scraper:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper:latest
+
       - name: Build and Push Docker Image for Postgres Service
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }} ./SSARE/postgres_service
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }} -f ./SSARE/postgres_service/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:latest
