@@ -3,52 +3,60 @@ version: '3.9'
 services:
   main_core_app:
     build: 
-      context: .
-      dockerfile: SSARE/app/Dockerfile
+      context: ./SSARE
+      dockerfile: ./app/Dockerfile
     ports:
       - "8080:8080"
-    develop:
-      watch:
-        - action: sync
-          path: SSARE/app
-          target: /app
     networks:
       - app_network
-
     depends_on:
       - scraper_service
       - postgres_service
-
-  scraper_service:
-    build: 
-      context: .
-      dockerfile: SSARE/scraper_service/Dockerfile
-    ports:
-      - "8081:8081"
     develop:
       watch:
         - action: sync
-          path: SSARE/scraper_service
+          path: ./app
           target: /app
+        - action: rebuild
+          path: ./app
 
+  scraper_service:
+    build: 
+      context: ./SSARE
+      dockerfile: ./scraper_service/Dockerfile
+    ports:
+      - "8081:8081"
     networks:
       - app_network
+    develop:
+      watch:
+        - action: sync
+          path: ./scraper_service
+          target: /app
+        - action: rebuild
+          path: ./scraper_service/main.py
 
   postgres_service:
     build: 
-      context: .
-      dockerfile: SSARE/postgres_service/Dockerfile
+      context: ./SSARE
+      dockerfile: ./postgres_service/Dockerfile
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     environment:
       POSTGRES_DB: root
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: password
     ports:
       - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
     networks:
       - app_network
-
+    develop:
+      watch:
+        - action: sync
+          path: ./postgres_service
+          target: /app
+        - action: rebuild
+          path: ./postgres_service
 
   redis:
     image: redis:latest
@@ -57,11 +65,8 @@ services:
     networks:
       - app_network
 
-
 networks:
   app_network:
 
 volumes:
-  core_volume:
-  db_volume:
   postgres_data:

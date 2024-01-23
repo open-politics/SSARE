@@ -64,6 +64,14 @@ def query_data(query):
 @app.get("/health")
 def health_check():
     """Health check endpoint"""
-    return {"status": "ok"}
+    return {"status": "yut"}
 
+@app.get("/hi")
+def hi():
+    return {"message": "Wassup"}
 
+@app.get("/get_articles")
+def get_articles():
+    # Call the database service to get data
+    # return the data
+    pass
