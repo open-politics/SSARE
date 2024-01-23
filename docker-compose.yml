@@ -7,6 +7,11 @@ services:
       dockerfile: SSARE/app/Dockerfile
     ports:
       - "8080:8080"
+    develop:
+      watch:
+        - action: sync
+          path: SSARE/app
+          target: /app
     networks:
       - app_network
 
@@ -23,8 +28,8 @@ services:
     develop:
       watch:
         - action: sync
-          path: ./*
-          target: /usr/src/app
+          path: SSARE/scraper_service
+          target: /app
 
     networks:
       - app_network

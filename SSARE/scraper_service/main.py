@@ -31,8 +31,11 @@ def scrape_data(flags: List[str] = Body(...)):
     for flag in flags:
         
 
-
 @app.get("/health")
 def health_check():
     """Health check endpoint"""
     return {"status": "ok"}
+
+@app.get("/hi")
+def hi():
+    return {"message": "Na"}
