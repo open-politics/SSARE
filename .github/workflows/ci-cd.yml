@@ -22,17 +22,17 @@ jobs:
         run: |
           cd SSARE
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }} -f ./app/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }} && \
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/app:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:latest
 
       - name: Build and Push Docker Image for Scraper Service
         run: |
           cd SSARE
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/scraper:${{ github.sha }} -f ./scraper_service/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/scraper:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/scraper:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper:latest
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/scraper_service:${{ github.sha }} -f ./scraper_service/Dockerfile .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper_service:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/scraper_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/scraper:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper_service:latest
 
       - name: Build and Push Docker Image for Postgres Service
         run: |
