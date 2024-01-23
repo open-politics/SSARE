@@ -1,7 +1,5 @@
 from celery import Celery
 from typing import List
-# import module import module
-# from module import function
 import json
 
 # Configure Celery
