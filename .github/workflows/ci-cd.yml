@@ -20,6 +20,7 @@ jobs:
 
       - name: Build and Push Docker Image for App
         run: |
+          cd SSARE
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }} -f ./app/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/app:latest
@@ -27,6 +28,7 @@ jobs:
 
       - name: Build and Push Docker Image for Scraper Service
         run: |
+          cd SSARE
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/scraper:${{ github.sha }} -f ./scraper_service/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/scraper:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/scraper:latest
@@ -34,6 +36,7 @@ jobs:
 
       - name: Build and Push Docker Image for Postgres Service
         run: |
+          cd SSARE
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }} -f ./postgres_service/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:latest
