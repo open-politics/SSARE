@@ -18,6 +18,14 @@ services:
     build: 
       context: .
       dockerfile: SSARE/scraper_service/Dockerfile
+    ports:
+      - "8081:8081"
+    develop:
+      watch:
+        - action: sync
+          path: ./*
+          target: /usr/src/app
+
     networks:
       - app_network
 
@@ -35,6 +43,15 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - app_network
+
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    networks:
+      - app_network
+
 
 networks:
   app_network:
