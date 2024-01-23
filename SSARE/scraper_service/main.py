@@ -39,4 +39,3 @@ def health_check():
 @app.get("/hi")
 def hi():
     return {"message": "Na auch hier?"}
-

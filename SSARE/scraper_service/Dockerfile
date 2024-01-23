@@ -16,3 +16,4 @@ COPY scraper_service/scrapers/scrapers_config.json .
 COPY scraper_service/celery_worker.py .
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8081"]
+
