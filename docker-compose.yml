@@ -20,6 +20,7 @@ services:
         - action: rebuild
           path: ./app
 
+
   scraper_service:
     build: 
       context: ./SSARE
@@ -35,6 +36,7 @@ services:
           target: /app
         - action: rebuild
           path: ./scraper_service/main.py
+
 
   postgres_service:
     build: 
