@@ -3,17 +3,17 @@ FROM python:3.9
 WORKDIR /app
 
 # Copy the requirements.txt file
-COPY ./SSARE/app/requirements.txt .
+COPY app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the core directory
-COPY ./SSARE/core ./core
+COPY core ./core
 
 # Copy the main.py file
-COPY ./SSARE/app/main.py .
+COPY app/main.py .
 
 # Copy the config.ini file
-COPY ./SSARE/app/config.ini .
+COPY app/config.ini .
 
 EXPOSE 8080
 

@@ -5,8 +5,8 @@ import json
 # Configure Celery
 celery_app = Celery(
     "worker",
-    backend="redis://localhost:6379/0",
-    broker="redis://localhost:6379/0"
+    backend="redis://redis:6379/0",
+    broker="redis://redis:6379/0"
 )
 
 @celery_app.task
@@ -27,3 +27,8 @@ def scrape_data_task(flags: List[str]):
     df = pd.read_csv("data/dataframes/cnn_articles.csv")
     print("Data loaded")
     
+
+# health check endpoint
+@celery_app.task
+def health_check():
+    return {"status": "ok"}
