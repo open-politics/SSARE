@@ -1,6 +1,15 @@
 version: '3.9'
 
 services:
+  redis:
+    image: redis:latest
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    networks:
+      - app_network
   main_core_app:
     build: 
       context: ./SSARE
@@ -12,13 +21,14 @@ services:
     depends_on:
       - scraper_service
       - postgres_service
+      - redis
     develop:
       watch:
         - action: sync
-          path: ./app
+          path: .
           target: /app
         - action: rebuild
-          path: ./app
+          path: .
 
 
   scraper_service:
@@ -32,10 +42,12 @@ services:
     develop:
       watch:
         - action: sync
-          path: ./scraper_service
+          path: .
           target: /app
         - action: rebuild
-          path: ./scraper_service/main.py
+          path: .
+    depends_on:
+      - redis
 
 
   postgres_service:
@@ -43,6 +55,7 @@ services:
       context: ./SSARE
       dockerfile: ./postgres_service/Dockerfile
     volumes:
+      - ./sql_commands:/docker-entrypoint-initdb.d
       - postgres_data:/var/lib/postgresql/data
     environment:
       POSTGRES_DB: root
@@ -55,17 +68,16 @@ services:
     develop:
       watch:
         - action: sync
-          path: ./postgres_service
+          path: .
           target: /app
+          ignore: 
+            - requirements.txt
         - action: rebuild
-          path: ./postgres_service
+          path: .
+    depends_on:
+      - redis
 
-  redis:
-    image: redis:latest
-    ports:
-      - "6379:6379"
-    networks:
-      - app_network
+
 
 networks:
   app_network:

@@ -5,3 +5,5 @@ pandas
 requests
 alembic
 psycopg2-binary
+redis
+asyncpg
