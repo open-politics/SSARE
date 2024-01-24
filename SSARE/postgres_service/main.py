@@ -32,10 +32,11 @@ class ArticleModel(Base):
 
 app = FastAPI()
 
-redis_conn = Redis(host='redis', port=6379, db=0)
+redis_conn_flags = Redis(host='redis', port=6379, db=0)  # For flags
+redis_conn_articles = Redis(host='redis', port=6379, db=2)  # For articles
+
 
 async def setup_db_connection():
-
     config = load_config()['postgresql']
     database_name = load_config()['postgresql']['postgres_db']
     table_name = load_config()['postgresql']['postgres_table_name']
@@ -63,19 +64,17 @@ app = FastAPI(lifespan=db_lifespan)
 
 @app.get("/flags")
 def produce_flags():
-    redis_conn.delete("scrape_sources")
+    redis_conn_flags.delete("scrape_sources")
     flags = ["cnn",]
-
     for flag in flags:
-        redis_conn.lpush("scrape_sources", flag)
-    
+        redis_conn_flags.lpush("scrape_sources", flag)
     return {"message": f"Flags produced: {', '.join(flags)}"}
     
 @app.get('/receive_raw_articles')
 async def save_raw_articles():
     async with app.state.db() as session:  # Use the async session
-        raw_articles = redis_conn.lrange('scraped_data', 0, -1)
-        redis_conn.delete('scraped_data')
+        raw_articles = redis_conn_articles.lrange('scraped_data', 0, -1)
+        redis_conn_articles.delete('scraped_data')
 
         articles_to_save = []
         for raw_article in raw_articles:
