@@ -1,4 +1,5 @@
 import requests
+import time 
 
 
 def trigger_flags():
@@ -11,7 +12,8 @@ def trigger_scraping():
 
 
 if __name__ == "__main__":
-    # trigger_flags()
+    trigger_flags()
+    time.sleep(1)
     trigger_scraping()
 
 
