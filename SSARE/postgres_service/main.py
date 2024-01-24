@@ -4,74 +4,91 @@ from fastapi import FastAPI
 import requests
 from core.utils import load_config
 from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy import inspect
 from core.utils import load_config
+from redis import Redis
+import pandas as pd
+from contextlib import asynccontextmanager
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy.ext.declarative import declarative_base
+import json
+from fastapi import FastAPI
 
-config = load_config()['postgresql']
+Base = declarative_base()
+
+class ArticleModel(Base):
+    __tablename__ = 'articles'
+
+    id = Column(Integer, primary_key=True, index=True)
+    url = Column(String, index=True)
+    headline = Column(String)
+    paragraphs = Column(Text)  # Assuming paragraphs are stored as a string
+
 
 app = FastAPI()
 
-class Article(BaseModel):
-    url: str
-    headline: str
-    paragraphs: List[str]
+redis_conn = Redis(host='redis', port=6379, db=0)
 
-# port 8000
+async def setup_db_connection():
 
-@app.get("/flags")
-def produce_flags():
-    # Call the scraper service to get data
-    # check if postgres entries have been older than 24 hours
-    # if yes, return the flags
-    return {"flags": ["cnn", "zdf", "fox"]}
-    
-@app.get('/receive_raw_articles')
-def save_raw_articles(data):
-    import pandas as pd
-    from sqlalchemy.orm import sessionmaker
-
-    # save articles to postgres
+    config = load_config()['postgresql']
     database_name = load_config()['postgresql']['postgres_db']
     table_name = load_config()['postgresql']['postgres_table_name']
     user = load_config()['postgresql']['postgres_user']
     password = load_config()['postgresql']['postgres_password']
     host = load_config()['postgresql']['postgres_host']
-    engine = create_engine(f'postgresql://{user}:{password}@{host}:5432/{database_name}')
-    Session = sessionmaker(bind=engine)
-    session = Session()
 
-    data = data['data']['unprocessed_articles']
-    articles = []
+    engine = create_async_engine(f'postgresql+asyncpg://{user}:{password}@postgres_service/{database_name}')
+    return engine
 
-    for article_data in data:
-        article = Article(url=article_data['url'], headline=article_data['headline'], paragraphs=article_data['paragraphs'])
-        articles.append(article)
+async def close_db_connection(engine):
+    # Close PostgreSQL connection
+    await engine.dispose()
 
+@asynccontextmanager
+async def db_lifespan(app: FastAPI):
+    # Before app startup
+    engine = await setup_db_connection()
+    app.state.db = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    yield
+    # After app shutdown
+    await close_db_connection(engine)
+
+app = FastAPI(lifespan=db_lifespan)
+
+@app.get("/flags")
+def produce_flags():
+    redis_conn.delete("scrape_sources")
+    flags = ["cnn",]
+
+    for flag in flags:
+        redis_conn.lpush("scrape_sources", flag)
     
-    session.add_all(articles)
-    session.commit()
+    return {"message": f"Flags produced: {', '.join(flags)}"}
+    
+@app.get('/receive_raw_articles')
+async def save_raw_articles():
+    async with app.state.db() as session:  # Use the async session
+        raw_articles = redis_conn.lrange('scraped_data', 0, -1)
+        redis_conn.delete('scraped_data')
 
-    return {"message": "Articles saved successfully"}
+        articles_to_save = []
+        for raw_article in raw_articles:
+            article_data = json.loads(raw_article)
+            for data in article_data:
+                article = ArticleModel(
+                    url=data['url'],
+                    headline=data['headline'],
+                    paragraphs=json.dumps(data['paragraphs'])  # Assuming paragraphs is a list
+                )
+                articles_to_save.append(article)
 
+        session.add_all(articles_to_save)
+        await session.commit()
 
-# add query endpoint
-@app.get("/query_raw_articles")
-def query_data(query):
-    # query the postgres database
-    # return the result
-    pass
-
-@app.get("/health")
-def health_check():
-    """Health check endpoint"""
-    return {"status": "yut"}
-
-@app.get("/hi")
-def hi():
-    return {"message": "Wassup"}
-
-@app.get("/get_articles")
-def get_articles():
-    # Call the database service to get data
-    # return the data
-    pass
+    return {"message": f"{len(articles_to_save)} articles saved"}

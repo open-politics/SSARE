@@ -23,7 +23,7 @@ async def trigger_scraping():
     async with httpx.AsyncClient() as client:
         try:
             # Trigger the scraper service to start scraping
-            response = await client.post(SCRAPER_SERVICE_URL)
+            response = await client.post(f"{SCRAPER_SERVICE_URL}/trigger_scraping")
             response.raise_for_status()
             return response.json()
         except httpx.HTTPError as e:

@@ -2,3 +2,7 @@ fastapi
 uvicorn
 requests
 celery[redis]
+bs4
+pandas
+aiohttp
+sqlalchemy
