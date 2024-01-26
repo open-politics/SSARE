@@ -12,6 +12,11 @@ from contextlib import asynccontextmanager
 import logging
 from core.models import ArticleBase
 
+""""
+This Service runs on port 8081 and is responsible for scraping articles.
+
+"""
+
 
 
 logging.basicConfig(level=logging.INFO)
@@ -46,11 +51,27 @@ app = FastAPI(lifespan=lifespan)
 
 
 def get_scraper_config():
+    """
+    This function loads the scraper configuration from the JSON file.
+    """
     with open("scrapers/scrapers_config.json") as f:
         return json.load(f)
 
 @app.post("/create_scrape_jobs")
 async def create_scrape_jobs():
+    """
+    This function is triggered by an API call from the orchestration container.
+    It reads from Redis Queue 0 - channel "scrape_sources" and creates a scraping job for each flag.
+    It passes a flag as a string argument to the scrape_single_source function.
+    It validates the flags against the scraper configuration.
+    The scrape job itself is created by triggering the scrape_data_task function in celery_worker.py.
+    -> inside of celery_worker.py:
+        The scrape_data_task function reads from the redis queue and create scraping jobs for each flag
+        by triggering the scrape_single_source function.
+        When the scrape_single_source function is complete, 
+        it will push the data to Redis Queue 1 - channel "raw_articles_queue".
+
+    """
     redis_conn_flags = await Redis(host='redis', port=6379, db=0)  # For flags
     logger.info("Creating scrape jobs")
     flags = await redis_conn_flags.lrange('scrape_sources', 0, -1)

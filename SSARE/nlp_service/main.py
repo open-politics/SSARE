@@ -21,8 +21,9 @@ model = SentenceTransformer('jinaai/jina-embeddings-v2-base-en')
 async def generate_embeddings():
     """
     This function generates embeddings for articles that do not have embeddings.
-    It is triggered by an API call. It reads from redis queue 5 - channel articles_without_embedding_queue
-    and writes to redis queue 6 - channel articles_with_embeddings
+    It is triggered by an API call from the orchestration container. 
+    It reads from redis queue 5 - channel articles_without_embedding_queue.
+    It writes to redis queue 6 - channel articles_with_embeddings.
     """
     try:
         redis_conn_raw = await Redis(host='redis', port=6379, db=5)
