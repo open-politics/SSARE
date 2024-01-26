@@ -48,6 +48,22 @@ services:
           path: .
     depends_on:
       - redis
+  
+  qdrant_service:
+    build: 
+      context: ./SSARE
+      dockerfile: ./qdrant_service/Dockerfile
+    ports:
+      - "6969:6"
+    networks:
+      - app_network
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+        - action: rebuild
+          path: .
       
   qdrant_storage:
     image: qdrant/qdrant
