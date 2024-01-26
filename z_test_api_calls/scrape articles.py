@@ -16,10 +16,10 @@ def trigger_processing():
 
 
 if __name__ == "__main__":
-    # trigger_flags()
-    # time.sleep(.5)
-    # trigger_scraping()
-    # time.sleep(.5)
+    trigger_flags()
+    time.sleep(.5)
+    trigger_scraping()
+    time.sleep(.5)
     trigger_processing()
 
 

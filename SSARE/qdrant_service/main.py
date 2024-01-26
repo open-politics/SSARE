@@ -4,8 +4,14 @@ import os
 from core.utils import load_config
 from populate_qdrant_from_postgres import PopulateQdrant
 import requests
+from core.models import ArticleBase
 
 app = FastAPI()
+
+
+@app.get("/healthcheck")
+async def healthcheck():
+    return {"message": "OK"}
 
 
 @app.get("/populate_qdrant")
@@ -16,20 +22,26 @@ async def populate_qdrant():
     return {"message": "Qdrant populated successfully."}
         
 
-@app.get("/search")
-async def search(query: str):
-    async with httpx.AsyncClient() as client:
-        try:
-            # Get the flags from the database service to see which sources need scraping
-            response = await client.get(DATABASE_SERVICE_URL + "/flags")
-            response.raise_for_status()
-            flags = response.json().get("flags", [])
-            
-            # If there are flags, process the respective articles
-            if flags:
-                process_response = await client.post(PROCESSOR_SERVICE_URL, json={"flags": flags})
-                process_response.raise_for_status()
-                return process_response.json()
-            return {"message": "No articles to process at this time."}
-        except httpx.HTTPError as e:
-            raise HTTPException(status_code=e.response.status_code, detail=str(e))
+# get articles from postgres and create embeddings
+@app.post("/send_to_nlp_for_embeddings")
+async def send_to_nlp_for_embeddings():
+    try:
+        articles = requests.get("http://postgres_service:5432/articles")
+        # Create embeddings
+        await httpx.post("http://nlp_service:0420/create_embeddings", json=articles.json())
+        return {"message": "Embeddings created successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+
+# get articles with embeddings and store into postgres and qdrant
+@app.post("/store_processed_articles")
+async def store_processed_articles():
+    try:
+        # Store embeddings
+        await httpx.post("http://postgres_service:8000/store_articles_with_embeddings")
+        # Populate Qdrant
+        await httpx.get("http://qdrant_service:8000/populate_qdrant")
+        return {"message": "Articles stored successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

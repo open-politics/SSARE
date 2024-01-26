@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Dict
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import requests
 from core.utils import load_config
 from sqlalchemy import create_engine
@@ -19,16 +19,21 @@ from sqlalchemy.ext.declarative import declarative_base
 import json
 from fastapi import FastAPI
 from sqlalchemy import select
+from core.models import ArticleBase
+from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
+# SQLAlchemy model
 class ArticleModel(Base):
     __tablename__ = 'articles'
-
     id = Column(Integer, primary_key=True, index=True)
     url = Column(String, index=True)
     headline = Column(String)
-    paragraphs = Column(Text)  # Assuming paragraphs are stored as a string
+    paragraphs = Column(Text)
+    # Add a new column for the source if necessary
+    source = Column(String, nullable=True)
 
 
 app = FastAPI()
@@ -80,13 +85,15 @@ async def save_raw_articles():
         articles_to_save = []
         for raw_article in raw_articles:
             article_data = json.loads(raw_article)
-            for data in article_data:
-                article = ArticleModel(
-                    url=data['url'],
-                    headline=data['headline'],
-                    paragraphs=json.dumps(data['paragraphs'])  # Assuming paragraphs is a list
-                )
-                articles_to_save.append(article)
+            # Deserialize paragraphs if it's stored as JSON string
+            paragraphs = json.loads(article_data['paragraphs']) if isinstance(article_data['paragraphs'], str) else article_data['paragraphs']
+            article = ArticleModel(
+                url=article_data['url'],
+                headline=article_data['headline'],
+                paragraphs=paragraphs,
+                source=article_data['source']
+            )
+            articles_to_save.append(article)
 
         session.add_all(articles_to_save)
         await session.commit()
@@ -100,3 +107,27 @@ async def get_articles():
         articles = articles.scalars().all()
         return {"articles": articles}
     
+
+@app.post("/store_articles_with_embeddings")
+async def store_articles_with_embeddings():
+    try:
+        # Get embeddings from Redis
+        redis_conn_embeddings = Redis(host='redis', port=6379, db=4, decode_responses=True)
+        articles = redis_conn_embeddings.keys()
+        articles = [article for article in articles]
+        embeddings = [redis_conn_embeddings.get(article) for article in articles]
+        # Store in PostgreSQL
+        async with app.state.db() as session:
+            for i, article in enumerate(articles):
+                article = ArticleModel(
+                    url=article,
+                    headline="",
+                    paragraphs="",
+                    source="",
+                    embedding=embeddings[i]
+                )
+                session.add(article)
+            await session.commit()
+        return {"message": "Embeddings stored successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

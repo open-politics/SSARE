@@ -50,6 +50,8 @@ def scrape_single_source(flag: str):
         df = pd.read_csv(f"/app/scrapers/data/dataframes/{flag}_articles.csv")
         logger.info(df.head(3))
 
+        # add column "source" which is the flag
+        df["source"] = flag
         articles = df.to_dict(orient="records")
 
         redis_conn_articles = Redis(host='redis', port=6379, db=2)  # For articles

@@ -7,70 +7,22 @@ app = FastAPI()
 
 config = load_config()["postgresql"]
 
-url_scraper_flags = "http://scraper_service:8000/flags"
 
-url_scraper_recieve_articles = "http://scraper_service:8000/flag"
+@app.get("/healthcheck")
+async def healthcheck():
+    return {"message": "OK"}
 
-DATABASE_SERVICE_URL = os.getenv("DATABASE_SERVICE_URL")
-SCRAPER_SERVICE_URL = os.getenv("SCRAPER_SERVICE_URL")
-PROCESSOR_SERVICE_URL = os.getenv("PROCESSOR_SERVICE_URL")
-
-check_health = lambda url: httpx.get(url).status_code == 200
-
-
-@app.post("/trigger_scraping")
-async def trigger_scraping():
-    async with httpx.AsyncClient() as client:
-        try:
-            # Trigger the scraper service to start scraping
-            response = await client.post(f"{SCRAPER_SERVICE_URL}/trigger_scraping")
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPError as e:
-            raise HTTPException(status_code=e.response.status_code, detail=str(e))
-
-@app.post("/check_for_processing")
-async def check_for_processing():
-    async with httpx.AsyncClient() as client:
-        try:
-            # Get the flags from the database service to see which sources need scraping
-            response = await client.get(DATABASE_SERVICE_URL + "/flags")
-            response.raise_for_status()
-            flags = response.json().get("flags", [])
-            
-            # If there are flags, process the respective articles
-            if flags:
-                process_response = await client.post(PROCESSOR_SERVICE_URL, json={"flags": flags})
-                process_response.raise_for_status()
-                return process_response.json()
-            return {"message": "No articles to process at this time."}
-        except httpx.HTTPError as e:
-            raise HTTPException(status_code=e.response.status_code, detail=str(e))
-
-@app.post("/save_processed_articles")
-async def save_processed_articles(articles: list):
-    async with httpx.AsyncClient() as client:
-        try:
-            # Save the processed articles to the database
-            response = await client.post(DATABASE_SERVICE_URL, json={"articles": articles})
-            response.raise_for_status()
-            return {"message": "Processed articles saved successfully."}
-        except httpx.HTTPError as e:
-            raise HTTPException(status_code=e.response.status_code, detail=str(e))
-        
-@app.get("/get_articles")
-async def get_articles():
-    async with httpx.AsyncClient() as client:
-        try:
-            # Get the articles from the database
-            response = await client.get(DATABASE_SERVICE_URL)
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPError as e:
-            raise HTTPException(status_code=e.response.status_code, detail=str(e))
-
-@app.get("/health")
-def health_check():
-    """Health check endpoint"""
-    return {"status": "ok"}
-
+@app.post("/full_run")
+async def full_run():
+    try:
+        # Produce flags
+        await httpx.post("http://scraper_service:5432/flags")
+        # Scrape data
+        await httpx.post("http://scraper_service:8081/create_scrape_jobs")
+        # Create embeddings
+        await httpx.post("http://nlp_service:0420/create_embeddings")
+        # Store embeddings
+        await httpx.post("http://postgres_service:8000/store_embeddings")
+        return {"message": "Full run complete."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
