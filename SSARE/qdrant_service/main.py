@@ -9,6 +9,16 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from fastapi.exceptions import RequestValidationError
 from starlette.responses import JSONResponse
+from core.models import ArticleBase
+
+"""
+This Service runs on port 6969 and is responsible qdrant related event-handling.
+It is responsible for:
+1. Creating embeddings jobs
+2. Storing embeddings in Qdrant
+3. Updating the flags in PostgreSQL for articles that have embeddings
+4. [TODO] Querying Qdrant
+"""
 
 
 app = FastAPI()
@@ -62,13 +72,12 @@ async def store_embeddings():
     try:
         redis_conn = await Redis(host='redis', port=6379, db=6)
         urls_to_update = []
+        articles_with_embedding_json = await redis_conn.rpop('articles_with_embeddings')
+
         while True:
-            article_with_embedding_json = await redis_conn.rpop('articles_with_embeddings')
-            if article_with_embedding_json is None:
-                break  # Exit if the queue is empty
+            article_with_embedding = json.loads(articles_with_embedding_json)
+            validated_article = ArticleBase(**article_with_embedding)
 
-
-            article_with_embedding = json.loads(article_with_embedding_json)
             payload = {
                 "headline": article_with_embedding["headline"],
                 "text": " ".join(article_with_embedding["paragraphs"]),  # Combine paragraphs into a single text
@@ -84,7 +93,7 @@ async def store_embeddings():
                     "payload": payload
                 }]
             )
-            urls_to_update.append(article_with_embedding["url"])
+            urls_to_update.append(validated_article.url)
             
             async with httpx.AsyncClient() as client:
                 await client.post("http://postgres_service:5432/update_qdrant_flags", json={"urls": urls_to_update})

@@ -1,10 +1,12 @@
 from celery import Celery
 import json
 from celery.utils.log import get_task_logger
+from core.models import ArticleBase
 import pandas as pd
 import subprocess
 import logging
-from redis.asyncio import Redis
+from redis import Redis
+from pydantic import ValidationError
 
 """ 
 This Script is creating Celery tasks for scraping data from news sources.
@@ -28,7 +30,7 @@ def scrape_data_task():
     """
     logger.info("Received request to scrape data")
     try:
-        # Asynchronous Redis connection for flags
+        # Synchronous Redis connection for flags
         redis_conn_flags = Redis(host='redis', port=6379, db=0)
 
         # Retrieve all flags from Redis
@@ -77,17 +79,25 @@ def scrape_single_source(flag: str):
         df = pd.read_csv(f"/app/scrapers/data/dataframes/{flag}_articles.csv")
         logger.info(df.head(3))
 
+
         # Add a 'source' column to the DataFrame with the flag
         df["source"] = flag
         articles = df.to_dict(orient="records")
 
-        # Asynchronous Redis connection for articles
+        # Synchronous Redis connection for articles
         redis_conn_articles = Redis(host='redis', port=6379, db=1)
 
-        # Push scraped articles to Redis
-        redis_conn_articles.lpush("raw_articles_queue", json.dumps(articles))
-        logger.info(f"Pushed {flag} data to Redis")
 
-        return f"Scraped data for {flag} successfully."
+        # Validate and push articles to Redis
+        for article_data in articles:
+            try:
+                validated_article = ArticleBase(**article_data)
+                redis_conn_articles.lpush("raw_articles_queue", json.dumps(validated_article.model_dump()))
+            except ValidationError as e:
+                logger.error(f"Validation error for article: {e}")
+
+
+        logger.info(f"Scraping for {flag} complete")
     except Exception as e:
-        logger.error(f"Error in scraping {flag}: {e}")
+        logger.error(f"Error in scraping data for {flag}: {e}")
+        raise e

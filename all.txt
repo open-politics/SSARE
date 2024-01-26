@@ -1,3 +1,134 @@
+./docker-compose.yml:
+version: '3.9'
+
+services:
+  redis:
+    image: redis:latest
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - ./core/configs/redis.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    networks:
+      - app_network
+
+  main_core_app:
+    build: 
+      context: ./SSARE
+      dockerfile: ./app/Dockerfile
+    ports:
+      - "8080:8080"
+    networks:
+      - app_network
+    depends_on:
+      - scraper_service
+      - postgres_service
+      - redis
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+        - action: rebuild
+          path: .
+
+  scraper_service:
+    build: 
+      context: ./SSARE
+      dockerfile: ./scraper_service/Dockerfile
+    ports:
+      - "8081:8081"
+    networks:
+      - app_network
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+        - action: rebuild
+          path: .
+    depends_on:
+      - redis
+      
+  qdrant_storage:
+    image: qdrant/qdrant
+    ports:
+      - "6333:6333"
+    networks:
+      - app_network
+
+  postgres_service:
+    build: 
+      context: ./SSARE
+      dockerfile: ./postgres_service/Dockerfile
+    volumes:
+      - ./sql_commands:/docker-entrypoint-initdb.d
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: root
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    networks:
+      - app_network
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+          ignore: 
+            - requirements.txt
+        - action: rebuild
+          path: .
+    depends_on:
+      - redis
+    
+  nlp_service:
+    build: 
+      context: ./SSARE
+      dockerfile: ./nlp_service/Dockerfile
+    ports:
+      - "0420:0420"
+    networks:
+      - app_network
+    depends_on:
+      - redis
+      - postgres_service
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+        - action: rebuild
+          path: .
+
+
+networks:
+  app_network:
+
+volumes:
+  postgres_data:
+
+
+./SSARE/qdrant_service/Dockerfile:
+FROM python:3.9
+
+WORKDIR /app
+
+# Copy the requirements.txt file
+COPY qdrant_service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the core directory
+COPY core ./core
+
+# Copy the main.py and other files from postgres_service
+COPY qdrant_service/main.py .
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "6969"]
+
+
 ./SSARE/qdrant_service/main.py:
 from fastapi import FastAPI, HTTPException
 import httpx
@@ -10,7 +141,6 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from fastapi.exceptions import RequestValidationError
 from starlette.responses import JSONResponse
-from core.models import ArticleBase
 
 """
 This Service runs on port 6969 and is responsible qdrant related event-handling.
@@ -73,12 +203,13 @@ async def store_embeddings():
     try:
         redis_conn = await Redis(host='redis', port=6379, db=6)
         urls_to_update = []
-        articles_with_embedding_json = await redis_conn.rpop('articles_with_embeddings')
-
         while True:
-            article_with_embedding = json.loads(articles_with_embedding_json)
-            validated_article = ArticleBase(**article_with_embedding)
+            article_with_embedding_json = await redis_conn.rpop('articles_with_embeddings')
+            if article_with_embedding_json is None:
+                break  # Exit if the queue is empty
 
+
+            article_with_embedding = json.loads(article_with_embedding_json)
             payload = {
                 "headline": article_with_embedding["headline"],
                 "text": " ".join(article_with_embedding["paragraphs"]),  # Combine paragraphs into a single text
@@ -94,7 +225,7 @@ async def store_embeddings():
                     "payload": payload
                 }]
             )
-            urls_to_update.append(validated_article.url)
+            urls_to_update.append(article_with_embedding["url"])
             
             async with httpx.AsyncClient() as client:
                 await client.post("http://postgres_service:5432/update_qdrant_flags", json={"urls": urls_to_update})
@@ -110,36 +241,31 @@ from typing import List, Optional
 class ArticleBase(BaseModel):
     url: str = Field(...)
     headline: str = Field(...)
-    paragraphs: str = Field(...)
+    paragraphs: List[str] = Field(...)
     source: Optional[str] = None
     embeddings: Optional[List[float]] = None
 
     class Config:
         orm_mode = True
 
-class ArticleModel(BaseModel):
-    url: str = Field(..., description="The URL of the article")
-    headline: str = Field(..., description="The headline of the article")
-    paragraphs: str = Field(..., description="The paragraphs of the article")
-    source: Optional[str] = Field(None, description="The source of the article")
-    embeddings: Optional[List[float]] = Field(None, description="The vector embeddings of the article's content")
-    embeddings_created: Optional[bool] = Field(False, description="Flag to indicate if embeddings are created")
-    isStored_in_qdrant: Optional[bool] = Field(False, description="Flag to indicate if the article is stored in Qdrant")
 
-    class Config:
-        orm_mode = True
-        schema_extra = {
-            "example": {
-                "url": "https://example-news.com/article1",
-                "headline": "Breaking News: Example Event Occurs",
-                "paragraphs": "Example paragraph 1. Example paragraph 2. Example paragraph 3",
-                "source": "Example News",
-                "embeddings": [0.01, 0.02, ..., 0.05],
-                "embeddings_created": True,
-                "isStored_in_qdrant": True
-            }
-        }
+./SSARE/postgres_service/Dockerfile:
+FROM python:3.9
 
+WORKDIR /app
+
+# Copy the requirements.txt file
+COPY postgres_service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the core directory
+COPY core ./core
+
+# Copy the main.py and other files from postgres_service
+COPY postgres_service/main.py .
+COPY postgres_service/sql_commands ./sql_commands
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5432"]
 
 
 ./SSARE/postgres_service/main.py:
@@ -156,15 +282,8 @@ from redis import Redis
 import json
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from core.models import ArticleBase, ArticleModel
+from core.models import ArticleBase, ArticleModel, ProcessedArticleModel
 from core.utils import load_config
-from pydantic import ValidationError
-
-import logging
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 
 Base = declarative_base()
 
@@ -309,23 +428,14 @@ async def store_raw_articles():
 
         async with app.state.db() as session:
             for raw_article in raw_articles:
-                try:
-                    article_data = json.loads(raw_article)
-                    article = ArticleBase(**article_data)
-                    db_article = ArticleModel(**article.model_dump())
-                    session.add(db_article)
-                except ValidationError as e:
-                    logger.error(f"Validation error for article: {e}")
-                    # You can also log article_data to see what's wrong
-                except json.JSONDecodeError as e:
-                    logger.error(f"JSON decoding error: {e}")
-                    # Log raw_article here to inspect the malformed JSON
-
+                article_data = json.loads(raw_article)
+                article = ArticleBase(**article_data)
+                db_article = ArticleModel(**article.model_dump())
+                session.add(db_article)
             await session.commit()
 
         return {"message": "Raw articles stored successfully."}
     except Exception as e:
-        logger.error(f"Error storing articles: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -383,6 +493,50 @@ async def update_qdrant_flags(urls: List[str]):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+./SSARE/app/Dockerfile:
+FROM python:3.9
+
+WORKDIR /app
+
+# Copy the requirements.txt file
+COPY app/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the core directory
+COPY core ./core
+
+# Copy the main.py file
+COPY app/main.py .
+
+# Copy the config.ini file
+COPY app/config.ini .
+
+EXPOSE 8080
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+
+
+./SSARE/app/config.ini:
+[server]
+host = 0.0.0.0
+port = 8000
+log_level = DEBUG
+
+[open_politics]
+# Qdrant Settings
+qdrant_host = localhost
+qdrant_grpc_port = 6334
+qdrant_prefer_grpc = True
+qdrant_collection_name = open_politics_live_articles
+
+# Postgres Settings
+[postgresql]
+postgres_db = root
+postgres_user = admin
+postgres_password = password
+postgres_host = postgres_service
+postgres_table_name = unprocessed_articles
+
 ./SSARE/app/main.py:
 from fastapi import FastAPI, HTTPException
 import httpx
@@ -413,6 +567,32 @@ async def full_run():
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+./SSARE/scraper_service/Dockerfile:
+FROM python:3.9
+
+WORKDIR /app
+
+# Copy the requirements.txt file
+COPY scraper_service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && apt-get install -y supervisor
+
+# Copy the core directory
+COPY core ./core
+
+# Copy the main.py and other files from scraper_service
+COPY scraper_service/main.py .
+COPY scraper_service/scrapers ./scrapers
+COPY scraper_service/scrapers/scrapers_config.json .
+COPY scraper_service/celery_worker.py .
+
+# Copy the supervisord.conf file
+COPY core/configs/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+
+
+
 ./SSARE/scraper_service/celery_worker.py:
 from celery import Celery
 import json
@@ -421,8 +601,7 @@ from core.models import ArticleBase
 import pandas as pd
 import subprocess
 import logging
-from redis import Redis
-from pydantic import ValidationError
+from redis.asyncio import Redis
 
 """ 
 This Script is creating Celery tasks for scraping data from news sources.
@@ -446,7 +625,7 @@ def scrape_data_task():
     """
     logger.info("Received request to scrape data")
     try:
-        # Synchronous Redis connection for flags
+        # Asynchronous Redis connection for flags
         redis_conn_flags = Redis(host='redis', port=6379, db=0)
 
         # Retrieve all flags from Redis
@@ -495,28 +674,26 @@ def scrape_single_source(flag: str):
         df = pd.read_csv(f"/app/scrapers/data/dataframes/{flag}_articles.csv")
         logger.info(df.head(3))
 
-
         # Add a 'source' column to the DataFrame with the flag
         df["source"] = flag
         articles = df.to_dict(orient="records")
 
-        # Synchronous Redis connection for articles
+        # Asynchronous Redis connection for articles
         redis_conn_articles = Redis(host='redis', port=6379, db=1)
 
+        # Push scraped articles to Redis
+        try:
+            validated_articles = [ArticleBase(**article) for article in articles]
+        except Exception as e:
+            logger.error(f"Error validating articles: {e}")
+            return
+        
+        redis_conn_articles.lpush("raw_articles_queue", json.dumps(articles))
+        logger.info(f"Pushed {flag} data to Redis")
 
-        # Validate and push articles to Redis
-        for article_data in articles:
-            try:
-                validated_article = ArticleBase(**article_data)
-                redis_conn_articles.lpush("raw_articles_queue", json.dumps(validated_article.model_dump()))
-            except ValidationError as e:
-                logger.error(f"Validation error for article: {e}")
-
-
-        logger.info(f"Scraping for {flag} complete")
+        return f"Scraped data for {flag} successfully."
     except Exception as e:
-        logger.error(f"Error in scraping data for {flag}: {e}")
-        raise e
+        logger.error(f"Error in scraping {flag}: {e}")
 
 ./SSARE/scraper_service/main.py:
 from fastapi import FastAPI, HTTPException, Query
@@ -615,6 +792,24 @@ def health_check():
 
 
 
+./SSARE/nlp_service/Dockerfile:
+FROM python:3.9
+
+WORKDIR /app
+
+# Copy the requirements.txt file
+COPY nlp_service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the core directory
+COPY core ./core
+
+# Copy the main.py and other files from postgres_service
+COPY nlp_service/main.py .
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "0420"]
+
+
 ./SSARE/nlp_service/main.py:
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -623,11 +818,6 @@ from typing import List
 from redis.asyncio import Redis
 from core.models import ArticleBase
 import json
-from pydantic import ValidationError
-import logging
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 """
 This Service runs on port 0420 and is responsible for generating embeddings for articles.
@@ -635,7 +825,7 @@ This Service runs on port 0420 and is responsible for generating embeddings for 
 
 app = FastAPI()
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
+model = SentenceTransformer('jinaai/jina-embeddings-v2-base-en')
 
 @app.post("/generate_embeddings")
 async def generate_embeddings():
@@ -646,32 +836,42 @@ async def generate_embeddings():
     It writes to redis queue 6 - channel articles_with_embeddings.
     """
     try:
+        # Incoming pipeline
         redis_conn_raw = await Redis(host='redis', port=6379, db=5)
+        # Outgoing pipeline
         redis_conn_processed = await Redis(host='redis', port=6379, db=6)
 
-        # Retrieve articles from Redis Queue 5
-        raw_articles_json = await redis_conn_raw.lrange('articles_without_embedding_queue', 0, -1)
 
-        for raw_article_json in raw_articles_json:
+        # Retrieve all articles from Redis Queue 5
+        raw_articles = await redis_conn_raw.lrange('articles_without_embedding_queue', 0, -1)
+        # Decode the articles
+        raw_articles = [article.decode('utf-8') for article in raw_articles]
+        # Convert to JSON
+        raw_articles = json.loads(raw_articles)
+
+        # Iterate over articles
+        for raw_article in raw_articles:
+            # Validate article structure
             try:
-                # Decode and load the article
-                raw_article = json.loads(raw_article_json.decode('utf-8'))
                 article = ArticleBase(**raw_article)
+            except:
+                continue
 
-                # Generate embeddings
-                embedding = model.encode(article.headline + " ".join(article.paragraphs)).tolist()
-                article_with_embedding = article.dict()
-                article_with_embedding["embeddings"] = embedding
+            # Deserialize article             
+            article = ArticleBase(**json.loads(raw_article))
+            # Generate embeddings
+            embedding = model.encode(article.headline + " ".join(article.paragraphs)).tolist()
 
-                # Push to Redis Queue 6
-                await redis_conn_processed.lpush('articles_with_embeddings', json.dumps(article_with_embedding))
-            except (json.JSONDecodeError, ValidationError) as e:
-                logger.error(f"Error processing article: {e}")
+            # Serialize article with embeddings
+            article_with_embedding = article.model_dump()
+            # Add embeddings to article
+            article_with_embedding["embeddings"] = embedding
 
-        return {"message": "Embeddings generated"}
+            # Push article with embeddings to Redis Queue 6
+            await redis_conn_processed.lpush('articles_with_embeddings', json.dumps(article_with_embedding))
+
+        return {"message": "Embeddings generated and pushed to queue."}
     except Exception as e:
-        logger.error(f"Error in generating embeddings: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
+        raise HTTPException(status_code=400, detail=str(e))
 
 

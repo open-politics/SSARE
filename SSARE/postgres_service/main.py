@@ -1,39 +1,25 @@
 from pydantic import BaseModel
-from typing import List, Dict
-from fastapi import FastAPI, HTTPException
+from typing import List, Dict, Optional
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
-from typing import Optional
-from fastapi import Query
-import requests
-from core.utils import load_config
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select, update, bindparam
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import insert
-from core.models import ArticleBase, ArticlesWithEmbeddings
-from sqlalchemy import Column, Integer, String
-from sqlalchemy import update
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import inspect
-from core.utils import load_config
-from redis import Redis
-import pandas as pd
-from core.models import ArticleBase, ArticleModel, ProcessedArticleModel
+from sqlalchemy import Column, Integer, String, Text
+from redis.asyncio import Redis 
+import json
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import Column, Integer, String, Text
-from sqlalchemy.ext.declarative import declarative_base
-from core.models import ArticleBase
-import json
-from fastapi import FastAPI
-from sqlalchemy import select
-from core.models import ArticleBase
-from sqlalchemy import Column, Integer, String, Text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy import bindparam
-from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy import bindparam
+from core.models import ArticleBase, ArticleModel
+from core.utils import load_config
+from pydantic import ValidationError
+
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 Base = declarative_base()
 
@@ -98,11 +84,11 @@ redis_conn_articles = Redis(host='redis', port=6379, db=2)  # For articles
 
 async def setup_db_connection():
     config = load_config()['postgresql']
-    database_name = load_config()['postgresql']['postgres_db']
-    table_name = load_config()['postgresql']['postgres_table_name']
-    user = load_config()['postgresql']['postgres_user']
-    password = load_config()['postgresql']['postgres_password']
-    host = load_config()['postgresql']['postgres_host']
+    database_name = config['postgres_db']
+    table_name = config['postgres_table_name']
+    user = config['postgres_user']
+    password = config['postgres_password']
+    host = config['postgres_host']
 
     engine = create_async_engine(f'postgresql+asyncpg://{user}:{password}@{host}/{database_name}?ssl=False')
     return engine
@@ -127,7 +113,7 @@ async def db_lifespan(app: FastAPI):
 app = FastAPI(lifespan=db_lifespan)
 
 @app.get("/flags")
-def produce_flags():
+async def produce_flags():
     """
     This function produces flags for the scraper service. It is triggered by an API call.
     It deletes all existing flags in Redis Queue 0 - channel "scrape_sources" and pushes new flags.
@@ -136,7 +122,7 @@ def produce_flags():
     redis_conn_flags.delete("scrape_sources")
     flags = ["cnn",]
     for flag in flags:
-        redis_conn_flags.lpush("scrape_sources", flag)
+        await redis_conn_flags.lpush("scrape_sources", flag)
     return {"message": f"Flags produced: {', '.join(flags)}"}
 
 @app.get('/articles', response_model=List[ArticleBase])
@@ -157,7 +143,7 @@ async def get_articles(
             query = query.where(ArticleModel.embeddings_created == embeddings_created)
 
         if isStored_in_Qdrant is not None:
-            query = query.where(ArticleModel.isStored_in_Qdrant == isStored_in_Qdrant)
+            query = query.where(ArticleModel.isStored_in_qdrant == isStored_in_Qdrant)
 
         query = query.offset(skip).limit(limit)
         result = await session.execute(query)
@@ -178,14 +164,23 @@ async def store_raw_articles():
 
         async with app.state.db() as session:
             for raw_article in raw_articles:
-                article_data = json.loads(raw_article)
-                article = ArticleBase(**article_data)
-                db_article = ArticleModel(**article.model_dump())
-                session.add(db_article)
+                try:
+                    article_data = json.loads(raw_article)
+                    article = ArticleBase(**article_data)
+                    db_article = ArticleModel(**article.model_dump())
+                    session.add(db_article)
+                except ValidationError as e:
+                    logger.error(f"Validation error for article: {e}")
+                    # You can also log article_data to see what's wrong
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON decoding error: {e}")
+                    # Log raw_article here to inspect the malformed JSON
+
             await session.commit()
 
         return {"message": "Raw articles stored successfully."}
     except Exception as e:
+        logger.error(f"Error storing articles: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
