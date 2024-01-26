@@ -152,7 +152,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import Column, Integer, String, Text
-from redis import Redis
+from redis.asyncio import Redis 
 import json
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -258,7 +258,7 @@ async def db_lifespan(app: FastAPI):
 app = FastAPI(lifespan=db_lifespan)
 
 @app.get("/flags")
-def produce_flags():
+async def produce_flags():
     """
     This function produces flags for the scraper service. It is triggered by an API call.
     It deletes all existing flags in Redis Queue 0 - channel "scrape_sources" and pushes new flags.
@@ -267,7 +267,7 @@ def produce_flags():
     redis_conn_flags.delete("scrape_sources")
     flags = ["cnn",]
     for flag in flags:
-        redis_conn_flags.lpush("scrape_sources", flag)
+        await redis_conn_flags.lpush("scrape_sources", flag)
     return {"message": f"Flags produced: {', '.join(flags)}"}
 
 @app.get('/articles', response_model=List[ArticleBase])

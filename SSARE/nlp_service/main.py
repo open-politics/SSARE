@@ -42,7 +42,7 @@ async def generate_embeddings():
 
                 # Generate embeddings
                 embedding = model.encode(article.headline + " ".join(article.paragraphs)).tolist()
-                article_with_embedding = article.dict()
+                article_with_embedding = article.model_dump()
                 article_with_embedding["embeddings"] = embedding
 
                 # Push to Redis Queue 6

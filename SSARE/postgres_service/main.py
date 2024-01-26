@@ -154,8 +154,9 @@ async def get_articles(
 @app.post("/store_raw_articles")
 async def store_raw_articles():
     """
-    This function is triggered by an API call. It reads from redis queue 1 - channel raw_articles_queue
-    and stores the articles in PostgreSQL.
+    This function is triggered by an API call. It reads from redis queue 1 - channel raw_articles_queue.
+    The input comes from the scraper service.
+    It stores the articles in PostgreSQL.
     """
     try:
         redis_conn = await Redis(host='redis', port=6379, db=1)
@@ -183,40 +184,33 @@ async def store_raw_articles():
         logger.error(f"Error storing articles: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-
 @app.post("/store_articles_with_embeddings")
 async def store_processed_articles():
-    """
-    This function is triggered by an API call. 
-    It reads from redis queue 6 - channel articles_with_embeddings
-    and stores the articles in PostgreSQL.
-    """
     try:
-        redis_conn = await Redis(host='redis', port=6379, db=3)
+        redis_conn = await Redis(host='redis', port=6379, db=6)
         articles_with_embeddings = await redis_conn.lrange('articles_with_embeddings', 0, -1)
         await redis_conn.delete('articles_with_embeddings')
 
-        articles = []
-        embeddings = []
+        batch_size = 10  # Or any other suitable number
         async with app.state.db() as session:
-            for article, embedding in zip(articles, embeddings):
-                # Convert embedding to JSON
-                embedding_json = json.dumps(embedding)
-                # Create a new ProcessedArticleModel instance
-                processed_article = ProcessedArticleModel(
-                    url=article.url,
-                    headline=article.headline,
-                    paragraphs=json.dumps(article.paragraphs),  # Convert list to JSON
-                    source=article.source,
-                    embedding=embedding_json,
-                    embeddings_created=1,  # Set to True
-                )
-                session.add(processed_article)
-            await session.commit()
+            for i in range(0, len(articles_with_embeddings), batch_size):
+                batch = articles_with_embeddings[i:i+batch_size]
+                for article_with_embedding in batch:
+                    try:
+                        article_data = json.loads(article_with_embedding)
+                        article = ArticleBase(**article_data)
+                        db_article = ProcessedArticleModel(**article.model_dump())
+                        session.add(db_article)
+                    except ValidationError as e:
+                        logger.error(f"Validation error for article: {e}")
+                    except json.JSONDecodeError as e:
+                        logger.error(f"JSON decoding error: {e}")
+                await session.commit()
 
         return {"message": "Articles with embeddings stored successfully in PostgreSQL."}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"An error occurred: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.post("/update_qdrant_flags")
 async def update_qdrant_flags(urls: List[str]):
