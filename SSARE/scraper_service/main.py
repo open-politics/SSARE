@@ -10,6 +10,7 @@ from core.utils import load_config
 from redis.asyncio import Redis
 from contextlib import asynccontextmanager
 import logging
+from core.models import ArticleBase
 
 
 logging.basicConfig(level=logging.INFO)
@@ -17,10 +18,12 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-class Article(BaseModel):
-    url: str
-    headline: str
-    paragraphs: List[str]
+
+class Flag(BaseModel):
+    flag: str
+
+
+
 
 async def setup_redis_connection():
     # Setup Redis connection
