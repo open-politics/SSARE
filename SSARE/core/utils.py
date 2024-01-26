@@ -3,10 +3,9 @@ import os
 from typing import Optional
 
 
-
 def load_config():
     config = ConfigParser()
-    config.read('config.ini')
+    config.read('core/configs/config.conf')
     return config
 
 

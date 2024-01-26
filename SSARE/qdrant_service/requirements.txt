@@ -1,0 +1,9 @@
+uvicorn
+sqlalchemy
+fastapi
+pandas
+requests
+psycopg2-binary
+redis
+asyncpg
+qdrant-client
