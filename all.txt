@@ -1,0 +1,722 @@
+./docker-compose.yml:
+version: '3.9'
+
+services:
+  redis:
+    image: redis:latest
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - ./core/configs/redis.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    networks:
+      - app_network
+
+  main_core_app:
+    build: 
+      context: ./SSARE
+      dockerfile: ./app/Dockerfile
+    ports:
+      - "8080:8080"
+    networks:
+      - app_network
+    depends_on:
+      - scraper_service
+      - postgres_service
+      - redis
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+        - action: rebuild
+          path: .
+
+  scraper_service:
+    build: 
+      context: ./SSARE
+      dockerfile: ./scraper_service/Dockerfile
+    ports:
+      - "8081:8081"
+    networks:
+      - app_network
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+        - action: rebuild
+          path: .
+    depends_on:
+      - redis
+      
+  qdrant_storage:
+    image: qdrant/qdrant
+    ports:
+      - "6333:6333"
+    networks:
+      - app_network
+
+  postgres_service:
+    build: 
+      context: ./SSARE
+      dockerfile: ./postgres_service/Dockerfile
+    volumes:
+      - ./sql_commands:/docker-entrypoint-initdb.d
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: root
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    networks:
+      - app_network
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+          ignore: 
+            - requirements.txt
+        - action: rebuild
+          path: .
+    depends_on:
+      - redis
+    
+  nlp_service:
+    build: 
+      context: ./SSARE
+      dockerfile: ./nlp_service/Dockerfile
+    ports:
+      - "0420:0420"
+    networks:
+      - app_network
+    depends_on:
+      - redis
+      - postgres_service
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+        - action: rebuild
+          path: .
+
+
+networks:
+  app_network:
+
+volumes:
+  postgres_data:
+
+
+./SSARE/qdrant_service/Dockerfile:
+FROM python:3.9
+
+WORKDIR /app
+
+# Copy the requirements.txt file
+COPY qdrant_service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the core directory
+COPY core ./core
+
+# Copy the main.py and other files from postgres_service
+COPY qdrant_service/main.py .
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "6969"]
+
+
+./SSARE/qdrant_service/main.py:
+from fastapi import FastAPI, HTTPException
+import httpx
+from qdrant_client import QdrantClient
+from redis import Redis
+import json
+from sqlalchemy import update
+from core.models import ProcessedArticleModel
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+
+
+app = FastAPI()
+
+qdrant_client = QdrantClient(host='qdrant_service', port=6333)
+collection_name = 'articles'
+
+@app.get("/healthcheck")
+async def healthcheck():
+    return {"message": "OK"}
+
+
+# get articles from postgres and create embeddings
+@app.post("/create_embedding_jobs")
+async def create_embeddings_jobs():
+    try:
+        async with httpx.AsyncClient() as client:
+            articles_without_embeddings = await client.get("http://postgres_service:5432/articles")
+            articles_without_embeddings = articles_without_embeddings.json()
+
+        redis_conn_unprocessed_articles = await Redis(host='redis', port=6379, db=5)
+        for article in articles_without_embeddings:
+            await redis_conn_unprocessed_articles.lpush('articles_without_embedding_queue', json.dumps(article))
+
+        return {"message": "Embedding jobs created."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+
+# get articles from postgres and create embeddings
+@app.post("/store_embeddings")
+async def store_embeddings():
+    try:
+        redis_conn = await Redis(host='redis', port=6379, db=6)
+        urls_to_update = []
+        while True:
+            article_with_embedding_json = await redis_conn.rpop('articles_with_embeddings')
+            if article_with_embedding_json is None:
+                break  # Exit if the queue is empty
+
+
+            article_with_embedding = json.loads(article_with_embedding_json)
+            payload = {
+                "headline": article_with_embedding["headline"],
+                "text": " ".join(article_with_embedding["paragraphs"]),  # Combine paragraphs into a single text
+                "source": article_with_embedding["source"],
+                "url": article_with_embedding["url"],
+            }
+
+            qdrant_client.upsert(
+                collection_name=collection_name,
+                points=[{
+                    "id": article_with_embedding["url"],  # Use URL as unique identifier
+                    "vector": article_with_embedding["embeddings"],
+                    "payload": payload
+                }]
+            )
+            urls_to_update.append(article_with_embedding["url"])
+            
+            async with httpx.AsyncClient() as client:
+                await client.post("http://postgres_service:5432/update_qdrant_flags", json={"urls": urls_to_update})
+
+        return {"message": "Embeddings processed and stored in Qdrant."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+./SSARE/core/models.py:
+from pydantic import BaseModel, Field
+from typing import List, Optional
+
+class ArticleBase(BaseModel):
+    url: str = Field(...)
+    headline: str = Field(...)
+    paragraphs: List[str] = Field(...)
+    source: Optional[str] = None
+    embeddings: Optional[List[float]] = None
+
+    class Config:
+        orm_mode = True
+
+
+./SSARE/postgres_service/Dockerfile:
+FROM python:3.9
+
+WORKDIR /app
+
+# Copy the requirements.txt file
+COPY postgres_service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the core directory
+COPY core ./core
+
+# Copy the main.py and other files from postgres_service
+COPY postgres_service/main.py .
+COPY postgres_service/sql_commands ./sql_commands
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5432"]
+
+
+./SSARE/postgres_service/main.py:
+from pydantic import BaseModel
+from typing import List, Dict
+from fastapi import FastAPI, HTTPException
+from fastapi.encoders import jsonable_encoder
+from typing import Optional
+from fastapi import Query
+import requests
+from core.utils import load_config
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.dialects.postgresql import insert
+from core.models import ArticleBase, ArticlesWithEmbeddings
+from sqlalchemy import Column, Integer, String
+from sqlalchemy import update
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import inspect
+from core.utils import load_config
+from redis import Redis
+import pandas as pd
+from core.models import ArticleBase, ArticleModel, ProcessedArticleModel
+from contextlib import asynccontextmanager
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy.ext.declarative import declarative_base
+from core.models import ArticleBase
+import json
+from fastapi import FastAPI
+from sqlalchemy import select
+from core.models import ArticleBase
+from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy.ext.declarative import declarative_base
+
+Base = declarative_base()
+
+# SQLAlchemy model
+class ProcessedArticleModel(Base):
+    __tablename__ = 'processed_articles'
+    id = Column(Integer, primary_key=True, index=True)
+    url = Column(String, index=True)
+    headline = Column(String)
+    paragraphs = Column(Text)
+    source = Column(String, nullable=True)
+    embedding = Column(Text)  # Storing the embedding as JSON
+
+    embeddings_created = Column(Integer, default=0)  # 0 = False, 1 = True
+    isStored_in_qdrant = Column(Integer, default=0)  # 0 = False, 1 = True
+
+
+app = FastAPI()
+
+redis_conn_flags = Redis(host='redis', port=6379, db=0)  # For flags
+redis_conn_articles = Redis(host='redis', port=6379, db=2)  # For articles
+
+async def setup_db_connection():
+    config = load_config()['postgresql']
+    database_name = load_config()['postgresql']['postgres_db']
+    table_name = load_config()['postgresql']['postgres_table_name']
+    user = load_config()['postgresql']['postgres_user']
+    password = load_config()['postgresql']['postgres_password']
+    host = load_config()['postgresql']['postgres_host']
+
+    engine = create_async_engine(f'postgresql+asyncpg://{user}:{password}@{host}/{database_name}?ssl=False')
+    return engine
+
+async def close_db_connection(engine):
+    # Close PostgreSQL connection
+    await engine.dispose()
+
+@asynccontextmanager
+async def db_lifespan(app: FastAPI):
+    # Before app startup
+    engine = await setup_db_connection()
+    app.state.db = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    yield
+    # After app shutdown
+    await close_db_connection(engine)
+
+app = FastAPI(lifespan=db_lifespan)
+
+@app.get("/flags")
+def produce_flags():
+    redis_conn_flags.delete("scrape_sources")
+    flags = ["cnn",]
+    for flag in flags:
+        redis_conn_flags.lpush("scrape_sources", flag)
+    return {"message": f"Flags produced: {', '.join(flags)}"}
+
+@app.get('/articles', response_model=List[ArticleBase])
+async def get_articles(
+    embeddings_created: Optional[bool] = Query(None),
+    isStored_in_Qdrant: Optional[bool] = Query(None),
+    skip: int = 0,
+    limit: int = 10
+    ):
+
+    async with app.state.db() as session:
+        query = select(ArticleModel)
+        
+        if embeddings_created is not None:
+            query = query.where(ArticleModel.embeddings_created == embeddings_created)
+
+        if isStored_in_Qdrant is not None:
+            query = query.where(ArticleModel.isStored_in_Qdrant == isStored_in_Qdrant)
+
+        query = query.offset(skip).limit(limit)
+        result = await session.execute(query)
+        articles = result.scalars().all()
+        
+        return jsonable_encoder(articles)
+
+@app.post("/store_raw_articles")
+async def store_raw_articles():
+    try:
+        redis_conn = await Redis(host='redis', port=6379, db=1)
+        raw_articles = await redis_conn.lrange('raw_articles_queue', 0, -1)
+        await redis_conn.delete('raw_articles_queue')
+
+        async with app.state.db() as session:
+            for raw_article in raw_articles:
+                article_data = json.loads(raw_article)
+                article = ArticleBase(**article_data)
+                db_article = ArticleModel(**article.model_dump())
+                session.add(db_article)
+            await session.commit()
+
+        return {"message": "Raw articles stored successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/store_articles_with_embeddings")
+async def store_processed_articles():
+    try:
+        redis_conn = await Redis(host='redis', port=6379, db=3)
+        articles_with_embeddings = await redis_conn.lrange('articles_with_embeddings', 0, -1)
+        await redis_conn.delete('articles_with_embeddings')
+
+        articles = []
+        embeddings = []
+        async with app.state.db() as session:
+            for article, embedding in zip(articles, embeddings):
+                # Convert embedding to JSON
+                embedding_json = json.dumps(embedding)
+                # Create a new ProcessedArticleModel instance
+                processed_article = ProcessedArticleModel(
+                    url=article.url,
+                    headline=article.headline,
+                    paragraphs=json.dumps(article.paragraphs),  # Convert list to JSON
+                    source=article.source,
+                    embedding=embedding_json,
+                    embeddings_created=1,  # Set to True
+                )
+                session.add(processed_article)
+            await session.commit()
+
+        return {"message": "Articles with embeddings stored successfully in PostgreSQL."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"An error occurred: {str(e)}")
+
+@app.post("/update_qdrant_flags")
+async def update_qdrant_flags(urls: List[str]):
+    try:
+        async with app.state.db() as session:
+            for url in urls:
+                await session.execute(update(ProcessedArticleModel).where(ProcessedArticleModel.url == url).values(isStored_in_qdrant=True))
+            await session.commit()
+
+        return {"message": "Qdrant flags updated successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+./SSARE/app/Dockerfile:
+FROM python:3.9
+
+WORKDIR /app
+
+# Copy the requirements.txt file
+COPY app/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the core directory
+COPY core ./core
+
+# Copy the main.py file
+COPY app/main.py .
+
+# Copy the config.ini file
+COPY app/config.ini .
+
+EXPOSE 8080
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+
+
+./SSARE/app/config.ini:
+[server]
+host = 0.0.0.0
+port = 8000
+log_level = DEBUG
+
+[open_politics]
+# Qdrant Settings
+qdrant_host = localhost
+qdrant_grpc_port = 6334
+qdrant_prefer_grpc = True
+qdrant_collection_name = open_politics_live_articles
+
+# Postgres Settings
+[postgresql]
+postgres_db = root
+postgres_user = admin
+postgres_password = password
+postgres_host = postgres_service
+postgres_table_name = unprocessed_articles
+
+./SSARE/app/main.py:
+from fastapi import FastAPI, HTTPException
+import httpx
+import os
+from core.utils import load_config
+
+app = FastAPI()
+
+config = load_config()["postgresql"]
+
+
+@app.get("/healthcheck")
+async def healthcheck():
+    return {"message": "OK"}
+
+@app.post("/full_run")
+async def full_run():
+    try:
+        # Produce flags
+        await httpx.post("http://scraper_service:5432/flags")
+        # Scrape data
+        await httpx.post("http://scraper_service:8081/create_scrape_jobs")
+        # Create embeddings
+        await httpx.post("http://nlp_service:0420/create_embeddings")
+        # Store embeddings
+        await httpx.post("http://postgres_service:8000/store_embeddings")
+        return {"message": "Full run complete."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+./SSARE/scraper_service/Dockerfile:
+FROM python:3.9
+
+WORKDIR /app
+
+# Copy the requirements.txt file
+COPY scraper_service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && apt-get install -y supervisor
+
+# Copy the core directory
+COPY core ./core
+
+# Copy the main.py and other files from scraper_service
+COPY scraper_service/main.py .
+COPY scraper_service/scrapers ./scrapers
+COPY scraper_service/scrapers/scrapers_config.json .
+COPY scraper_service/celery_worker.py .
+
+# Copy the supervisord.conf file
+COPY core/configs/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+
+
+
+./SSARE/scraper_service/celery_worker.py:
+from celery import Celery
+import json
+from celery.utils.log import get_task_logger
+import pandas as pd
+import subprocess
+import logging
+from redis import Redis
+logging.basicConfig(level=logging.INFO)
+logger = get_task_logger(__name__)
+
+celery_app = Celery("worker", backend="redis://redis:6379/9", broker="redis://redis:6379/9")
+
+@celery_app.task
+def scrape_data_task():
+    logger.info("Received request to scrape data")
+    try:
+        redis_conn_flags = Redis(host='redis', port=6379, db=0) # For flags
+
+        flags = redis_conn_flags.lrange('scrape_sources', 0, -1)
+        flags = [flag.decode('utf-8') for flag in flags]
+        logger.info(f"Scraping data for {flags}")
+
+        for flag in flags:
+            scrape_single_source.delay(flag)
+            logger.info(f"Scraping data for {flag} complete")
+        logger.info("Scraping complete")
+    except Exception as e:
+        logger.error(f"Error in scraping data: {e}")
+        raise e
+
+@celery_app.task
+def scrape_single_source(flag: str):
+    logger.info(f"Single source scraping for {flag}")
+    try:
+        with open("./scrapers/scrapers_config.json") as file:
+            config_json = json.load(file)
+
+        if flag not in config_json["scrapers"]:
+            logger.error(f"No configuration found for flag: {flag}")
+            return
+
+        script_location = config_json["scrapers"][flag]["location"]
+        logger.info(f"Running script for {flag}")
+
+        result = subprocess.run(["python", script_location], capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error(f"Error running script for {flag}: {result.stderr}")
+            return
+
+        df = pd.read_csv(f"/app/scrapers/data/dataframes/{flag}_articles.csv")
+        logger.info(df.head(3))
+
+        # add column "source" which is the flag
+        df["source"] = flag
+        articles = df.to_dict(orient="records")
+
+        redis_conn_articles = Redis(host='redis', port=6379, db=1)  # For articles
+        redis_conn_articles.lpush("raw_articles_queue", json.dumps(articles))
+        logger.info(f"Pushed {flag} data to Redis")
+
+        return f"Scraped data for {flag} successfully."
+    except Exception as e:
+        logger.error(f"Error in scraping {flag}: {e}")
+
+
+./SSARE/scraper_service/main.py:
+from fastapi import FastAPI, HTTPException, Query
+import requests
+from pydantic import BaseModel
+from typing import List
+import importlib
+import json
+from fastapi import Body
+from celery_worker import scrape_data_task
+from core.utils import load_config
+from redis.asyncio import Redis
+from contextlib import asynccontextmanager
+import logging
+from core.models import ArticleBase
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI()
+
+
+class Flag(BaseModel):
+    flag: str
+
+
+
+
+async def setup_redis_connection():
+    # Setup Redis connection
+    return await Redis(host='redis', port=6379, db=1, decode_responses=True)
+async def close_redis_connection(redis_conn):
+
+    # Close Redis connection
+    await redis_conn.close()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Before app startup
+    app.state.redis = await setup_redis_connection()
+    yield
+    # After app shutdown
+    await close_redis_connection(app.state.redis)
+
+app = FastAPI(lifespan=lifespan)
+
+
+def get_scraper_config():
+    with open("scrapers/scrapers_config.json") as f:
+        return json.load(f)
+
+@app.post("/create_scrape_jobs")
+async def create_scrape_jobs():
+    redis_conn_flags = await Redis(host='redis', port=6379, db=0)  # For flags
+    logger.info("Creating scrape jobs")
+    flags = await redis_conn_flags.lrange('scrape_sources', 0, -1)
+    flags = [flag.decode('utf-8') for flag in flags]
+
+    config_json = get_scraper_config()
+    if not all(flag in config_json["scrapers"].keys() for flag in flags):
+        raise HTTPException(status_code=400, detail="Invalid flags provided.")
+    logger.info("Scrape jobs created")
+    result = scrape_data_task.delay()
+    logger.info(f"Scrape data task created with ID: {result.id}")
+    return {"message": "Scraping triggered successfully."}
+        
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint"""
+    return {"status": "ok"}
+
+
+
+
+./SSARE/nlp_service/Dockerfile:
+FROM python:3.9
+
+WORKDIR /app
+
+# Copy the requirements.txt file
+COPY nlp_service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the core directory
+COPY core ./core
+
+# Copy the main.py and other files from postgres_service
+COPY nlp_service/main.py .
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "0420"]
+
+
+./SSARE/nlp_service/main.py:
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+from sentence_transformers import SentenceTransformer
+from typing import List
+from redis.asyncio import Redis
+from core.models import ArticleBase
+from core.utils import load_config
+import httpx
+import requests
+import json
+from core.models import ArticleBase
+app = FastAPI()
+
+model = SentenceTransformer('jinaai/jina-embeddings-v2-base-en')
+
+
+
+@app.post("/generate_embeddings")
+async def generate_embeddings():
+    try:
+        redis_conn_raw = await Redis(host='redis', port=6379, db=5)
+        raw_articles = await redis_conn_raw.lrange('articles_without_embedding_queue', 0, -1)
+        raw_articles = [article.decode('utf-8') for article in raw_articles]
+
+        redis_conn_processed = await Redis(host='redis', port=6379, db=6)
+
+
+
+        for raw_article in raw_articles:
+            article = ArticleBase(**json.loads(raw_article))
+            embedding = model.encode(article.headline + " ".join(article.paragraphs)).tolist()
+
+            article_with_embedding = article.model_dump()
+            article_with_embedding["embeddings"] = embedding
+
+            await redis_conn_processed.lpush('articles_with_embeddings', json.dumps(article_with_embedding))
+            
+
+
+
+        return {"message": "Embeddings generated and pushed to queue."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+
+

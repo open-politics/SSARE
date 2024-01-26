@@ -6,30 +6,39 @@ from redis.asyncio import Redis
 from core.models import ArticleBase
 from core.utils import load_config
 import httpx
-
-
+import requests
+import json
+from core.models import ArticleBase
 app = FastAPI()
 
 model = SentenceTransformer('jinaai/jina-embeddings-v2-base-en')
 
 
-from core.models import ArticleBase
 
-@app.post("/create_embeddings")
-async def create_embeddings(articles: List[ArticleBase]):
+@app.post("/generate_embeddings")
+async def generate_embeddings():
     try:
-        embeddings = model.encode([article.headline + " ".join(article.paragraphs) for article in articles])
-        embeddings_list = embeddings.tolist()
+        redis_conn_raw = await Redis(host='redis', port=6379, db=5)
+        raw_articles = await redis_conn_raw.lrange('articles_without_embedding_queue', 0, -1)
+        raw_articles = [article.decode('utf-8') for article in raw_articles]
 
-        # Send embeddings to qdrant_service for storage
-        async with httpx.AsyncClient() as client:
-            response = await client.post("http://qdrant_service:8000/store_embeddings", json={
-                "articles": [article.model_dump() for article in articles],
-                "embeddings": embeddings_list
-            })
-            response.raise_for_status()
+        redis_conn_processed = await Redis(host='redis', port=6379, db=6)
 
-        return {"message": "Embeddings created successfully and sent for storage."}
+
+
+        for raw_article in raw_articles:
+            article = ArticleBase(**json.loads(raw_article))
+            embedding = model.encode(article.headline + " ".join(article.paragraphs)).tolist()
+
+            article_with_embedding = article.model_dump()
+            article_with_embedding["embeddings"] = embedding
+
+            await redis_conn_processed.lpush('articles_with_embeddings', json.dumps(article_with_embedding))
+            
+
+
+
+        return {"message": "Embeddings generated and pushed to queue."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

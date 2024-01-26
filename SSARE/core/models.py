@@ -1,12 +1,11 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
-
+from typing import List, Optional
 
 class ArticleBase(BaseModel):
     url: str = Field(...)
     headline: str = Field(...)
     paragraphs: List[str] = Field(...)
-    source: Optional[str] = None  # Extendable field for the article's source
+    source: Optional[str] = None
     embeddings: Optional[List[float]] = None
 
     class Config:

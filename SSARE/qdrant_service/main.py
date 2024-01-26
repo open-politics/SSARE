@@ -1,14 +1,13 @@
 from fastapi import FastAPI, HTTPException
 import httpx
-import os
-from typing import List
-from core.utils import load_config
-from populate_qdrant_from_postgres import PopulateQdrant
-import requests
-from core.models import ArticleBase, ArticleModel
 from qdrant_client import QdrantClient
 from redis import Redis
-import uuid
+import json
+from sqlalchemy import update
+from core.models import ProcessedArticleModel
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+
 
 app = FastAPI()
 
@@ -20,49 +19,56 @@ async def healthcheck():
     return {"message": "OK"}
 
 
-@app.get("/populate_qdrant")
-async def populate_qdrant():
-    postgres_data = requests.get("http://postgres_service:8000/articles")
-    populate_qdrant = PopulateQdrant()
-    populate_qdrant.populate_qdrant()
-    return {"message": "Qdrant populated successfully."}
-        
-
 # get articles from postgres and create embeddings
-@app.post("/send_to_nlp_for_embeddings")
-async def send_to_nlp_for_embeddings():
+@app.post("/create_embedding_jobs")
+async def create_embeddings_jobs():
     try:
-        articles = requests.get("http://postgres_service:5432/articles")
-        # Create embeddings
-        await httpx.post("http://nlp_service:0420/create_embeddings", json=articles.json())
-        return {"message": "Embeddings created successfully."}
+        async with httpx.AsyncClient() as client:
+            articles_without_embeddings = await client.get("http://postgres_service:5432/articles")
+            articles_without_embeddings = articles_without_embeddings.json()
+
+        redis_conn_unprocessed_articles = await Redis(host='redis', port=6379, db=5)
+        for article in articles_without_embeddings:
+            await redis_conn_unprocessed_articles.lpush('articles_without_embedding_queue', json.dumps(article))
+
+        return {"message": "Embedding jobs created."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     
 
 # get articles from postgres and create embeddings
 @app.post("/store_embeddings")
-async def store_embeddings(articles: List[ArticleBase], embeddings: List[List[float]]):
+async def store_embeddings():
     try:
-        # Store embeddings in Qdrant
-        for article, embedding in zip(articles, embeddings):
+        redis_conn = await Redis(host='redis', port=6379, db=6)
+        urls_to_update = []
+        while True:
+            article_with_embedding_json = await redis_conn.rpop('articles_with_embeddings')
+            if article_with_embedding_json is None:
+                break  # Exit if the queue is empty
+
+
+            article_with_embedding = json.loads(article_with_embedding_json)
+            payload = {
+                "headline": article_with_embedding["headline"],
+                "text": " ".join(article_with_embedding["paragraphs"]),  # Combine paragraphs into a single text
+                "source": article_with_embedding["source"],
+                "url": article_with_embedding["url"],
+            }
+
             qdrant_client.upsert(
                 collection_name=collection_name,
                 points=[{
-                    "id": article.url,  # Assuming URLs are unique identifiers
-                    "vector": embedding,
-                    "payload": article.model_dump()
+                    "id": article_with_embedding["url"],  # Use URL as unique identifier
+                    "vector": article_with_embedding["embeddings"],
+                    "payload": payload
                 }]
             )
+            urls_to_update.append(article_with_embedding["url"])
+            
+            async with httpx.AsyncClient() as client:
+                await client.post("http://postgres_service:5432/update_qdrant_flags", json={"urls": urls_to_update})
 
-        # Send articles and embeddings to postgres_service for storage
-        async with httpx.AsyncClient() as client:
-            response = await client.post("http://postgres_service:8000/store_articles_with_embeddings", json={
-                "articles": [article.model_dump() for article in articles],
-                "embeddings": embeddings
-            })
-            response.raise_for_status()
-
-        return {"message": "Embeddings and articles stored in Qdrant and PostgreSQL successfully."}
+        return {"message": "Embeddings processed and stored in Qdrant."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

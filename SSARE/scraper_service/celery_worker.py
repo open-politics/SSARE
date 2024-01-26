@@ -54,8 +54,8 @@ def scrape_single_source(flag: str):
         df["source"] = flag
         articles = df.to_dict(orient="records")
 
-        redis_conn_articles = Redis(host='redis', port=6379, db=2)  # For articles
-        redis_conn_articles.lpush("scraped_data", json.dumps(articles))
+        redis_conn_articles = Redis(host='redis', port=6379, db=1)  # For articles
+        redis_conn_articles.lpush("raw_articles_queue", json.dumps(articles))
         logger.info(f"Pushed {flag} data to Redis")
 
         return f"Scraped data for {flag} successfully."
