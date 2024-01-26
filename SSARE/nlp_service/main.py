@@ -9,14 +9,22 @@ import httpx
 import requests
 import json
 from core.models import ArticleBase
+
+"""
+This Service runs on port 0420 and is responsible for generating embeddings for articles.
+"""
+
 app = FastAPI()
 
 model = SentenceTransformer('jinaai/jina-embeddings-v2-base-en')
 
-
-
 @app.post("/generate_embeddings")
 async def generate_embeddings():
+    """
+    This function generates embeddings for articles that do not have embeddings.
+    It is triggered by an API call. It reads from redis queue 5 - channel articles_without_embedding_queue
+    and writes to redis queue 6 - channel articles_with_embeddings
+    """
     try:
         redis_conn_raw = await Redis(host='redis', port=6379, db=5)
         raw_articles = await redis_conn_raw.lrange('articles_without_embedding_queue', 0, -1)
@@ -34,7 +42,7 @@ async def generate_embeddings():
             article_with_embedding["embeddings"] = embedding
 
             await redis_conn_processed.lpush('articles_with_embeddings', json.dumps(article_with_embedding))
-            
+
 
 
 
