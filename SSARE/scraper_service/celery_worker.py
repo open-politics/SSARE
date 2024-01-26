@@ -5,6 +5,15 @@ import pandas as pd
 import subprocess
 import logging
 from redis.asyncio import Redis
+
+""" 
+This Script is creating Celery tasks for scraping data from news sources.
+It is triggered by the orchestrator service.
+The scrapa_daa_task function reads from Redis Queue 0 - channel "scrape_sources" and creates a scraping job for each flag.
+It passes a flag as a string argument to the scrape_single_source function.
+"""
+
+
 logging.basicConfig(level=logging.INFO)
 logger = get_task_logger(__name__)
 

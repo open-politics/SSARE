@@ -9,7 +9,6 @@ import httpx
 import requests
 import json
 from core.models import ArticleBase
-
 """
 This Service runs on port 0420 and is responsible for generating embeddings for articles.
 """
