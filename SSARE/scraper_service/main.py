@@ -13,6 +13,7 @@ import logging
 from core.models import ArticleBase
 
 
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 

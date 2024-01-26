@@ -30,14 +30,17 @@ from sqlalchemy import select
 from core.models import ArticleBase
 from sqlalchemy import Column, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import bindparam
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import bindparam
 
 Base = declarative_base()
 
-# SQLAlchemy model
-class ProcessedArticleModel(Base):
-    __tablename__ = 'processed_articles'
-    id = Column(Integer, primary_key=True, index=True)
-    url = Column(String, index=True)
+# SQLAlchemy model - unprocessed articles
+class ArticleModel(Base):
+    __tablename__ = 'articles'
+    url = Column(String, primary_key=True, index=True)
     headline = Column(String)
     paragraphs = Column(Text)
     source = Column(String, nullable=True)
@@ -45,6 +48,42 @@ class ProcessedArticleModel(Base):
 
     embeddings_created = Column(Integer, default=0)  # 0 = False, 1 = True
     isStored_in_qdrant = Column(Integer, default=0)  # 0 = False, 1 = True
+
+    def model_dump(self):
+        return {
+            "url": self.url,
+            "headline": self.headline,
+            "paragraphs": json.loads(self.paragraphs),
+            "source": self.source,
+            "embedding": json.loads(self.embedding),
+            "embeddings_created": self.embeddings_created,
+            "isStored_in_qdrant": self.isStored_in_qdrant
+        }
+
+
+# SQLAlchemy model
+class ProcessedArticleModel(Base):
+    __tablename__ = 'processed_articles'
+
+    url = Column(String, primary_key=True, index=True)
+    headline = Column(String)
+    paragraphs = Column(Text)
+    source = Column(String, nullable=True)
+    embedding = Column(Text)  # Storing the embedding as JSON
+
+    embeddings_created = Column(Integer, default=0)  # 0 = False, 1 = True
+    isStored_in_qdrant = Column(Integer, default=0)  # 0 = False, 1 = True
+
+    def model_dump(self):
+        return {
+            "url": self.url,
+            "headline": self.headline,
+            "paragraphs": json.loads(self.paragraphs),
+            "source": self.source,
+            "embedding": json.loads(self.embedding),
+            "embeddings_created": self.embeddings_created,
+            "isStored_in_qdrant": self.isStored_in_qdrant
+        }
 
 
 app = FastAPI()
@@ -80,6 +119,11 @@ app = FastAPI(lifespan=db_lifespan)
 
 @app.get("/flags")
 def produce_flags():
+    """
+    This function produces flags for the scraper service. It is triggered by an API call.
+    It deletes all existing flags in Redis Queue 0 - channel "scrape_sources" and pushes new flags.
+    The flag creation mechanism is to be updated, and not hardcoded like now.
+    """
     redis_conn_flags.delete("scrape_sources")
     flags = ["cnn",]
     for flag in flags:
@@ -162,8 +206,10 @@ async def store_processed_articles():
 async def update_qdrant_flags(urls: List[str]):
     try:
         async with app.state.db() as session:
-            for url in urls:
-                await session.execute(update(ProcessedArticleModel).where(ProcessedArticleModel.url == url).values(isStored_in_qdrant=True))
+            stmt = update(ProcessedArticleModel).\
+                where(ProcessedArticleModel.url == bindparam('url')).\
+                values(isStored_in_qdrant=True)
+            await session.execute(stmt, [{"url": url} for url in urls])
             await session.commit()
 
         return {"message": "Qdrant flags updated successfully."}

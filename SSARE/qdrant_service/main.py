@@ -1,12 +1,14 @@
 from fastapi import FastAPI, HTTPException
 import httpx
 from qdrant_client import QdrantClient
-from redis import Redis
 import json
+from redis.asyncio import Redis
 from sqlalchemy import update
 from core.models import ProcessedArticleModel
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from fastapi.exceptions import RequestValidationError
+from starlette.responses import JSONResponse
 
 
 app = FastAPI()
@@ -18,6 +20,14 @@ collection_name = 'articles'
 async def healthcheck():
     return {"message": "OK"}
 
+# Add exception handler for RequestValidationError
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=400,
+        content={"detail": exc.errors(), "body": exc.body},
+    )
+
 
 # get articles from postgres and create embeddings
 @app.post("/create_embedding_jobs")
@@ -27,7 +37,7 @@ async def create_embeddings_jobs():
             articles_without_embeddings = await client.get("http://postgres_service:5432/articles")
             articles_without_embeddings = articles_without_embeddings.json()
 
-        redis_conn_unprocessed_articles = await Redis(host='redis', port=6379, db=5)
+        redis_conn_unprocessed_articles = Redis(host='redis', port=6379, db=5)
         for article in articles_without_embeddings:
             await redis_conn_unprocessed_articles.lpush('articles_without_embedding_queue', json.dumps(article))
 
@@ -39,6 +49,11 @@ async def create_embeddings_jobs():
 # get articles from postgres and create embeddings
 @app.post("/store_embeddings")
 async def store_embeddings():
+    """
+    This function is triggered by an api. It reads from redis queue 6 - channel articles_with_embeddings.
+    It stores the embeddings in Qdrant.
+
+    """
     try:
         redis_conn = await Redis(host='redis', port=6379, db=6)
         urls_to_update = []

@@ -1,16 +1,16 @@
 ./SSARE/qdrant_service/main.py:
 from fastapi import FastAPI, HTTPException
 import httpx
-import os
-from typing import List
-from core.utils import load_config
-from populate_qdrant_from_postgres import PopulateQdrant
-import requests
-from core.models import ArticleBase, ArticleModel
 from qdrant_client import QdrantClient
 from redis import Redis
-import uuid
 import json
+from sqlalchemy import update
+from core.models import ProcessedArticleModel
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+from fastapi.exceptions import RequestValidationError
+from starlette.responses import JSONResponse
+
 
 app = FastAPI()
 
@@ -21,16 +21,28 @@ collection_name = 'articles'
 async def healthcheck():
     return {"message": "OK"}
 
-        
+# Add exception handler for RequestValidationError
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=400,
+        content={"detail": exc.errors(), "body": exc.body},
+    )
+
 
 # get articles from postgres and create embeddings
-@app.post("/send_to_nlp_for_embeddings")
-async def send_to_nlp_for_embeddings():
+@app.post("/create_embedding_jobs")
+async def create_embeddings_jobs():
     try:
-        articles = requests.get("http://postgres_service:5432/articles")
-        # Create embeddings
-        await httpx.post("http://nlp_service:0420/create_embeddings", json=articles.json())
-        return {"message": "Embeddings created successfully."}
+        async with httpx.AsyncClient() as client:
+            articles_without_embeddings = await client.get("http://postgres_service:5432/articles")
+            articles_without_embeddings = articles_without_embeddings.json()
+
+        redis_conn_unprocessed_articles = await Redis(host='redis', port=6379, db=5)
+        for article in articles_without_embeddings:
+            await redis_conn_unprocessed_articles.lpush('articles_without_embedding_queue', json.dumps(article))
+
+        return {"message": "Embedding jobs created."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     
@@ -39,11 +51,13 @@ async def send_to_nlp_for_embeddings():
 @app.post("/store_embeddings")
 async def store_embeddings():
     try:
-        redis_conn = await Redis(host='redis', port=6379, db=2)
+        redis_conn = await Redis(host='redis', port=6379, db=6)
+        urls_to_update = []
         while True:
-            article_with_embedding_json = await redis_conn.rpop('embedding_queue')
+            article_with_embedding_json = await redis_conn.rpop('articles_with_embeddings')
             if article_with_embedding_json is None:
                 break  # Exit if the queue is empty
+
 
             article_with_embedding = json.loads(article_with_embedding_json)
             payload = {
@@ -61,6 +75,10 @@ async def store_embeddings():
                     "payload": payload
                 }]
             )
+            urls_to_update.append(article_with_embedding["url"])
+            
+            async with httpx.AsyncClient() as client:
+                await client.post("http://postgres_service:5432/update_qdrant_flags", json={"urls": urls_to_update})
 
         return {"message": "Embeddings processed and stored in Qdrant."}
     except Exception as e:
@@ -86,6 +104,8 @@ from pydantic import BaseModel
 from typing import List, Dict
 from fastapi import FastAPI, HTTPException
 from fastapi.encoders import jsonable_encoder
+from typing import Optional
+from fastapi import Query
 import requests
 from core.utils import load_config
 from sqlalchemy import create_engine
@@ -93,13 +113,13 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import insert
 from core.models import ArticleBase, ArticlesWithEmbeddings
 from sqlalchemy import Column, Integer, String
+from sqlalchemy import update
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import inspect
 from core.utils import load_config
 from redis import Redis
 import pandas as pd
 from core.models import ArticleBase, ArticleModel, ProcessedArticleModel
-
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
@@ -112,6 +132,10 @@ from sqlalchemy import select
 from core.models import ArticleBase
 from sqlalchemy import Column, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import bindparam
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import bindparam
 
 Base = declarative_base()
 
@@ -125,15 +149,14 @@ class ProcessedArticleModel(Base):
     source = Column(String, nullable=True)
     embedding = Column(Text)  # Storing the embedding as JSON
 
-# Pydantic model
-
+    embeddings_created = Column(Integer, default=0)  # 0 = False, 1 = True
+    isStored_in_qdrant = Column(Integer, default=0)  # 0 = False, 1 = True
 
 
 app = FastAPI()
 
 redis_conn_flags = Redis(host='redis', port=6379, db=0)  # For flags
 redis_conn_articles = Redis(host='redis', port=6379, db=2)  # For articles
-
 
 async def setup_db_connection():
     config = load_config()['postgresql']
@@ -168,11 +191,34 @@ def produce_flags():
     for flag in flags:
         redis_conn_flags.lpush("scrape_sources", flag)
     return {"message": f"Flags produced: {', '.join(flags)}"}
-    
+
+@app.get('/articles', response_model=List[ArticleBase])
+async def get_articles(
+    embeddings_created: Optional[bool] = Query(None),
+    isStored_in_Qdrant: Optional[bool] = Query(None),
+    skip: int = 0,
+    limit: int = 10
+    ):
+
+    async with app.state.db() as session:
+        query = select(ArticleModel)
+        
+        if embeddings_created is not None:
+            query = query.where(ArticleModel.embeddings_created == embeddings_created)
+
+        if isStored_in_Qdrant is not None:
+            query = query.where(ArticleModel.isStored_in_Qdrant == isStored_in_Qdrant)
+
+        query = query.offset(skip).limit(limit)
+        result = await session.execute(query)
+        articles = result.scalars().all()
+        
+        return jsonable_encoder(articles)
+
 @app.post("/store_raw_articles")
 async def store_raw_articles():
     try:
-        redis_conn = await Redis(host='redis', port=6379, db=0)
+        redis_conn = await Redis(host='redis', port=6379, db=1)
         raw_articles = await redis_conn.lrange('raw_articles_queue', 0, -1)
         await redis_conn.delete('raw_articles_queue')
 
@@ -180,7 +226,7 @@ async def store_raw_articles():
             for raw_article in raw_articles:
                 article_data = json.loads(raw_article)
                 article = ArticleBase(**article_data)
-                db_article = ArticleModel(**article.dict())
+                db_article = ArticleModel(**article.model_dump())
                 session.add(db_article)
             await session.commit()
 
@@ -188,17 +234,16 @@ async def store_raw_articles():
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.get('/articles', response_model=List[ArticleBase])
-async def get_articles():
-    async with app.state.db() as session:
-        result = await session.execute(select(ArticleModel))
-        articles = result.scalars().all()
-        return jsonable_encoder(articles)
-    
 
 @app.post("/store_articles_with_embeddings")
-async def store_articles_with_embeddings(articles: List[ArticleBase], embeddings: List[List[float]]):
+async def store_processed_articles():
     try:
+        redis_conn = await Redis(host='redis', port=6379, db=3)
+        articles_with_embeddings = await redis_conn.lrange('articles_with_embeddings', 0, -1)
+        await redis_conn.delete('articles_with_embeddings')
+
+        articles = []
+        embeddings = []
         async with app.state.db() as session:
             for article, embedding in zip(articles, embeddings):
                 # Convert embedding to JSON
@@ -209,7 +254,8 @@ async def store_articles_with_embeddings(articles: List[ArticleBase], embeddings
                     headline=article.headline,
                     paragraphs=json.dumps(article.paragraphs),  # Convert list to JSON
                     source=article.source,
-                    embedding=embedding_json
+                    embedding=embedding_json,
+                    embeddings_created=1,  # Set to True
                 )
                 session.add(processed_article)
             await session.commit()
@@ -217,6 +263,21 @@ async def store_articles_with_embeddings(articles: List[ArticleBase], embeddings
         return {"message": "Articles with embeddings stored successfully in PostgreSQL."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"An error occurred: {str(e)}")
+
+@app.post("/update_qdrant_flags")
+async def update_qdrant_flags(urls: List[str]):
+    try:
+        async with app.state.db() as session:
+            stmt = update(ProcessedArticleModel).\
+                where(ProcessedArticleModel.url == bindparam('url')).\
+                values(isStored_in_qdrant=True)
+            await session.execute(stmt, [{"url": url} for url in urls])
+            await session.commit()
+
+        return {"message": "Qdrant flags updated successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 ./SSARE/app/main.py:
 from fastapi import FastAPI, HTTPException
@@ -255,7 +316,7 @@ from celery.utils.log import get_task_logger
 import pandas as pd
 import subprocess
 import logging
-from redis import Redis
+from redis.asyncio import Redis
 logging.basicConfig(level=logging.INFO)
 logger = get_task_logger(__name__)
 
@@ -263,14 +324,22 @@ celery_app = Celery("worker", backend="redis://redis:6379/9", broker="redis://re
 
 @celery_app.task
 def scrape_data_task():
+    """
+    This function will be called by the main.py script. It will check the flags in Redis Queue 0 - channel "scrape_sources"
+    and create a scraping job for each flag with Celery.
+    It passes a flag as a string argument to the scrape_single_source function.
+    """
     logger.info("Received request to scrape data")
     try:
-        redis_conn_flags = Redis(host='redis', port=6379, db=0) # For flags
+        # Asynchronous Redis connection for flags
+        redis_conn_flags = Redis(host='redis', port=6379, db=0)
 
+        # Retrieve all flags from Redis
         flags = redis_conn_flags.lrange('scrape_sources', 0, -1)
         flags = [flag.decode('utf-8') for flag in flags]
         logger.info(f"Scraping data for {flags}")
 
+        # Trigger scraping for each flag
         for flag in flags:
             scrape_single_source.delay(flag)
             logger.info(f"Scraping data for {flag} complete")
@@ -281,38 +350,50 @@ def scrape_data_task():
 
 @celery_app.task
 def scrape_single_source(flag: str):
+    """
+    This function is triggered by the scrape_data_task function. It will run the corresponding scraper script
+    for the flag. It will then read the CSV file created by the scraper script 
+    and push the data to Redis Queue 1 - channel "raw_articles_queue".
+    """
     logger.info(f"Single source scraping for {flag}")
     try:
+        # Load scraper configuration from JSON file
         with open("./scrapers/scrapers_config.json") as file:
             config_json = json.load(file)
 
+        # Check if the flag has a corresponding scraper configuration
         if flag not in config_json["scrapers"]:
             logger.error(f"No configuration found for flag: {flag}")
             return
 
+        # Get the location of the scraper script
         script_location = config_json["scrapers"][flag]["location"]
         logger.info(f"Running script for {flag}")
 
+        # Run the scraper script as a subprocess
         result = subprocess.run(["python", script_location], capture_output=True, text=True)
         if result.returncode != 0:
             logger.error(f"Error running script for {flag}: {result.stderr}")
             return
 
+        # Read the scraped data from CSV to a DataFrame
         df = pd.read_csv(f"/app/scrapers/data/dataframes/{flag}_articles.csv")
         logger.info(df.head(3))
 
-        # add column "source" which is the flag
+        # Add a 'source' column to the DataFrame with the flag
         df["source"] = flag
         articles = df.to_dict(orient="records")
 
-        redis_conn_articles = Redis(host='redis', port=6379, db=2)  # For articles
-        redis_conn_articles.lpush("scraped_data", json.dumps(articles))
+        # Asynchronous Redis connection for articles
+        redis_conn_articles = Redis(host='redis', port=6379, db=1)
+
+        # Push scraped articles to Redis
+        redis_conn_articles.lpush("raw_articles_queue", json.dumps(articles))
         logger.info(f"Pushed {flag} data to Redis")
 
         return f"Scraped data for {flag} successfully."
     except Exception as e:
         logger.error(f"Error in scraping {flag}: {e}")
-
 
 ./SSARE/scraper_service/main.py:
 from fastapi import FastAPI, HTTPException, Query
@@ -328,6 +409,7 @@ from redis.asyncio import Redis
 from contextlib import asynccontextmanager
 import logging
 from core.models import ArticleBase
+
 
 
 logging.basicConfig(level=logging.INFO)
@@ -400,20 +482,31 @@ from core.utils import load_config
 import httpx
 import requests
 import json
+from core.models import ArticleBase
+
+"""
+This Service runs on port 0420 and is responsible for generating embeddings for articles.
+"""
 
 app = FastAPI()
 
 model = SentenceTransformer('jinaai/jina-embeddings-v2-base-en')
 
-
-from core.models import ArticleBase
-
 @app.post("/generate_embeddings")
 async def generate_embeddings():
+    """
+    This function generates embeddings for articles that do not have embeddings.
+    It is triggered by an API call. It reads from redis queue 5 - channel articles_without_embedding_queue
+    and writes to redis queue 6 - channel articles_with_embeddings
+    """
     try:
-        redis_conn = await Redis(host='redis', port=6379, db=5)
-        raw_articles = await redis_conn.lrange('articles_for_embedding_queue', 0, -1)
-        await redis_conn.delete('articles_for_embedding_queue')
+        redis_conn_raw = await Redis(host='redis', port=6379, db=5)
+        raw_articles = await redis_conn_raw.lrange('articles_without_embedding_queue', 0, -1)
+        raw_articles = [article.decode('utf-8') for article in raw_articles]
+
+        redis_conn_processed = await Redis(host='redis', port=6379, db=6)
+
+
 
         for raw_article in raw_articles:
             article = ArticleBase(**json.loads(raw_article))
@@ -421,7 +514,11 @@ async def generate_embeddings():
 
             article_with_embedding = article.model_dump()
             article_with_embedding["embeddings"] = embedding
-            await redis_conn.lpush('embedding_queue', json.dumps(article_with_embedding))
+
+            await redis_conn_processed.lpush('articles_with_embeddings', json.dumps(article_with_embedding))
+
+
+
 
         return {"message": "Embeddings generated and pushed to queue."}
     except Exception as e:
