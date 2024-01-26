@@ -39,6 +39,9 @@ Base = declarative_base()
 
 # SQLAlchemy model - unprocessed articles
 class ArticleModel(Base):
+    """
+    This model is used to store unprocessed articles in PostgreSQL after scraping.
+    """
     __tablename__ = 'articles'
     url = Column(String, primary_key=True, index=True)
     headline = Column(String)
@@ -63,8 +66,10 @@ class ArticleModel(Base):
 
 # SQLAlchemy model
 class ProcessedArticleModel(Base):
+    """
+    This model is used to store processed articles in PostgreSQL after NLP processing.
+    """
     __tablename__ = 'processed_articles'
-
     url = Column(String, primary_key=True, index=True)
     headline = Column(String)
     paragraphs = Column(Text)
@@ -108,6 +113,10 @@ async def close_db_connection(engine):
 
 @asynccontextmanager
 async def db_lifespan(app: FastAPI):
+    """
+    This function is used to setup and close the PostgreSQL connection.
+    It is used as a context manager.
+    """
     # Before app startup
     engine = await setup_db_connection()
     app.state.db = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
@@ -137,7 +146,10 @@ async def get_articles(
     skip: int = 0,
     limit: int = 10
     ):
-
+    """
+    This function is used to retrieve articles from PostgreSQL.
+    It can be used to retrieve all articles, or articles with specific flags.
+    """
     async with app.state.db() as session:
         query = select(ArticleModel)
         
@@ -155,6 +167,10 @@ async def get_articles(
 
 @app.post("/store_raw_articles")
 async def store_raw_articles():
+    """
+    This function is triggered by an API call. It reads from redis queue 1 - channel raw_articles_queue
+    and stores the articles in PostgreSQL.
+    """
     try:
         redis_conn = await Redis(host='redis', port=6379, db=1)
         raw_articles = await redis_conn.lrange('raw_articles_queue', 0, -1)
@@ -175,6 +191,11 @@ async def store_raw_articles():
 
 @app.post("/store_articles_with_embeddings")
 async def store_processed_articles():
+    """
+    This function is triggered by an API call. 
+    It reads from redis queue 6 - channel articles_with_embeddings
+    and stores the articles in PostgreSQL.
+    """
     try:
         redis_conn = await Redis(host='redis', port=6379, db=3)
         articles_with_embeddings = await redis_conn.lrange('articles_with_embeddings', 0, -1)
@@ -204,6 +225,11 @@ async def store_processed_articles():
 
 @app.post("/update_qdrant_flags")
 async def update_qdrant_flags(urls: List[str]):
+    """
+    This function is triggered by an API call.
+    It updates the isStored_in_qdrant flag for articles in PostgreSQL which have been stored in Qdrant.
+    It is used by the qdrant_service.
+    """
     try:
         async with app.state.db() as session:
             stmt = update(ProcessedArticleModel).\
