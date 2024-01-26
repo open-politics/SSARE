@@ -18,6 +18,7 @@ from sqlalchemy import Column, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
 import json
 from fastapi import FastAPI
+from sqlalchemy import select
 
 Base = declarative_base()
 
@@ -44,7 +45,7 @@ async def setup_db_connection():
     password = load_config()['postgresql']['postgres_password']
     host = load_config()['postgresql']['postgres_host']
 
-    engine = create_async_engine(f'postgresql+asyncpg://{user}:{password}@postgres_service/{database_name}')
+    engine = create_async_engine(f'postgresql+asyncpg://{user}:{password}@postgres_service/{database_name}?sslmode=disable')
     return engine
 
 async def close_db_connection(engine):
@@ -91,3 +92,11 @@ async def save_raw_articles():
         await session.commit()
 
     return {"message": f"{len(articles_to_save)} articles saved"}
+
+@app.get('/articles')
+async def get_articles():
+    async with app.state.db() as session:
+        articles = await session.execute(select(ArticleModel))
+        articles = articles.scalars().all()
+        return {"articles": articles}
+    

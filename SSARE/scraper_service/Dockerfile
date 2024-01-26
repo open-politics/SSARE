@@ -17,7 +17,7 @@ COPY scraper_service/scrapers/scrapers_config.json .
 COPY scraper_service/celery_worker.py .
 
 # Copy the supervisord.conf file
-COPY service_configs/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY core/configs/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 

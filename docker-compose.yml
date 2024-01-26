@@ -5,11 +5,12 @@ services:
     image: redis:latest
     command: redis-server /usr/local/etc/redis/redis.conf
     volumes:
-      - ./service_configs/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./core/configs/redis.conf:/usr/local/etc/redis/redis.conf
     ports:
       - "6379:6379"
     networks:
       - app_network
+
   main_core_app:
     build: 
       context: ./SSARE
@@ -30,7 +31,6 @@ services:
         - action: rebuild
           path: .
 
-
   scraper_service:
     build: 
       context: ./SSARE
@@ -48,7 +48,6 @@ services:
           path: .
     depends_on:
       - redis
-
 
   postgres_service:
     build: 
@@ -76,7 +75,25 @@ services:
           path: .
     depends_on:
       - redis
-
+    
+  nlp_service:
+    build: 
+      context: ./SSARE
+      dockerfile: ./nlp_service/Dockerfile
+    ports:
+      - "0420:0420"
+    networks:
+      - app_network
+    depends_on:
+      - redis
+      - postgres_service
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+        - action: rebuild
+          path: .
 
 
 networks:
