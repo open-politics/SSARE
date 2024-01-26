@@ -12,4 +12,4 @@ COPY core ./core
 # Copy the main.py and other files from postgres_service
 COPY qdrant_service/main.py .
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5432"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "6969"]

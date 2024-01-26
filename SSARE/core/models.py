@@ -7,6 +7,7 @@ class ArticleBase(BaseModel):
     headline: str = Field(...)
     paragraphs: List[str] = Field(...)
     source: Optional[str] = None  # Extendable field for the article's source
+    embeddings: Optional[List[float]] = None
 
     class Config:
         orm_mode = True

@@ -1,10 +1,13 @@
 from pydantic import BaseModel
 from typing import List, Dict
 from fastapi import FastAPI, HTTPException
+from fastapi.encoders import jsonable_encoder
 import requests
 from core.utils import load_config
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.dialects.postgresql import insert
+from core.models import ArticleBase, ArticlesWithEmbeddings
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import inspect
@@ -26,14 +29,14 @@ from sqlalchemy.ext.declarative import declarative_base
 Base = declarative_base()
 
 # SQLAlchemy model
-class ArticleModel(Base):
-    __tablename__ = 'articles'
+class ProcessedArticleModel(Base):
+    __tablename__ = 'processed_articles'
     id = Column(Integer, primary_key=True, index=True)
     url = Column(String, index=True)
     headline = Column(String)
     paragraphs = Column(Text)
-    # Add a new column for the source if necessary
     source = Column(String, nullable=True)
+    embedding = Column(Text)  # Storing the embedding as JSON
 
 
 app = FastAPI()
@@ -50,7 +53,7 @@ async def setup_db_connection():
     password = load_config()['postgresql']['postgres_password']
     host = load_config()['postgresql']['postgres_host']
 
-    engine = create_async_engine(f'postgresql+asyncpg://{user}:{password}@postgres_service/{database_name}?sslmode=disable')
+    engine = create_async_engine(f'postgresql+asyncpg://{user}:{password}@{host}/{database_name}?ssl=False')
     return engine
 
 async def close_db_connection(engine):
@@ -100,34 +103,32 @@ async def save_raw_articles():
 
     return {"message": f"{len(articles_to_save)} articles saved"}
 
-@app.get('/articles')
+@app.get('/articles', response_model=List[ArticleBase])
 async def get_articles():
     async with app.state.db() as session:
-        articles = await session.execute(select(ArticleModel))
-        articles = articles.scalars().all()
-        return {"articles": articles}
+        result = await session.execute(select(ArticleModel))
+        articles = result.scalars().all()
+        return jsonable_encoder(articles)
     
 
 @app.post("/store_articles_with_embeddings")
-async def store_articles_with_embeddings():
+async def store_articles_with_embeddings(articles: List[ArticleBase], embeddings: List[List[float]]):
     try:
-        # Get embeddings from Redis
-        redis_conn_embeddings = Redis(host='redis', port=6379, db=4, decode_responses=True)
-        articles = redis_conn_embeddings.keys()
-        articles = [article for article in articles]
-        embeddings = [redis_conn_embeddings.get(article) for article in articles]
-        # Store in PostgreSQL
         async with app.state.db() as session:
-            for i, article in enumerate(articles):
-                article = ArticleModel(
-                    url=article,
-                    headline="",
-                    paragraphs="",
-                    source="",
-                    embedding=embeddings[i]
+            for article, embedding in zip(articles, embeddings):
+                # Convert embedding to JSON
+                embedding_json = json.dumps(embedding)
+                # Create a new ProcessedArticleModel instance
+                processed_article = ProcessedArticleModel(
+                    url=article.url,
+                    headline=article.headline,
+                    paragraphs=json.dumps(article.paragraphs),  # Convert list to JSON
+                    source=article.source,
+                    embedding=embedding_json
                 )
-                session.add(article)
+                session.add(processed_article)
             await session.commit()
-        return {"message": "Embeddings stored successfully."}
+
+        return {"message": "Articles with embeddings stored successfully in PostgreSQL."}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=f"An error occurred: {str(e)}")
