@@ -32,6 +32,11 @@ async def validation_exception_handler(request, exc):
 # get articles from postgres and create embeddings
 @app.post("/create_embedding_jobs")
 async def create_embeddings_jobs():
+    """
+    This function is triggered by an api. It reads from postgres /articles where embeddings_created = 0.
+    It writes to redis queue 5 - channel articles_without_embedding_queue.
+    It doesn't trigger the generate_embeddings function in nlp_service. That is done by the scheduler.
+    """
     try:
         async with httpx.AsyncClient() as client:
             articles_without_embeddings = await client.get("http://postgres_service:5432/articles")
