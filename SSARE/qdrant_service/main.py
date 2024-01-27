@@ -9,6 +9,11 @@ from sqlalchemy.orm import sessionmaker
 from fastapi.exceptions import RequestValidationError
 from starlette.responses import JSONResponse
 from core.models import ArticleBase
+import logging
+
+# Setup Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 """
 This Service runs on port 6969 and is responsible qdrant related event-handling.
@@ -22,7 +27,7 @@ It is responsible for:
 
 app = FastAPI()
 
-qdrant_client = QdrantClient(host='qdrant_service', port=6333)
+qdrant_client = QdrantClient(host='localhost', port=6333)
 collection_name = 'articles'
 
 @app.get("/healthcheck")
@@ -46,12 +51,17 @@ async def create_embeddings_jobs():
     It writes to redis queue 5 - channel articles_without_embedding_queue.
     It doesn't trigger the generate_embeddings function in nlp_service. That is done by the scheduler.
     """
+    logger.info("Trying to create embedding jobs.")
     try:
         async with httpx.AsyncClient() as client:
-            articles_without_embeddings = await client.get("http://postgres_service:5434/articles")
+            articles_without_embeddings = await client.get("http://postgres_service:5434/articles?embeddings_created=0")
             articles_without_embeddings = articles_without_embeddings.json()
 
+
         redis_conn_unprocessed_articles = Redis(host='redis', port=6379, db=5)
+
+
+
         for article in articles_without_embeddings:
             await redis_conn_unprocessed_articles.lpush('articles_without_embedding_queue', json.dumps(article))
 
@@ -69,11 +79,17 @@ async def store_embeddings():
 
     """
     try:
+        logger.info("Trying to store embeddings in Qdrant.")
         redis_conn = await Redis(host='redis', port=6379, db=6)
+        logger.info("Connected to Redis.")
         urls_to_update = []
         articles_with_embedding_json = await redis_conn.rpop('articles_with_embeddings')
+        logger.info("Popped from Redis.")
 
         while True:
+            if articles_with_embedding_json is None:
+                logger.info("No more articles to process.")
+                break
             article_with_embedding = json.loads(articles_with_embedding_json)
             validated_article = ArticleBase(**article_with_embedding)
 

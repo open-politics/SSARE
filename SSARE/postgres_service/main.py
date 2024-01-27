@@ -19,7 +19,7 @@ class ArticleModel(BaseModel):
     headline: str
     paragraphs: str  # JSON string
     source: Optional[str]
-    embeddings: Optional[str]  # JSON string
+    embeddings: Optional[List[float]] 
     embeddings_created: int = 0  # 0 = False, 1 = True
     isStored_in_qdrant: int = 0  # 0 = False, 1 = True
 
@@ -48,9 +48,49 @@ def get_db_connection():
 # FastAPI app initialization
 app = FastAPI()
 
+def create_articles_table():
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS articles (
+            url TEXT PRIMARY KEY,
+            headline TEXT,
+            paragraphs TEXT,  -- JSON string
+            source TEXT,
+            embeddings ARRAY,
+            embeddings_created INT DEFAULT 0,
+            isStored_in_qdrant INT DEFAULT 0
+        )
+        """
+        cur.execute(create_table_query)
+        conn.commit()
+        cur.close()
+
+create_articles_table()
+
+def create_processed_articles_table():
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS processed_articles (
+            url TEXT PRIMARY KEY,
+            headline TEXT,
+            paragraphs TEXT,  -- JSON string
+            source TEXT,
+            embeddings ARRAY,
+            embeddings_created INT DEFAULT 1,
+            isStored_in_qdrant INT DEFAULT 0
+        )
+        """
+        cur.execute(create_table_query)
+        conn.commit()
+        cur.close()
+
+create_processed_articles_table()
+
 # Redis connections
 redis_conn_flags = Redis(host='redis', port=6379, db=0)  # For flags
-redis_conn_articles = Redis(host='redis', port=6379, db=2)  # For articles
+
 
 @app.get("/flags")
 async def produce_flags():
@@ -61,7 +101,7 @@ async def produce_flags():
     return {"message": f"Flags produced: {', '.join(flags)}"}
 
 @app.get('/articles', response_model=List[ArticleModel])
-async def get_articles(embeddings_created: Optional[bool] = Query(None), isStored_in_Qdrant: Optional[bool] = Query(None), skip: int = 0, limit: int = 10):
+async def get_articles(embeddings_created: Optional[int] = Query(None), isStored_in_Qdrant: Optional[int] = Query(None), skip: int = 0, limit: int = 10):
     with get_db_connection() as conn:
         cur = conn.cursor()
         query = "SELECT * FROM articles"
@@ -75,8 +115,11 @@ async def get_articles(embeddings_created: Optional[bool] = Query(None), isStore
         query += f" OFFSET {skip} LIMIT {limit}"
 
         cur.execute(query)
-        articles = cur.fetchall()
+        rows = cur.fetchall()
         cur.close()
+
+        # Convert the articles to a list of ArticleModel objects
+        articles = [dict(zip([column[0] for column in cur.description], row)) for row in rows]
         return articles
 
 @app.post("/store_raw_articles")
@@ -94,14 +137,23 @@ async def store_raw_articles():
                 batch = raw_articles[i:i + batch_size]
                 for raw_article in batch:
                     try:
+                        print(raw_article)
                         article_data = json.loads(raw_article)
-                        if 'embeddings' in article_data:
-                            del article_data['embeddings']
+                        logger.info(f"Storing article: {article_data['url']}")
+                        logger.info(f"Article data: {article_data}['paragraphs'][:100]")
                         article = ArticleModel(**article_data)
-                        insert_query = "INSERT INTO articles (url, headline, paragraphs, source, embedding, embeddings_created, isStored_in_qdrant) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-                        cur.execute(insert_query, (article.url, article.headline, article.paragraphs, article.source, article.embedding, article.embeddings_created, article.isStored_in_qdrant))
+                        
+                        # Check if the article URL already exists in the database
+                        cur.execute("SELECT 1 FROM articles WHERE url = %s", (article.url,))
+                        if cur.fetchone() is not None:
+                            logger.info(f"Article already exists: {article.url}")
+                            continue
+
+                        insert_query = "INSERT INTO articles (url, headline, paragraphs, source, embeddings, embeddings_created, isStored_in_qdrant) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+                        cur.execute(insert_query, (article.url, article.headline, article.paragraphs, article.source, article.embeddings, article.embeddings_created, article.isStored_in_qdrant))
                     except ValidationError as e:
                         logger.error(f"Validation error for article: {e}")
+                        logger.error(f"Article data: {article_data}")
                     except json.JSONDecodeError as e:
                         logger.error(f"JSON decoding error: {e}")
                 conn.commit()
@@ -128,8 +180,8 @@ async def store_processed_articles():
                     try:
                         article_data = json.loads(article_with_embedding)
                         article = ProcessedArticleModel(**article_data)
-                        insert_query = "INSERT INTO processed_articles (url, headline, paragraphs, source, embedding, embeddings_created, isStored_in_qdrant) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-                        cur.execute(insert_query, (article.url, article.headline, article.paragraphs, article.source, article.embedding, article.embeddings_created, article.isStored_in_qdrant))
+                        insert_query = "INSERT INTO processed_articles (url, headline, paragraphs, source, embeddings, embeddings_created, isStored_in_qdrant) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+                        cur.execute(insert_query, (article.url, article.headline, article.paragraphs, article.source, article.embeddings, article.embeddings_created, article.isStored_in_qdrant))
                     except ValidationError as e:
                         logger.error(f"Validation error for article: {e}")
                     except json.JSONDecodeError as e:
