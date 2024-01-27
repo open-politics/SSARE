@@ -11,6 +11,5 @@ COPY core ./core
 
 # Copy the main.py and other files from postgres_service
 COPY postgres_service/main.py .
-COPY postgres_service/sql_commands ./sql_commands
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5434"]

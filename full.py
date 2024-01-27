@@ -16,7 +16,7 @@ async def test_ssare_pipeline():
         # Produce flags
         await client.get(f"{services['postgres_service']}/flags")
 
-        # Wait for flags to be produced - adjust sleep time as needed
+        # # Wait for flags to be produced - adjust sleep time as needed
         await asyncio.sleep(10)
 
         # Produce flags and trigger scraping
@@ -38,7 +38,7 @@ async def test_ssare_pipeline():
         await asyncio.sleep(10)
 
         # Trigger Embedding Creation
-        await client.post(f"{services['nlp_service']}/generate_embeddings")
+        await client.post(f"{services['nlp_service']}/generate_embeddings", timeout=60)
 
         # Wait for embedding process - adjust sleep time as needed
         await asyncio.sleep(30)
@@ -50,7 +50,7 @@ async def test_ssare_pipeline():
         await asyncio.sleep(10)
 
         # Store Embeddings in Qdrant
-        await client.post(f"{services['qdrant_service']}/store_vectors")
+        await client.post(f"{services['qdrant_service']}/store_embeddings")
 
         print("Test run complete. Check logs and database for results.")
 

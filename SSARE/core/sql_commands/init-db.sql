@@ -1,0 +1,9 @@
+CREATE TABLE articles (
+    url TEXT PRIMARY KEY,
+    headline TEXT,
+    paragraphs TEXT,
+    source TEXT,
+    embeddings TEXT,  -- Adjust the datatype as needed.
+    embeddings_created BOOLEAN DEFAULT FALSE,
+    isStored_in_qdrant BOOLEAN DEFAULT FALSE
+);

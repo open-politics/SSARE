@@ -54,7 +54,7 @@ services:
       context: ./SSARE
       dockerfile: ./qdrant_service/Dockerfile
     ports:
-      - "6969:6"
+      - "6969:6969"
     networks:
       - app_network
     develop:
@@ -79,7 +79,7 @@ services:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: password
     volumes:
-      - ./sql_commands:/docker-entrypoint-initdb.d
+      - ./core/sql_commands:/docker-entrypoint-initdb.d
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
@@ -90,9 +90,6 @@ services:
     build: 
       context: ./SSARE
       dockerfile: ./postgres_service/Dockerfile
-    volumes:
-      - ./sql_commands:/docker-entrypoint-initdb.d
-      - postgres_data:/var/lib/postgresql/data
     environment:
       POSTGRES_DB: root
       POSTGRES_USER: admin
@@ -113,9 +110,6 @@ services:
     depends_on:
       - redis
       - postgres_db
-
-
-
       
   nlp_service:
     build: 
@@ -135,7 +129,6 @@ services:
           target: /app
         - action: rebuild
           path: .
-
 
 networks:
   app_network:
