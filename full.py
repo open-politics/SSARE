@@ -13,23 +13,23 @@ async def test_ssare_pipeline():
 
     async with httpx.AsyncClient() as client:
 
-        # # Produce flags
-        # await client.get(f"{services['postgres_service']}/flags")
+        # Produce flags
+        await client.get(f"{services['postgres_service']}/flags")
 
-        # # Wait for flags to be produced - adjust sleep time as needed
-        # await asyncio.sleep(10)
+        # Wait for flags to be produced - adjust sleep time as needed
+        await asyncio.sleep(10)
 
-        # # Produce flags and trigger scraping
-        # await client.post(f"{services['scraper_service']}/create_scrape_jobs")
+        # Produce flags and trigger scraping
+        await client.post(f"{services['scraper_service']}/create_scrape_jobs")
 
-        # # Wait for scraping to complete - adjust sleep time as needed
-        # await asyncio.sleep(15)
+        # Wait for scraping to complete - adjust sleep time as needed
+        await asyncio.sleep(15)
 
-        # # Store raw articles
-        # await client.post(f"{services['postgres_service']}/store_raw_articles")
+        # Store raw articles
+        await client.post(f"{services['postgres_service']}/store_raw_articles")
 
-        # # Wait for raw articles to be stored - adjust sleep time as needed
-        # await asyncio.sleep(10)
+        # Wait for raw articles to be stored - adjust sleep time as needed
+        await asyncio.sleep(10)
         
 
         await client.post(f"{services['qdrant_service']}/create_embedding_jobs")
