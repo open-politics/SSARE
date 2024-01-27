@@ -91,6 +91,7 @@ def scrape_single_source(flag: str):
         # Validate and push articles to Redis
         for article_data in articles:
             try:
+                logger.info(f"Validating article: {article_data}")
                 validated_article = ArticleBase(**article_data)
                 redis_conn_articles.lpush("raw_articles_queue", json.dumps(validated_article.model_dump()))
             except ValidationError as e:

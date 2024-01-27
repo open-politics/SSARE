@@ -4,7 +4,6 @@ from qdrant_client import QdrantClient
 import json
 from redis.asyncio import Redis
 from sqlalchemy import update
-from core.models import ProcessedArticleModel
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from fastapi.exceptions import RequestValidationError
@@ -49,7 +48,7 @@ async def create_embeddings_jobs():
     """
     try:
         async with httpx.AsyncClient() as client:
-            articles_without_embeddings = await client.get("http://postgres_service:5432/articles")
+            articles_without_embeddings = await client.get("http://postgres_service:5434/articles")
             articles_without_embeddings = articles_without_embeddings.json()
 
         redis_conn_unprocessed_articles = Redis(host='redis', port=6379, db=5)
@@ -96,7 +95,7 @@ async def store_embeddings():
             urls_to_update.append(validated_article.url)
             
             async with httpx.AsyncClient() as client:
-                await client.post("http://postgres_service:5432/update_qdrant_flags", json={"urls": urls_to_update})
+                await client.post("http://postgres_service:5434/update_qdrant_flags", json={"urls": urls_to_update})
 
         return {"message": "Embeddings processed and stored in Qdrant."}
     except Exception as e:

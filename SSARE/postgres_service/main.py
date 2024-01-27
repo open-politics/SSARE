@@ -19,7 +19,7 @@ class ArticleModel(BaseModel):
     headline: str
     paragraphs: str  # JSON string
     source: Optional[str]
-    embedding: Optional[str]  # JSON string
+    embeddings: Optional[str]  # JSON string
     embeddings_created: int = 0  # 0 = False, 1 = True
     isStored_in_qdrant: int = 0  # 0 = False, 1 = True
 
@@ -95,6 +95,8 @@ async def store_raw_articles():
                 for raw_article in batch:
                     try:
                         article_data = json.loads(raw_article)
+                        if 'embeddings' in article_data:
+                            del article_data['embeddings']
                         article = ArticleModel(**article_data)
                         insert_query = "INSERT INTO articles (url, headline, paragraphs, source, embedding, embeddings_created, isStored_in_qdrant) VALUES (%s, %s, %s, %s, %s, %s, %s)"
                         cur.execute(insert_query, (article.url, article.headline, article.paragraphs, article.source, article.embedding, article.embeddings_created, article.isStored_in_qdrant))
@@ -107,4 +109,49 @@ async def store_raw_articles():
         return {"message": "Raw articles stored successfully."}
     except Exception as e:
         logger.error(f"Error storing articles: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/store_articles_with_embeddings")
+async def store_processed_articles():
+    try:
+        redis_conn = await Redis(host='redis', port=6379, db=6)
+        articles_with_embeddings = await redis_conn.lrange('articles_with_embeddings', 0, -1)
+        await redis_conn.delete('articles_with_embeddings')
+
+        with get_db_connection() as conn:
+            cur = conn.cursor()
+            batch_size = 10  # Adjust the batch size as needed
+            for i in range(0, len(articles_with_embeddings), batch_size):
+                batch = articles_with_embeddings[i:i + batch_size]
+                for article_with_embedding in batch:
+                    try:
+                        article_data = json.loads(article_with_embedding)
+                        article = ProcessedArticleModel(**article_data)
+                        insert_query = "INSERT INTO processed_articles (url, headline, paragraphs, source, embedding, embeddings_created, isStored_in_qdrant) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+                        cur.execute(insert_query, (article.url, article.headline, article.paragraphs, article.source, article.embedding, article.embeddings_created, article.isStored_in_qdrant))
+                    except ValidationError as e:
+                        logger.error(f"Validation error for article: {e}")
+                    except json.JSONDecodeError as e:
+                        logger.error(f"JSON decoding error: {e}")
+                conn.commit()
+            cur.close()
+        return {"message": "Articles with embeddings stored successfully in PostgreSQL."}
+    except Exception as e:
+        logger.error(f"Error storing articles: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/update_qdrant_flags")
+async def update_qdrant_flags(urls: List[str]):
+    try:
+        with get_db_connection() as conn:
+            cur = conn.cursor()
+            update_query = "UPDATE processed_articles SET isStored_in_qdrant = 1 WHERE url = %s"
+            for url in urls:
+                cur.execute(update_query, (url,))
+            conn.commit()
+            cur.close()
+        return {"message": "Qdrant flags updated successfully."}
+    except Exception as e:
+        logger.error(f"Error updating Qdrant flags: {e}")
         raise HTTPException(status_code=400, detail=str(e))
