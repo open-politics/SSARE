@@ -13,4 +13,4 @@ COPY core ./core
 COPY postgres_service/main.py .
 COPY postgres_service/sql_commands ./sql_commands
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5432"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5434"]
