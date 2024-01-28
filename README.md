@@ -20,6 +20,10 @@ SSARE/scraper_service/scrapers
 and add the location to the config at
 SSARE/scraper_service/scrapers/scrapers_config.json.
 
+## Note
+The scraper service is not yet round. The orchestration service not written.
+Querying is the databases is not yet implemented.
+
 ## Storage
 The storage is postgresql and qdrant. Both can be used to retrieve/ query.
 Suggestion right now: recommend with qdrant, deliver with postgres.
