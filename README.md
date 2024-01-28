@@ -3,8 +3,6 @@ Semantic Search Article Recommendation Engine
 
 ![Alt text](media/image.png)
 
-
-
 ## Overview
 SSARE (Semantic Searcg Article Recommendation Engine) is an advanced, open-source information architecture designed to autonomously aggregate, process, and store news articles. With a focus on political discourse, SSARE aligns with the upcycling philosophy of data, enabling efficient, on-demand retrieval of pertinent information.
 
@@ -13,6 +11,8 @@ We are actively seeking contributions from data scientists and coders, particula
 
 
 ## Usage
+run and build with docker-compose
+```
 Run full.py to test the services.
 If you have a scraper script, the expected format are the columns: url, headline, paragraphs.
 Put the script into 
