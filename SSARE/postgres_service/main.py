@@ -57,7 +57,7 @@ def create_articles_table():
             headline TEXT,
             paragraphs TEXT,  -- JSON string
             source TEXT,
-            embeddings ARRAY,
+            embeddings JSONB,  --- array of ints
             embeddings_created INT DEFAULT 0,
             isStored_in_qdrant INT DEFAULT 0
         )
@@ -77,7 +77,7 @@ def create_processed_articles_table():
             headline TEXT,
             paragraphs TEXT,  -- JSON string
             source TEXT,
-            embeddings ARRAY,
+            embeddings JSONB,  --- array of ints
             embeddings_created INT DEFAULT 1,
             isStored_in_qdrant INT DEFAULT 0
         )
@@ -150,7 +150,8 @@ async def store_raw_articles():
                             continue
 
                         insert_query = "INSERT INTO articles (url, headline, paragraphs, source, embeddings, embeddings_created, isStored_in_qdrant) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-                        cur.execute(insert_query, (article.url, article.headline, article.paragraphs, article.source, article.embeddings, article.embeddings_created, article.isStored_in_qdrant))
+                        embeddings_json = json.dumps(article.embeddings)  # Convert the list of floats to a JSON string
+                        cur.execute(insert_query, (article.url, article.headline, article.paragraphs, article.source, embeddings_json, article.embeddings_created, article.isStored_in_qdrant))
                     except ValidationError as e:
                         logger.error(f"Validation error for article: {e}")
                         logger.error(f"Article data: {article_data}")
