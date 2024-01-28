@@ -2,12 +2,13 @@
 Semantic Search Article Recommendation Engine
 
 ## About this project
-SSARE is an open-source information architecture designed to autonomously aggregate, store and semantically search news articles. With a focus on political discourse, SSARE aims to provide a scalable open-source infrastructure to scrape news for researchers and data scientists.
+SSARE is an open-source information architecture designed to autonomously aggregate, store, and semantically search news articles. Focusing on political discourse, SSARE aims to provide a scalable open-source infrastructure for scraping news, adressing researchers, data scientists and internet activists.
 
-The proposition:
-- By providing any sourcing or scraping script that produces the "column", "url", "headline", and "paragraphs".
-- The project grows with every scraper, enhancing the infrastructure to acquire, store, and query the articles.
-- Qdrant is used for the semantic search, and PostgreSQL for storage.
+The Proposition:
+
+By providing any sourcing or scraping script that produces "column", "url", "headline", and "paragraphs", the project can be extended to any news source.
+The project expands with each scraper, enhancing the infrastructure for acquiring, storing, and querying articles.
+Qdrant is utilized for semantic search, and PostgreSQL for storage.
 
 ## Roadmap (upcoming) 
 
