@@ -12,13 +12,16 @@ We are actively seeking contributions from data scientists and coders, particula
 
 ## Usage
 run and build with docker-compose
-```
 Run full.py to test the services.
 If you have a scraper script, the expected format are the columns: url, headline, paragraphs.
 Put the script into 
+```
 SSARE/scraper_service/scrapers
+```
 and add the location to the config at
+```
 SSARE/scraper_service/scrapers/scrapers_config.json.
+```
 
 ## Note
 The scraper service is not yet round. The orchestration service not written.
