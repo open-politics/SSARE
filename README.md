@@ -25,7 +25,7 @@ Run and build with docker-compose.
 ```
 docker-compose up --build
 ```
-Run full.py to test the services.
+Run full.py to test the services (currently only cnn)
 ```
 python full.py
 ```
