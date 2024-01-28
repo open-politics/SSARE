@@ -21,8 +21,14 @@ We are actively seeking contributions from data scientists and coders, particula
 
 
 ## Usage
-run and build with docker-compose
+Run and build with docker-compose.
+```
+docker-compose up --build
+```
 Run full.py to test the services.
+```
+python full.py
+```
 If you have a scraper script, the expected format are the columns: url, headline, paragraphs.
 Put the script into 
 ```
