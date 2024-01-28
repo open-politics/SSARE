@@ -6,7 +6,7 @@ SSARE is an open-source information architecture designed to autonomously aggreg
 
 The Proposition:
 
-By providing any sourcing or scraping script that produces columns "url", "headline", and "paragraphs", the project can be extended to any news source.
+By providing any sourcing or scraping script that produces the columns "url", "headline", and "paragraphs", the project can be extended to any news source.
 The project expands with each scraper, enhancing the infrastructure for acquiring, storing, and querying articles.
 Qdrant is utilized for semantic search, and PostgreSQL for storage.
 
