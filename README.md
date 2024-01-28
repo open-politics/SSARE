@@ -16,7 +16,6 @@ Qdrant is utilized for semantic search, and PostgreSQL for storage.
 
 ## Overview
 
-
 ## Contribution: Article Input Scripts
 We are actively seeking contributions from data scientists and coders, particularly in the realm of article input scripts. By writing scripts that scrape, process, and standardize news articles, you can help us expand our database and improve the breadth of our political news coverage.
 
