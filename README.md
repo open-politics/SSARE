@@ -33,6 +33,8 @@ and add the location to the config at
 ```
 SSARE/scraper_service/scrapers/scrapers_config.json.
 ```
+and the orchestration service will run it (upcoming).
+
 
 ## Note
 The scraper service is not yet round. The orchestration service not written.
@@ -49,3 +51,4 @@ A more detailed description will follow.
 
 ## License
 SSARE is licensed under the MIT License - see the LICENSE file for details.
+
