@@ -45,6 +45,11 @@ async def generate_embeddings():
                 article_with_embedding = article.model_dump()
                 article_with_embedding["embeddings"] = embedding
 
+                logger.info(f"Embeddings generated for article: {article.url}")
+
+                # Print first 10 values of embeddings
+                logger.info(f"Embeddings: {embedding[:10]}")
+
                 # Push to Redis Queue 6
                 await redis_conn_processed.lpush('articles_with_embeddings', json.dumps(article_with_embedding))
             except (json.JSONDecodeError, ValidationError) as e:

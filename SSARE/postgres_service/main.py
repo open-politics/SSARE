@@ -57,7 +57,7 @@ def create_articles_table():
             headline TEXT,
             paragraphs TEXT,  -- JSON string
             source TEXT,
-            embeddings JSONB,  --- array of ints
+            embeddings INT[],  --- array of ints
             embeddings_created INT DEFAULT 0,
             isStored_in_qdrant INT DEFAULT 0
         )
@@ -77,7 +77,7 @@ def create_processed_articles_table():
             headline TEXT,
             paragraphs TEXT,  -- JSON string
             source TEXT,
-            embeddings JSONB,  --- array of ints
+            embeddings INT[],  --- array of ints
             embeddings_created INT DEFAULT 1,
             isStored_in_qdrant INT DEFAULT 0
         )

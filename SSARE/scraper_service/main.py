@@ -27,6 +27,7 @@ app = FastAPI()
 
 class Flag(BaseModel):
     flag: str
+    
 
 
 

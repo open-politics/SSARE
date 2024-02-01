@@ -44,6 +44,26 @@ and the orchestration service will run it (upcoming).
 ## Note
 The scraper service is not yet round. The orchestration service not written.
 Querying is the databases is not yet implemented.
+You can access each API endoint independently.
+
+## API / Service Map
+### Services
+#### redis
+Redis is used as the backend for inter-service queues.
+The channels communicate via lrange and rpop.
+The celery workers also use redis as their backend.
+#### main core app
+This service will later orchestrate the composition of microservices by scheduling tasks, checking in on queues and calling apis to trigger processes.
+#### postgres service
+The postgres service can produce flags (e.g. "cnn") if triggered and put them into a redis task queue. It also stores the articles for fast retrieval and as a general intermediate storage.
+#### postgres database
+This service is the image
+#### scraper service
+This service reads from the redis queue where the flags for scraping jobs are stored. It instructs celery to create async scraping jobs for the flag by running the corresponding scripts (retrievable via the location in the scrapers-config.json).
+#### qdrant service
+This service creates jobs to vectorise the articles (by sending them to the nlp service). It handles the upsert and querying logic of qdrant.
+#### qdrant storage
+This service is Qdrant's storage. It 
 
 ## Storage
 The storage is postgresql and qdrant. Both can be used to retrieve/ query.
