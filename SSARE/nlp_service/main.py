@@ -19,6 +19,10 @@ app = FastAPI()
 
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
+@app.get("/health")
+async def healthcheck():
+    return {"message": "NLP Service Running"}, 200
+
 @app.post("/generate_embeddings")
 async def generate_embeddings():
     """
