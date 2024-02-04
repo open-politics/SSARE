@@ -208,3 +208,5 @@ async def update_qdrant_flags(urls: List[str]):
     except Exception as e:
         logger.error(f"Error updating Qdrant flags: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+
