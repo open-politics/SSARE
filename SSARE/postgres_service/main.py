@@ -48,6 +48,11 @@ def get_db_connection():
 # FastAPI app initialization
 app = FastAPI()
 
+@app.get("/health")
+async def healthcheck():
+    return {"message": "Postgres Service Running"}, 200
+
+
 def create_articles_table():
     with get_db_connection() as conn:
         cur = conn.cursor()
