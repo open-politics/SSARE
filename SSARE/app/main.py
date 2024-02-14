@@ -4,10 +4,10 @@ import os
 from core.utils import load_config
 from redis.asyncio import Redis
 
+### Configuration & Mapping
 config = load_config()["postgresql"]
 
 app = FastAPI()
-
 
 redis_channel_mappings = {
     "flags": {"db": 0, "key": "scrape_sources"},
@@ -17,13 +17,18 @@ redis_channel_mappings = {
     "articles_with_embeddings": {"db": 6, "key": "articles_with_embeddings"},
 }
 
+runtime_url = "http://main_core_app:8080"
+
+
 service_urls = {
-    "main_app": "http://main_core_app:8080",
+    "main_core_app": runtime_url,
     "postgres_service": "http://postgres_service:5434",
     "nlp_service": "http://nlp_service:0420",
     "qdrant_service": "http://qdrant_service:6969",
     "qdrant_storage": "http://qdrant_storage:6333",
 }
+
+### Healthcheck & Monitoring
 
 @app.get("/health")
 async def healthcheck():
@@ -33,13 +38,14 @@ async def healthcheck():
 async def check_services():
     service_statuses = {}
     for service, url in service_urls.items():
-        try:
-            response = await httpx.get(url + "/health", timeout=10.0)  # Set a timeout of 10 seconds
-            service_statuses[service] = response.status_code
-        except httpx.TimeoutException:
-            service_statuses[service] = "timed out"
-        except Exception as e:
-            service_statuses[service] = str(e)
+        if url != runtime_url:
+            try:
+                response = await httpx.get(url + "/health", timeout=10.0)  # Set a timeout of 10 seconds
+                service_statuses[service] = response.status_code
+            except httpx.TimeoutException:
+                service_statuses[service] = "timed out"
+            except Exception as e:
+                service_statuses[service] = str(e)
     return service_statuses, 200
 
 

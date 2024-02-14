@@ -76,7 +76,6 @@ async def store_embeddings():
     """
     This function is triggered by an api. It reads from redis queue 6 - channel articles_with_embeddings.
     It stores the embeddings in Qdrant.
-
     """
     try:
         logger.info("Trying to store embeddings in Qdrant.")
