@@ -38,7 +38,7 @@ class ArticleModel(BaseModel):
     source: Optional[str]
     embeddings: Optional[List[float]]
     embeddings_created: int = 0
-    staticmethodtored_in_qdrant: int = 0
+    stored_in_qdrant: int = 0
 
 class ProcessedArticleModel(ArticleModel):
     pass
