@@ -1,7 +1,7 @@
 import os
 
 def copy_specific_files(root_path, output_file):
-    files_to_copy = ['main.py', 'celery_worker.py', 'models.py']
+    files_to_copy = ['main.py', 'celery_worker.py']
     with open(output_file, 'w') as output:
         for root, dirs, files in os.walk(root_path):
             for file in files:

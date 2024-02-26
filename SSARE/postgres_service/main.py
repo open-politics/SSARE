@@ -142,10 +142,11 @@ async def store_raw_articles():
                 batch = raw_articles[i:i + batch_size]
                 for raw_article in batch:
                     try:
-                        print(raw_article)
                         article_data = json.loads(raw_article)
                         logger.info(f"Storing article: {article_data['url']}")
-                        logger.info(f"Article data: {article_data}['paragraphs'][:100]")
+                        first_100_chars = article_data['paragraphs'][:100]
+                        logger.info(f"First 100 chars: {first_100_chars}")
+
                         article = ArticleModel(**article_data)
                         
                         # Check if the article URL already exists in the database
@@ -154,9 +155,11 @@ async def store_raw_articles():
                             logger.info(f"Article already exists: {article.url}")
                             continue
 
+                        # Set embeddings to NULL if they are None or empty
+                        embeddings_to_insert = None if not article.embeddings else article.embeddings
+                        
                         insert_query = "INSERT INTO articles (url, headline, paragraphs, source, embeddings, embeddings_created, isStored_in_qdrant) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-                        embeddings_json = json.dumps(article.embeddings)  # Convert the list of floats to a JSON string
-                        cur.execute(insert_query, (article.url, article.headline, article.paragraphs, article.source, embeddings_json, article.embeddings_created, article.isStored_in_qdrant))
+                        cur.execute(insert_query, (article.url, article.headline, article.paragraphs, article.source, embeddings_to_insert, article.embeddings_created, article.isStored_in_qdrant))
                     except ValidationError as e:
                         logger.error(f"Validation error for article: {e}")
                         logger.error(f"Article data: {article_data}")
@@ -186,8 +189,19 @@ async def store_processed_articles():
                     try:
                         article_data = json.loads(article_with_embedding)
                         article = ProcessedArticleModel(**article_data)
-                        insert_query = "INSERT INTO processed_articles (url, headline, paragraphs, source, embeddings, embeddings_created, isStored_in_qdrant) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-                        cur.execute(insert_query, (article.url, article.headline, article.paragraphs, article.source, article.embeddings, article.embeddings_created, article.isStored_in_qdrant))
+                        upsert_query = """
+                            INSERT INTO processed_articles (url, headline, paragraphs, source, embeddings, embeddings_created, isStored_in_qdrant)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (url)
+                            DO UPDATE SET
+                                headline = EXCLUDED.headline,
+                                paragraphs = EXCLUDED.paragraphs,
+                                source = EXCLUDED.source,
+                                embeddings = EXCLUDED.embeddings,
+                                embeddings_created = EXCLUDED.embeddings_created,
+                                isStored_in_qdrant = EXCLUDED.isStored_in_qdrant;
+                            """
+                        cur.execute(upsert_query, (article.url, article.headline, article.paragraphs, article.source, article.embeddings, article.embeddings_created, article.isStored_in_qdrant))
                     except ValidationError as e:
                         logger.error(f"Validation error for article: {e}")
                     except json.JSONDecodeError as e:

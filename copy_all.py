@@ -1,7 +1,7 @@
 import os
 
 def copy_additional_files(root_path, output_file):
-    files_to_copy = ['main.py', 'celery_worker.py', 'models.py', 'Dockerfile', 'docker-compose.yml', 'config.ini']
+    files_to_copy = ['main.py', 'celery_worker.py', 'models.py', 'Dockerfile', 'docker-compose.yml', 'config.ini', 'README.md']
     with open(output_file, 'w') as output:
         for root, dirs, files in os.walk(root_path):
             for file in files:

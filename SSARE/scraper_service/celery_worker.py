@@ -54,51 +54,37 @@ def scrape_single_source(flag: str):
     for the flag. It will then read the CSV file created by the scraper script 
     and push the data to Redis Queue 1 - channel "raw_articles_queue".
     """
-    logger.info(f"Single source scraping for {flag}")
+    logger.info(f"Scraping started for source: {flag}")
     try:
-        # Load scraper configuration from JSON file
         with open("./scrapers/scrapers_config.json") as file:
             config_json = json.load(file)
 
-        # Check if the flag has a corresponding scraper configuration
         if flag not in config_json["scrapers"]:
-            logger.error(f"No configuration found for flag: {flag}")
+            logger.error(f"No scraper configuration for flag: {flag}")
             return
 
-        # Get the location of the scraper script
         script_location = config_json["scrapers"][flag]["location"]
-        logger.info(f"Running script for {flag}")
-
-        # Run the scraper script as a subprocess
         result = subprocess.run(["python", script_location], capture_output=True, text=True)
         if result.returncode != 0:
-            logger.error(f"Error running script for {flag}: {result.stderr}")
+            logger.error(f"Scraper script error for {flag}: {result.stderr}")
             return
 
-        # Read the scraped data from CSV to a DataFrame
         df = pd.read_csv(f"/app/scrapers/data/dataframes/{flag}_articles.csv")
-        logger.info(df.head(3))
-
-
-        # Add a 'source' column to the DataFrame with the flag
         df["source"] = flag
         articles = df.to_dict(orient="records")
 
-        # Synchronous Redis connection for articles
         redis_conn_articles = Redis(host='redis', port=6379, db=1)
 
-
-        # Validate and push articles to Redis
         for article_data in articles:
             try:
-                logger.info(f"Validating article: {article_data}")
                 validated_article = ArticleBase(**article_data)
+                article_summary = {k: v[:10] if isinstance(v, str) else v for k, v in validated_article.dict().items()}
+                logger.info(f"Storing article summary: {article_summary}")
                 redis_conn_articles.lpush("raw_articles_queue", json.dumps(validated_article.model_dump()))
             except ValidationError as e:
-                logger.error(f"Validation error for article: {e}")
+                logger.error(f"Validation error: {e.json()}")
 
-
-        logger.info(f"Scraping for {flag} complete")
+        logger.info(f"Completed scraping for {flag}")
     except Exception as e:
-        logger.error(f"Error in scraping data for {flag}: {e}")
+        logger.error(f"Error in scraping for {flag}: {e}")
         raise e
