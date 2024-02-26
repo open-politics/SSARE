@@ -10,6 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.responses import JSONResponse
 from core.models import ArticleBase
 import logging
+from typing import List
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -83,6 +84,7 @@ async def store_embeddings():
         logger.info("Connected to Redis.")
         urls_to_update = []
         articles_with_embedding_json = await redis_conn.rpop('articles_with_embeddings')
+        logger.info(articles_with_embedding_json)
         logger.info("Popped from Redis.")
 
         while True:
@@ -99,19 +101,40 @@ async def store_embeddings():
                 "url": article_with_embedding["url"],
             }
 
-            qdrant_client.upsert(
-                collection_name=collection_name,
+            from qdrant_client.http.models import Distance, VectorParams
+            qdrant_client.create_collection(
+                collection_name="Articles",
+                vector_size=VectorParams(size=768, distance= Distance.DOT),
+            )
+
+            operation_info = qdrant_client.upsert(
+                collection_name="Articles",
                 points=[{
                     "id": article_with_embedding["url"],  # Use URL as unique identifier
                     "vector": article_with_embedding["embeddings"],
                     "payload": payload
                 }]
             )
+            logger.info(f"Upsert Operation: {validated_article.url}")
             urls_to_update.append(validated_article.url)
             
             async with httpx.AsyncClient() as client:
                 await client.post("http://postgres_service:5434/update_qdrant_flags", json={"urls": urls_to_update})
+                logger.info("Updated qdrant flags for articles.")
 
         return {"message": "Embeddings processed and stored in Qdrant."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
+
+@app.post("/search")
+async def search(embeddings: List[float]):
+    try:
+        search_response = qdrant_client.search(
+           collection_name="Articles",
+            query_vector=embeddings,
+            limit=10  # Number of top similar results to return
+        )
+        return search_response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

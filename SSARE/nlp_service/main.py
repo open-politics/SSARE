@@ -37,30 +37,64 @@ async def generate_embeddings():
 
         # Retrieve articles from Redis Queue 5
         raw_articles_json = await redis_conn_raw.lrange('articles_without_embedding_queue', 0, -1)
-
+        logger.info(f"Retrieved {len(raw_articles_json)} articles from Redis")
+        logger.info("Starting embeddings generation process")
         for raw_article_json in raw_articles_json:
             try:
-                # Decode and load the article
                 raw_article = json.loads(raw_article_json.decode('utf-8'))
                 article = ArticleBase(**raw_article)
 
                 # Generate embeddings
                 embedding = model.encode(article.headline + " ".join(article.paragraphs)).tolist()
-                article_with_embedding = article.model_dump()
-                article_with_embedding["embeddings"] = embedding
 
-                logger.info(f"Embeddings generated for article: {article.url}")
+                # Processed article with embeddings
+                article_with_embedding = {
+                    "headline": article.headline,
+                    "paragraphs": article.paragraphs,
+                    "embeddings": embedding,
+                    "embeddings_created": 1,
+                    "url": article.url,
+                    "source": article.source,
+                    "isStored_in_qdrant": 0
+                }
 
-                # Print first 10 values of embeddings
-                logger.info(f"Embeddings: {embedding[:10]}")
+                logger.info(f"Generated embeddings for article: {article.url}, Embedding Length: {len(embedding)}")
 
-                # Push to Redis Queue 6
-                await redis_conn_processed.lpush('articles_with_embeddings', json.dumps(article_with_embedding))
-            except (json.JSONDecodeError, ValidationError) as e:
-                logger.error(f"Error processing article: {e}")
+                try:
+                    print(article_with_embedding)
+                    # Write articles with embeddings to Redis Queue 6
+                    await redis_conn_processed.lpush('articles_with_embeddings', json.dumps(article_with_embedding))
+                    logger.info(f"Article with embeddings written to Redis: {article.url}")
+                except Exception as e:
+                    logger.error(f"Error writing article with embeddings to Redis: {e}")
 
+                first_10_embeddings = embedding[:10]
+                logger.info(f"First 10 embeddings: {first_10_embeddings}")
+
+            except Exception as e:
+                logger.error(f"Error processing article {article.url}: {e}")
+
+        logger.info("Embeddings generation process completed")
         return {"message": "Embeddings generated"}
+    
     except Exception as e:
-        logger.error(f"Error in generating embeddings: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+    
 
+
+@app.post("/generate_query_embeddings")
+async def generate_query_embedding(query: str):
+    """
+    This function generates embeddings for a query.
+    It is triggered by an API call from the orchestration container.
+    """
+    try:
+        embeddings = model.encode(query).tolist()  # Ensure embeddings are JSON serializable
+        logger.info(f"Generated embeddings for query: {query}, Embedding Length: {len(embeddings)}")
+        first_10_embeddings = embeddings[:10]
+        logger.info(f"First 10 embeddings: {first_10_embeddings}")
+
+        # Include embeddings in the response
+        return {"message": "Embeddings generated", "embeddings": embeddings}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

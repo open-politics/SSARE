@@ -49,12 +49,11 @@ async def check_services():
     return service_statuses, 200
 
 
+
 async def get_redis_queue_length(redis_db: int, queue_key: str):
     try:
         redis_conn = Redis(host='redis', port=6379, db=redis_db)
         queue_length = await redis_conn.llen(queue_key)  # Replace 'queue_key' with your specific key for each channel
-        await redis_conn.close()
-        return queue_length
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Redis error: {str(e)}")
 
@@ -65,3 +64,9 @@ async def check_channels():
         queue_length = await get_redis_queue_length(db_info['db'], db_info['key'])
         channel_lengths[channel] = queue_length
     return channel_lengths
+
+@app.get("/healthcheck")
+def print_health():
+    return {"message": "OK"}, 200
+
+
