@@ -66,9 +66,11 @@ services:
           path: .
       
   qdrant_storage:
-    image: qdrant/qdrant
+    image: qdrant/qdrant:latest
     ports:
       - "6333:6333"
+    volumes:
+      - ./qdrant_storage:/qdrant/data
     networks:
       - app_network
 

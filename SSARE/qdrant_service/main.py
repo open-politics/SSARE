@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 import httpx
 from qdrant_client import QdrantClient
+from qdrant_client.http.models import VectorParams, Distance, PointStruct
 import json
 from redis.asyncio import Redis
 from sqlalchemy import update
@@ -25,10 +26,35 @@ It is responsible for:
 4. [TODO] Querying Qdrant
 """
 
+from pydantic import BaseModel
+from typing import List, Optional
+
+class ArticleModel(BaseModel):
+    url: str
+    headline: str
+    paragraphs: str  # JSON string
+    source: Optional[str]
+    embeddings: Optional[List[float]]
+    embeddings_created: int = 1
+    stored_in_qdrant: int = 0
+
 
 app = FastAPI()
 
-qdrant_client = QdrantClient(host='localhost', port=6333)
+qdrant_client = QdrantClient(host='qdrant_storage', port=6333)
+vectors_config = VectorParams(size=768, distance=Distance.COSINE)
+
+# Try to create the collection if it does not exist, continue if it does
+try:
+    create_collection_info = qdrant_client.create_collection(
+                    collection_name="articles",
+                    vectors_config=vectors_config,
+                )
+    logger.info(f"Collection created: {create_collection_info}")
+except Exception as e:
+    logger.info(f"Collection already exists: {e}")
+    pass
+    
 collection_name = 'articles'
 
 @app.get("/healthcheck")
@@ -44,32 +70,7 @@ async def validation_exception_handler(request, exc):
     )
 
 
-# get articles from postgres and create embeddings
-@app.post("/create_embedding_jobs")
-async def create_embeddings_jobs():
-    """
-    This function is triggered by an api. It reads from postgres /articles where embeddings_created = 0.
-    It writes to redis queue 5 - channel articles_without_embedding_queue.
-    It doesn't trigger the generate_embeddings function in nlp_service. That is done by the scheduler.
-    """
-    logger.info("Trying to create embedding jobs.")
-    try:
-        async with httpx.AsyncClient() as client:
-            articles_without_embeddings = await client.get("http://postgres_service:5434/articles?embeddings_created=0")
-            articles_without_embeddings = articles_without_embeddings.json()
 
-
-        redis_conn_unprocessed_articles = Redis(host='redis', port=6379, db=5)
-
-
-
-        for article in articles_without_embeddings:
-            await redis_conn_unprocessed_articles.lpush('articles_without_embedding_queue', json.dumps(article))
-
-        return {"message": "Embedding jobs created."}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    
 
 # get articles from postgres and create embeddings
 @app.post("/store_embeddings")
@@ -84,38 +85,52 @@ async def store_embeddings():
         logger.info("Connected to Redis.")
         urls_to_update = []
         articles_with_embedding_json = await redis_conn.rpop('articles_with_embeddings')
-        logger.info(articles_with_embedding_json)
         logger.info("Popped from Redis.")
 
         while True:
             if articles_with_embedding_json is None:
                 logger.info("No more articles to process.")
                 break
-            article_with_embedding = json.loads(articles_with_embedding_json)
-            validated_article = ArticleBase(**article_with_embedding)
+
+            article_with_embeddings = json.loads(articles_with_embedding_json)
+            try:
+                validated_article = ArticleModel(**article_with_embeddings)
+                logger.info(f"Validated article: {validated_article.url}")
+                if validated_article.embeddings is not None:
+                    logger.info(f"Embeddings: {validated_article.embeddings[:10]}")
+                else:
+                    logger.info("Embeddings are None")
+            except Exception as e:
+                logger.error(f"Error validating article: {e}")
+                continue
+
 
             payload = {
-                "headline": article_with_embedding["headline"],
-                "text": " ".join(article_with_embedding["paragraphs"]),  # Combine paragraphs into a single text
-                "source": article_with_embedding["source"],
-                "url": article_with_embedding["url"],
+                "headline": article_with_embeddings["headline"],
+                "paragraphs": " ".join(article_with_embeddings["paragraphs"]),  # Combine paragraphs into a single text
+                "source": article_with_embeddings["source"],
+                "url": article_with_embeddings["url"],
             }
 
-            from qdrant_client.http.models import Distance, VectorParams
-            qdrant_client.create_collection(
-                collection_name="Articles",
-                vector_size=VectorParams(size=768, distance= Distance.DOT),
-            )
+            # Log constructed payload (first 10 elements of each field)
+            logger.info(f"Payload Url: {payload['url']}")
+            logger.info(f"Payload Headline: {payload['headline']}")
+            logger.info(f"Payload Text: {payload['paragraphs'][:10]}")
+            logger.info(f"Payload Source: {payload['source']}")
+            logger.info(f"Payload Length: {len(payload['paragraphs'])}")
 
             operation_info = qdrant_client.upsert(
-                collection_name="Articles",
-                points=[{
-                    "id": article_with_embedding["url"],  # Use URL as unique identifier
-                    "vector": article_with_embedding["embeddings"],
-                    "payload": payload
-                }]
+                collection_name="articles",
+                points=[
+                    PointStruct(
+                        id=article_with_embeddings["url"],  # Assuming this is a unique identifier
+                        vector=article_with_embeddings["embeddings"],  # Assuming this is a list of floats
+                        payload=payload
+                    )
+                ]
             )
-            logger.info(f"Upsert Operation: {validated_article.url}")
+
+            logger.info(f"Upsert Operation: {operation_info}")
             urls_to_update.append(validated_article.url)
             
             async with httpx.AsyncClient() as client:
@@ -131,7 +146,7 @@ async def store_embeddings():
 async def search(embeddings: List[float]):
     try:
         search_response = qdrant_client.search(
-           collection_name="Articles",
+           collection_name="articles",
             query_vector=embeddings,
             limit=10  # Number of top similar results to return
         )

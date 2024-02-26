@@ -37,7 +37,7 @@ async def test_ssare_pipeline():
         await asyncio.sleep(10)
         
         # Create embedding jobs
-        embedding_jobs_result = await client.post(f"{services['qdrant_service']}/create_embedding_jobs")
+        embedding_jobs_result = await client.post(f"{services['postgres_service']}/create_embedding_jobs")
         if embedding_jobs_result.status_code == 200:
             print("Embedding jobs created successfully")
         else:
@@ -60,12 +60,16 @@ async def test_ssare_pipeline():
         # Wait for embeddings to be stored - adjust sleep time as needed
         await asyncio.sleep(10)
 
-        # Store Embeddings in Qdrant
-        store_embeddings_result = await client.post(f"{services['qdrant_service']}/store_embeddings")
-        if store_embeddings_result.status_code == 200:
-            print("Embeddings stored in Qdrant successfully")
-        else:
-            print("Failed to store embeddings in Qdrant")
+        # Trigger pushing articles to queue in PostgreSQL service
+        await client.post(f"{services['postgres_service']}/trigger_qdrant_queue_push")
+        print("Articles pushed to queue in PostgreSQL service")
+
+        # Wait for articles to be pushed to queue - adjust sleep time as needed
+        await asyncio.sleep(10)
+
+        # Trigger reading articles from queue in Qdrant service
+        await client.post(f"{services['qdrant_service']}/store_embeddings")
+        print("Articles read from queue in Qdrant service")
 
         print("Test run complete. Check logs and database for results.")
 

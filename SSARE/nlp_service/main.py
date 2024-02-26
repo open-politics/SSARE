@@ -45,30 +45,33 @@ async def generate_embeddings():
                 article = ArticleBase(**raw_article)
 
                 # Generate embeddings
-                embedding = model.encode(article.headline + " ".join(article.paragraphs)).tolist()
+                embeddings = model.encode(article.headline + " ".join(article.paragraphs)).tolist()
 
                 # Processed article with embeddings
-                article_with_embedding = {
+                article_with_embeddings = {
                     "headline": article.headline,
                     "paragraphs": article.paragraphs,
-                    "embeddings": embedding,
+                    "embeddings": embeddings,
                     "embeddings_created": 1,
                     "url": article.url,
                     "source": article.source,
-                    "isStored_in_qdrant": 0
+                    "stored_in_qdrant": 0
                 }
 
-                logger.info(f"Generated embeddings for article: {article.url}, Embedding Length: {len(embedding)}")
+                logger.info(f"Generated embeddings for article: {article.url}, Embeddings Length: {len(embeddings)}")
 
                 try:
-                    print(article_with_embedding)
+                    logger.info(f"Article: {article.url}")
+                    logger.info(f"Headline: {article.headline}")
+                    logger.info(f"First 30 paragraphs: {article.paragraphs[:30]}")
+                    logger.info(f"First 20 embeddings: {embeddings[:3]}")
                     # Write articles with embeddings to Redis Queue 6
-                    await redis_conn_processed.lpush('articles_with_embeddings', json.dumps(article_with_embedding))
+                    await redis_conn_processed.lpush('articles_with_embeddings', json.dumps(article_with_embeddings))
                     logger.info(f"Article with embeddings written to Redis: {article.url}")
                 except Exception as e:
                     logger.error(f"Error writing article with embeddings to Redis: {e}")
 
-                first_10_embeddings = embedding[:10]
+                first_10_embeddings = embeddings[:10]
                 logger.info(f"First 10 embeddings: {first_10_embeddings}")
 
             except Exception as e:
