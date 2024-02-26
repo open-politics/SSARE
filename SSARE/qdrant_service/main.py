@@ -3,6 +3,7 @@ import httpx
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, Distance, PointStruct
 import json
+import uuid
 from redis.asyncio import Redis
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -87,6 +88,8 @@ async def store_embeddings():
         articles_with_embedding_json = await redis_conn.rpop('articles_with_embeddings')
         logger.info("Popped from Redis.")
 
+        points = []  # List to hold all points
+
         while True:
             if articles_with_embedding_json is None:
                 logger.info("No more articles to process.")
@@ -104,10 +107,9 @@ async def store_embeddings():
                 logger.error(f"Error validating article: {e}")
                 continue
 
-
             payload = {
                 "headline": article_with_embeddings["headline"],
-                "paragraphs": " ".join(article_with_embeddings["paragraphs"]),  # Combine paragraphs into a single text
+                "paragraphs": " ".join(article_with_embeddings["paragraphs"]),
                 "source": article_with_embeddings["source"],
                 "url": article_with_embeddings["url"],
             }
@@ -115,27 +117,30 @@ async def store_embeddings():
             # Log constructed payload (first 10 elements of each field)
             logger.info(f"Payload Url: {payload['url']}")
             logger.info(f"Payload Headline: {payload['headline']}")
-            logger.info(f"Payload Text: {payload['paragraphs'][:10]}")
+            logger.info(f"Payload Text: {payload['paragraphs'][:3]}")
             logger.info(f"Payload Source: {payload['source']}")
             logger.info(f"Payload Length: {len(payload['paragraphs'])}")
 
-            operation_info = qdrant_client.upsert(
-                collection_name="articles",
-                points=[
-                    PointStruct(
-                        id=article_with_embeddings["url"],  # Assuming this is a unique identifier
-                        vector=article_with_embeddings["embeddings"],  # Assuming this is a list of floats
-                        payload=payload
-                    )
-                ]
+            point = PointStruct(
+                id=uuid.uuid4().hex,  # Use simple UUID string representation
+                vector=article_with_embeddings["embeddings"],  # List of floats
+                payload=payload
             )
 
-            logger.info(f"Upsert Operation: {operation_info}")
+            points.append(point)  # Add point to the list
             urls_to_update.append(validated_article.url)
-            
-            async with httpx.AsyncClient() as client:
-                await client.post("http://postgres_service:5434/update_qdrant_flags", json={"urls": urls_to_update})
-                logger.info("Updated qdrant flags for articles.")
+
+        # Upsert all points at once
+        operation_info = qdrant_client.upsert(
+            collection_name="articles",
+            points=points,
+        )
+
+        logger.info(f"Upsert Operation: {operation_info}")
+
+        async with httpx.AsyncClient() as client:
+            await client.post("http://postgres_service:5434/update_qdrant_flags", json={"urls": urls_to_update})
+            logger.info("Updated qdrant flags for articles.")
 
         return {"message": "Embeddings processed and stored in Qdrant."}
     except Exception as e:
