@@ -13,59 +13,59 @@ async def test_ssare_pipeline():
 
     async with httpx.AsyncClient() as client:
 
-        # Produce flags
-        flags_result = await client.get(f"{services['postgres_service']}/flags")
-        if flags_result.status_code == 200:
-            print("Flags produced successfully")
-        else:
-            print("Failed to produce flags")
+        # # Produce flags
+        # flags_result = await client.get(f"{services['postgres_service']}/flags")
+        # if flags_result.status_code == 200:
+        #     print("Flags produced successfully")
+        # else:
+        #     print("Failed to produce flags")
 
-        # Wait for flags to be produced - adjust sleep time as needed
-        await asyncio.sleep(10)
+        # # Wait for flags to be produced - adjust sleep time as needed
+        # await asyncio.sleep(10)
 
-        # Produce flags and trigger scraping
-        await client.post(f"{services['scraper_service']}/create_scrape_jobs")
-        print("Scrape jobs created")
+        # # Produce flags and trigger scraping
+        # await client.post(f"{services['scraper_service']}/create_scrape_jobs")
+        # print("Scrape jobs created")
 
-        # Wait for scraping to complete - adjust sleep time as needed
-        await asyncio.sleep(20)
-        # Store raw articles
-        await client.post(f"{services['postgres_service']}/store_raw_articles")
-        print("Raw articles stored")
+        # # Wait for scraping to complete - adjust sleep time as needed
+        # await asyncio.sleep(20)
+        # # Store raw articles
+        # await client.post(f"{services['postgres_service']}/store_raw_articles")
+        # print("Raw articles stored")
 
-        # Wait for raw articles to be stored - adjust sleep time as needed
-        await asyncio.sleep(10)
+        # # Wait for raw articles to be stored - adjust sleep time as needed
+        # await asyncio.sleep(10)
         
-        # Create embedding jobs
-        embedding_jobs_result = await client.post(f"{services['postgres_service']}/create_embedding_jobs")
-        if embedding_jobs_result.status_code == 200:
-            print("Embedding jobs created successfully")
-        else:
-            print("Failed to create embedding jobs")
+        # # Create embedding jobs
+        # embedding_jobs_result = await client.post(f"{services['postgres_service']}/create_embedding_jobs")
+        # if embedding_jobs_result.status_code == 200:
+        #     print("Embedding jobs created successfully")
+        # else:
+        #     print("Failed to create embedding jobs")
 
-        # Wait for embedding jobs to be created - adjust sleep time as needed
-        await asyncio.sleep(10)
+        # # Wait for embedding jobs to be created - adjust sleep time as needed
+        # await asyncio.sleep(10)
 
-        # Trigger Embedding Creation
-        await client.post(f"{services['nlp_service']}/generate_embeddings", timeout=70)
-        print("Embeddings generated")
+        # # Trigger Embedding Creation
+        # await client.post(f"{services['nlp_service']}/generate_embeddings", timeout=70)
+        # print("Embeddings generated")
 
-        # Wait for embedding process - adjust sleep time as needed
-        await asyncio.sleep(30)
+        # # Wait for embedding process - adjust sleep time as needed
+        # await asyncio.sleep(30)
 
-        # Store Embeddings
-        await client.post(f"{services['postgres_service']}/store_articles_with_embeddings")
-        print("Articles with embeddings stored")
+        # # Store Embeddings
+        # await client.post(f"{services['postgres_service']}/store_articles_with_embeddings")
+        # print("Articles with embeddings stored")
 
-        # Wait for embeddings to be stored - adjust sleep time as needed
-        await asyncio.sleep(10)
+        # # Wait for embeddings to be stored - adjust sleep time as needed
+        # await asyncio.sleep(10)
 
         # Trigger pushing articles to queue in PostgreSQL service
         await client.post(f"{services['postgres_service']}/trigger_qdrant_queue_push")
         print("Articles pushed to queue in PostgreSQL service")
 
         # Wait for articles to be pushed to queue - adjust sleep time as needed
-        await asyncio.sleep(10)
+        await asyncio.sleep(2)
 
         # Trigger reading articles from queue in Qdrant service
         await client.post(f"{services['qdrant_service']}/store_embeddings")
