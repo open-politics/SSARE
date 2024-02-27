@@ -9,12 +9,21 @@ if not os.path.exists(directory_path):
     os.makedirs(directory_path)
 
 # Function to fetch news URLs from the Python News API
-async def fetch_news(session, api_key):
-    url = f'https://newsapi.org/v2/everything?q=politics&apiKey={api_key}'
-    async with session.get(url) as response:
-        data = await response.json()
-        articles = data.get('articles', [])
-        return [(article['url'], article['title']) for article in articles]
+async def fetch_news(session, api_key, total_articles=300):
+    articles = []
+    page = 1
+    pageSize = 100  # Max allowed by API
+    while len(articles) < total_articles:
+        url = f'https://newsapi.org/v2/top-headlines?category=general&pageSize={pageSize}&page={page}&apiKey={api_key}'
+        async with session.get(url) as response:
+            data = await response.json()
+            fetched_articles = data.get('articles', [])
+            articles.extend([(article['url'], article['title']) for article in fetched_articles])
+            # Break if no more articles are returned
+            if not fetched_articles:
+                break
+            page += 1
+    return articles[:total_articles]
 
 # Async function to process each article URL
 async def process_article_url(session, url):
