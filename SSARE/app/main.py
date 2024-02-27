@@ -34,20 +34,37 @@ service_urls = {
 async def healthcheck():
     return {"message": "OK"}, 200
 
+
 @app.get("/check_services")
 async def check_services():
     service_statuses = {}
     for service, url in service_urls.items():
-        if url != runtime_url:
-            try:
-                response = await httpx.get(url + "/health", timeout=10.0)  # Set a timeout of 10 seconds
-                service_statuses[service] = response.status_code
-            except httpx.TimeoutException:
-                service_statuses[service] = "timed out"
-            except Exception as e:
-                service_statuses[service] = str(e)
-    return service_statuses, 200
+        try:
+            response = await httpx.get(url + "/health", timeout=10.0)
+            service_statuses[service] = response.status_code
+        except httpx.RequestError as e:
+            service_statuses[service] = str(e)
+    return service_statuses
 
+
+@app.post("/trigger_scraping")
+async def trigger_scraping():
+    response = await httpx.post(service_urls["scraper_service"] + "/create_scrape_jobs")
+    if response.status_code == 200:
+        return {"message": "Scraping jobs triggered successfully."}
+    else:
+        raise HTTPException(status_code=response.status_code, detail="Failed to trigger scraping jobs.")
+
+@app.post("/store_embeddings_in_qdrant")
+async def store_embeddings_in_qdrant():
+    response = await httpx.post(service_urls["qdrant_service"] + "/store_embeddings")
+    if response.status_code == 200:
+        return {"message": "Embeddings storage in Qdrant triggered successfully."}
+    else:
+        raise HTTPException(status_code=response.status_code, detail="Failed to trigger embeddings storage in Qdrant.")
+
+        
+        
 
 
 async def get_redis_queue_length(redis_db: int, queue_key: str):
