@@ -64,15 +64,15 @@ async def generate_embeddings():
                     logger.info(f"Article: {article.url}")
                     logger.info(f"Headline: {article.headline}")
                     logger.info(f"First 30 paragraphs: {article.paragraphs[:30]}")
-                    logger.info(f"First 20 embeddings: {embeddings[:3]}")
+                    logger.info(f"First 3 embeddings: {embeddings[:3]}")
                     # Write articles with embeddings to Redis Queue 6
                     await redis_conn_processed.lpush('articles_with_embeddings', json.dumps(article_with_embeddings))
                     logger.info(f"Article with embeddings written to Redis: {article.url}")
                 except Exception as e:
                     logger.error(f"Error writing article with embeddings to Redis: {e}")
 
-                first_10_embeddings = embeddings[:10]
-                logger.info(f"First 10 embeddings: {first_10_embeddings}")
+                first_3_embeddings = embeddings[:3]
+                logger.info(f"First 10 embeddings: {first_3_embeddings}")
 
             except Exception as e:
                 logger.error(f"Error processing article {article.url}: {e}")
@@ -85,7 +85,7 @@ async def generate_embeddings():
     
 
 
-@app.post("/generate_query_embeddings")
+@app.get("/generate_query_embeddings")
 async def generate_query_embedding(query: str):
     """
     This function generates embeddings for a query.
@@ -101,3 +101,4 @@ async def generate_query_embedding(query: str):
         return {"message": "Embeddings generated", "embeddings": embeddings}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+

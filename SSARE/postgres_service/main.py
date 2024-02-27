@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy import Column, Integer, String, Float
@@ -141,16 +141,22 @@ async def store_raw_articles(session: AsyncSession = Depends(get_session)):
 
 
 @app.post("/update_qdrant_flags")
-async def update_qdrant_flags(urls: List[str], session: AsyncSession = Depends(get_session)):
+async def update_qdrant_flags(data: Dict[str, List[str]], session: AsyncSession = Depends(get_session)):
+    urls = data.get('urls', [])
+    if not urls:
+        logger.info("No URLs provided for updating Qdrant flags.")
+        return {"message": "No URLs to update."}
+
     try:
         async with session.begin():
             query = update(Article).where(Article.url.in_(urls)).values(stored_in_qdrant=1)
-            await session.execute(query)
+            result = await session.execute(query)
+            await session.commit()  # Explicit commit might be redundant but ensures transaction closure
+            logger.info(f"Qdrant flags updated for URLs: {urls}, Rows affected: {result.rowcount}")
         return {"message": "Qdrant flags updated successfully."}
     except Exception as e:
         logger.error(f"Error updating Qdrant flags: {e}")
         raise HTTPException(status_code=400, detail=str(e))
-
 
 @app.post("/store_articles_with_embeddings")
 async def store_processed_articles(session: AsyncSession = Depends(get_session)):
