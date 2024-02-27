@@ -18,7 +18,8 @@ async def fetch_news(session, api_key, total_articles=300):
         async with session.get(url) as response:
             data = await response.json()
             fetched_articles = data.get('articles', [])
-            articles.extend([(article['url'], article['title']) for article in fetched_articles])
+            filtered_articles = [(article['url'], article['title']) for article in fetched_articles if 'news.google.com' not in article['url']]
+            articles.extend(filtered_articles)
             # Break if no more articles are returned
             if not fetched_articles:
                 break

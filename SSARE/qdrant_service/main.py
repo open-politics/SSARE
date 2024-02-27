@@ -10,9 +10,9 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from fastapi.exceptions import RequestValidationError
 from starlette.responses import JSONResponse
-from core.models import ArticleBase
 import logging
-from typing import List
+from pydantic import BaseModel
+from typing import List, Optional
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -27,8 +27,6 @@ It is responsible for:
 4. [TODO] Querying Qdrant
 """
 
-from pydantic import BaseModel
-from typing import List, Optional
 
 class ArticleModel(BaseModel):
     url: str
@@ -39,11 +37,25 @@ class ArticleModel(BaseModel):
     embeddings_created: int = 1
     stored_in_qdrant: int = 0
 
-
 app = FastAPI()
 
 qdrant_client = QdrantClient(host='qdrant_storage', port=6333)
 vectors_config = VectorParams(size=768, distance=Distance.COSINE)
+collection_name = 'articles'
+
+
+# Add exception handler for RequestValidationError
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=400,
+        content={"detail": exc.errors(), "body": exc.body},
+    )
+
+@app.get("/healthcheck")
+async def healthcheck():
+    return {"message": "OK"}
+
 
 # Try to create the collection if it does not exist, continue if it does
 try:
@@ -56,21 +68,31 @@ except Exception as e:
     logger.info(f"Collection already exists: {e}")
     pass
     
-collection_name = 'articles'
 
-@app.get("/healthcheck")
-async def healthcheck():
-    return {"message": "OK"}
-
-# Add exception handler for RequestValidationError
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=400,
-        content={"detail": exc.errors(), "body": exc.body},
+def recreate_collection(qdrant_client, collection_name, vectors_config):
+    """
+    This function recreates the collection in Qdrant.
+    """
+    qdrant_client.delete_collection(collection_name)
+    create_collection_info = qdrant_client.create_collection(
+        collection_name=collection_name,
+        vectors_config=vectors_config,
     )
+    logger.info(f"Collection recreated: {create_collection_info}")
+    return create_collection_info
 
 
+@app.post("/recreate_collection")
+async def recreate_collection():
+    """
+    This function is triggered by an API call from the orchestration container.
+    It recreates the collection in Qdrant.
+    """
+    try:
+        recreate_collection(qdrant_client, collection_name, vectors_config)
+        return {"message": "Collection recreated"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # get articles from postgres and create embeddings
