@@ -182,6 +182,7 @@ async def search(query: str, top: int):
             collection_name="articles",
             query_vector=query_embeddings,
             limit=top,
+            score_threshold=0.1,
         )
         logger.info(f"Search Response: {search_response}")  # Log the search response for debugging
 
