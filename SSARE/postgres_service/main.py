@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy import Column, Integer, String, Float
 from sqlalchemy import select, insert, update
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import declarative_base, sessionmaker
 from pydantic import BaseModel
@@ -227,7 +228,6 @@ async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-
 async def push_articles_to_qdrant_upsert_queue(session):
     try:
         async with session.begin():
@@ -259,5 +259,22 @@ async def trigger_push_articles_to_queue(session: AsyncSession = Depends(get_ses
     try:
         await push_articles_to_qdrant_upsert_queue(session)
         return {"message": "Articles pushed to queue successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# deducplication endpoint
+@app.post("/deduplicate_articles")
+async def deduplicate_articles(session: AsyncSession = Depends(get_session)):
+    try:
+        async with session.begin():
+            query = select(Article).distinct(Article.url).group_by(Article.url).having(func.count() > 1)
+            result = await session.execute(query)
+            duplicate_articles = result.scalars().all()
+
+        for article in duplicate_articles:
+            logger.info(f"Duplicate article: {article.url}")
+            await session.delete(article)
+
+        return {"message": "Duplicate articles deleted successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
