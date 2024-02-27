@@ -70,7 +70,7 @@ def scrape_single_source(flag: str):
             return
 
         df = pd.read_csv(f"/app/scrapers/data/dataframes/{flag}_articles.csv")
-        df["source"] = flag
+
         articles = df.to_dict(orient="records")
 
         redis_conn_articles = Redis(host='redis', port=6379, db=1)
@@ -78,7 +78,7 @@ def scrape_single_source(flag: str):
         for article_data in articles:
             try:
                 validated_article = ArticleBase(**article_data)
-                article_summary = {k: v[:10] if isinstance(v, str) else v for k, v in validated_article.dict().items()}
+                article_summary = {k: v[:10] if isinstance(v, str) else v for k, v in validated_article.model_dump().items()}
                 logger.info(f"Storing article summary: {article_summary}")
                 redis_conn_articles.lpush("raw_articles_queue", json.dumps(validated_article.model_dump()))
             except ValidationError as e:

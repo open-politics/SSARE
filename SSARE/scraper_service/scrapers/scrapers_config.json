@@ -1,9 +1,12 @@
 {
     "scrapers": {
-            "cnn": {
-                "location": "scrapers/cnn.py",
-                "last_run": "2015-01-01 00:00:00"
-            }
+        "cnn": {
+            "location": "scrapers/cnn.py",
+            "last_run": "2015-01-01 00:00:00"
+        },
+        "pynews": {
+            "location": "scrapers/pynews.py",
+            "last_run": "2023-01-01 00:00:00"
         }
-
+    }
 }
