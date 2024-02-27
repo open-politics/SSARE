@@ -43,7 +43,7 @@ class ArticleModel(BaseModel):
 app = FastAPI()
 
 qdrant_client = QdrantClient(host='qdrant_storage', port=6333)
-vectors_config = VectorParams(size=768, distance=Distance.COSINE)
+vectors_config = VectorParams(size=384, distance=Distance.COSINE)
 
 # Try to create the collection if it does not exist, continue if it does
 try:
@@ -84,18 +84,23 @@ async def store_embeddings():
         logger.info("Trying to store embeddings in Qdrant.")
         redis_conn = await Redis(host='redis', port=6379, db=6)
         logger.info("Connected to Redis.")
-        urls_to_update = []
-        articles_with_embedding_json = await redis_conn.rpop('articles_with_embeddings')
-        logger.info("Popped from Redis.")
 
+        urls_to_update = []
         points = []  # List to hold all points
 
         while True:
+            articles_with_embedding_json = await redis_conn.rpop('articles_with_embeddings')
             if articles_with_embedding_json is None:
                 logger.info("No more articles to process.")
                 break
 
             article_with_embeddings = json.loads(articles_with_embedding_json)
+            
+            # Add a check to prevent re-processing if flag is already set
+            if article_with_embeddings.get("stored_in_qdrant", 0) == 1:
+                logger.info(f"Article already processed: {article_with_embeddings['url']}")
+                continue
+
             try:
                 validated_article = ArticleModel(**article_with_embeddings)
                 logger.info(f"Validated article: {validated_article.url}")
@@ -109,7 +114,7 @@ async def store_embeddings():
 
             payload = {
                 "headline": article_with_embeddings["headline"],
-                "paragraphs": " ".join(article_with_embeddings["paragraphs"]),
+                "paragraphs": article_with_embeddings["paragraphs"],
                 "source": article_with_embeddings["source"],
                 "url": article_with_embeddings["url"],
             }
@@ -130,31 +135,57 @@ async def store_embeddings():
             points.append(point)  # Add point to the list
             urls_to_update.append(validated_article.url)
 
-        # Upsert all points at once
-        operation_info = qdrant_client.upsert(
-            collection_name="articles",
-            points=points,
-        )
+        # Check if there are any points to upsert
+        if points:
+            # Upsert all points at once
+            operation_info = qdrant_client.upsert(
+                collection_name="articles",
+                points=points,
+            )
 
-        logger.info(f"Upsert Operation: {operation_info}")
+            logger.info(f"Upsert Operation: {operation_info}")
 
-        async with httpx.AsyncClient() as client:
-            await client.post("http://postgres_service:5434/update_qdrant_flags", json={"urls": urls_to_update})
-            logger.info("Updated qdrant flags for articles.")
+            # Update qdrant flags only if there are URLs to update
+            if urls_to_update:
+                logger.info(f"urls_to_update: {urls_to_update}")
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                    "http://postgres_service:5434/update_qdrant_flags",
+                    json={"urls": urls_to_update}
+                    )
+                    if response.status_code == 200:
+                        logger.info("Updated qdrant flags for articles.")
+                    else:
+                        logger.error(f"Failed to update qdrant flags: {response.text}")
 
         return {"message": "Embeddings processed and stored in Qdrant."}
     except Exception as e:
+        logger.error(f"Error storing embeddings: {e}")
         raise HTTPException(status_code=400, detail=str(e))
-    
 
-@app.post("/search")
-async def search(embeddings: List[float]):
+
+
+@app.get("/search")
+async def search(query: str, top: int):
     try:
+        # Convert textual query to embeddings
+        logger.info(f"Query: {query}")
+        logger.info(f"Top: {top}")
+        query_embeddings_response = httpx.get(f"http://nlp_service:420/generate_query_embeddings?query={query}")
+        query_embeddings_response.raise_for_status()  # Raises an HTTPException if the response was unsuccessful
+
+        query_embeddings = query_embeddings_response.json()["embeddings"]
+        logger.info(f"Query Embeddings: {query_embeddings[:10]}")  # Log the first 10 embeddings for debugging
+
+        # Use the async search method
         search_response = qdrant_client.search(
-           collection_name="articles",
-            query_vector=embeddings,
-            limit=10  # Number of top similar results to return
+            collection_name="articles",
+            query_vector=query_embeddings,
+            limit=top,
         )
+        logger.info(f"Search Response: {search_response}")  # Log the search response for debugging
+
         return search_response
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Search error: {str(e)}")  # Log any exceptions for debugging
+        raise HTTPException(status_code=400, detail=str(e))
