@@ -76,7 +76,7 @@ async def test_ssare_pipeline():
         print("Test run complete. Check logs and database for results.")
         qdrant_service_url = 'http://127.0.0.1:6969/search'
 
-        test_query = "Wassuppp"
+        test_query = "Germany"
 
         response = httpx.get(
             qdrant_service_url,
