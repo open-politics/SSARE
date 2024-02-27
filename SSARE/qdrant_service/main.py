@@ -43,7 +43,7 @@ class ArticleModel(BaseModel):
 app = FastAPI()
 
 qdrant_client = QdrantClient(host='qdrant_storage', port=6333)
-vectors_config = VectorParams(size=384, distance=Distance.COSINE)
+vectors_config = VectorParams(size=768, distance=Distance.COSINE)
 
 # Try to create the collection if it does not exist, continue if it does
 try:

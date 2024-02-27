@@ -17,7 +17,7 @@ This Service runs on port 0420 and is responsible for generating embeddings for 
 
 app = FastAPI()
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
+model = SentenceTransformer("jinaai/jina-embeddings-v2-base-en")
 
 @app.get("/health")
 async def healthcheck():
