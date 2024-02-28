@@ -9,27 +9,27 @@ postgres_storage:
 
 postgres_service:
   image:
-    repository: "registry.docker.io/jimvincetw/postgres_service"
+    repository: "jimvincetw/postgres_service"
     tag: "latest"
 
 main_core_app:
   image:
-    repository: "registry.docker.io/jimvincetw/main_core_app"
+    repository: "jimvincetw/main_core_app"
     tag: "latest"
 
 scraper:
   image:
-    repository: "registry.docker.io/jimvincetw/scraper_service"
+    repository: "jimvincetw/scraper_service"
     tag: "latest"
 
 qdrant_storage:
   image:
-    repository: "registry.docker.io/qdrant/qdrant"
+    repository: "qdrant/qdrant"
     tag: "latest"
 
 qdrant_service:
   image:
-    repository: "registry.docker.io/jimvincetw/qdrant_service"
+    repository: "jimvincetw/qdrant_service"
     tag: "latest"
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
@@ -40,10 +40,10 @@ qdrant_service:
 
 redis:
   image:
-    repository: "registry.docker.io/redis/redis"
+    repository: "redis/redis"
     tag: "latest"
 
 nlp:
   image:
-    repository: "registry.docker.io/jimvincetw/nlp_service"
+    repository: "jimvincetw/nlp_service"
     tag: "latest"
