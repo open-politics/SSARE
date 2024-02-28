@@ -75,7 +75,8 @@ Here's a concise guide to utilizing SSARE:
 If your additional scripts need scraping libraries other than BeautifulSoup, please add them to the requirements.txt file in the scraper_service folder (and create a pull request).
 
 ## Important Notes
-Current limitations include the pending development of the scraper service and orchestration framework, alongside the unavailability of postgres database querying features. However, individual API endpoints remain accessible.
+Current limitations include the limited number of scrapers, alongside the unavailability of querying the postgres database directly.
+
 
 ## Architecture and Storage
 SSARE's architecture fosters communication through a decoupled microservices design, ensuring scalability and maintainability. The system is composed of the following services:
