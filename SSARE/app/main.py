@@ -30,7 +30,7 @@ service_urls = {
 
 ### Healthcheck & Monitoring
 
-@app.get("/health")
+@app.get("/healthz")
 async def healthcheck():
     return {"message": "OK"}, 200
 
@@ -62,9 +62,6 @@ async def store_embeddings_in_qdrant():
         return {"message": "Embeddings storage in Qdrant triggered successfully."}
     else:
         raise HTTPException(status_code=response.status_code, detail="Failed to trigger embeddings storage in Qdrant.")
-
-        
-        
 
 
 async def get_redis_queue_length(redis_db: int, queue_key: str):

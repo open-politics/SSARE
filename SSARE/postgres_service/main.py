@@ -77,9 +77,9 @@ app = FastAPI(lifespan=lifespan)
 
 
 # Health Check Endpoint
-@app.get("/health")
+@app.get("/healthz")
 async def healthcheck():
-    return {"message": "Postgres and Redis Services Running"}
+    return {"message": "OK"}, 200
 
 @app.get("/flags")
 async def produce_flags():

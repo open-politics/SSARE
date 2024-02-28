@@ -19,7 +19,7 @@ app = FastAPI()
 
 model = SentenceTransformer("jinaai/jina-embeddings-v2-base-en")
 
-@app.get("/health")
+@app.get("/healthz")
 async def healthcheck():
     return {"message": "NLP Service Running"}, 200
 
