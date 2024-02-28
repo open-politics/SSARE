@@ -19,7 +19,8 @@ SSARE is a composition of microservices to make this project a scalable and main
 We are excited to announce that SSARE version 1 is now operational and usable!
 
 ### Getting Started
-Ensure Docker and docker-compose are installed. 
+Ensure Docker and docker-compose are installed.
+
 Then:
 1. Download the source code by cloning the repository.
     ```bash
@@ -34,7 +35,7 @@ Then:
    ```bash
    python full.py
    ```
-   Wait
+   Wait (initial scraping/ processing may take a few minutes).
 4. Query the API:
    ```bash
    curl -X GET "http://127.0.0.1:6969/search?query=Argentinia&top=5"
