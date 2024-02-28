@@ -1,5 +1,6 @@
-# SSARE: Semantic Search Article Recommendation Engine
-Up-to-date political news RAG endpoint for semantic search and article recommendations.
+# SSARE 
+# Semantic Search Article Recommendation Engine
+Always up-to-date open-source political news RAG endpoint for semantic search and article recommendations.
 
 ![SSARE](media/banner.jpg)
 
