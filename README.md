@@ -9,7 +9,7 @@ SSARE stands for Semantic Search Article Recommendation Engine, an open-source p
 
 SSARE serves as an efficient and scalable resource for semantic search and article recommendations, catering primarily to news data.
 
-SSARE is an always up to date political news RAG endpoint.
+SSARE is an always up to date political news RAG vector storage and retrieval endpoint.
 
 The engine is adaptable to various sources, requiring only a sourcing cript that outputs the data in the format of a dataframe with the columns "url," "headline," and "paragraphs." Once integrated, SSARE processes these articles using embeddings models of your choice(upcoming, currently hardcoded), stores their vector representations in a Qdrant vector database, and maintains a full copy in a PostgreSQL database. 
 
