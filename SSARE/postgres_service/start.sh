@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Write database environment variables to ini file
 # Pfad zur Konfigurationsdatei
 CONFIG_FILE="/core/configs/config.conf"
