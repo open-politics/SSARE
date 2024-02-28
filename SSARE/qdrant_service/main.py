@@ -52,9 +52,9 @@ async def validation_exception_handler(request, exc):
         content={"detail": exc.errors(), "body": exc.body},
     )
 
-@app.get("/healthcheck")
+@app.get("/healthz")
 async def healthcheck():
-    return {"message": "OK"}
+    return {"message": "OK"}, 200
 
 
 # Try to create the collection if it does not exist, continue if it does

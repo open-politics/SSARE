@@ -87,9 +87,9 @@ async def create_scrape_jobs():
     return {"message": "Scraping triggered successfully."}
         
 
-@app.get("/health")
+@app.get("/healthz")
 def health_check():
     """Health check endpoint"""
-    return {"status": "ok"}
+    return {"status": "ok"}, 200
 
 
