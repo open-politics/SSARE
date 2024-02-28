@@ -1,6 +1,6 @@
 # SSARE 
 # Semantic Search Article Recommendation Engine
-Always up-to-date open-source political news RAG endpoint for semantic search and article recommendations.
+Always up-to-date political news RAG endpoint for semantic search and article recommendations.
 
 ![SSARE](media/banner.jpg)
 
@@ -9,10 +9,13 @@ SSARE stands for Semantic Search Article Recommendation Engine, an open-source p
 
 SSARE serves as an efficient and scalable resource for semantic search and article recommendations, catering primarily to news data.
 
-SSARE is an always up to date political news RAG vector storage and retrieval endpoint.
+SSARE is an always up to date political news RAG endpoint.
 
-The engine is adaptable to various sources, requiring only a sourcing cript that outputs the data in the format of a dataframe with the columns "url," "headline," and "paragraphs." Once integrated, SSARE processes these articles using embeddings models of your choice(upcoming, currently hardcoded), stores their vector representations in a Qdrant vector database, and maintains a full copy in a PostgreSQL database. 
+The engine is adaptable to various sources, requiring only a sourcing cript that outputs the data in the format of a dataframe with the columns "url," "headline," and "paragraphs." Once integrated, SSARE processes these articles using embeddings models of your choice(upcoming, currently hardcoded), stores their vector representations in a Qdrant vector database, and maintains a full in a PostgreSQL database. 
 
+SSARE is a composition of microservices to make this project a scalable and maintainable solution. The services are:
+
+![High Level Architecture](media/ssare_high_level_diagramm.png)
 
 ## Version 1 Deployment
 We are excited to announce that SSARE version 1 is now operational and usable!
@@ -40,9 +43,7 @@ Then:
    curl -X GET "http://127.0.0.1:6969/search?query=Argentinia&top=5"
    ```
 
-The design philosophy underscores flexibility, allowing integration with any scraper script that aligns with the specified data structure. The infrastructure benefits from each additional source, enriching the system's capability to amass, store, and retrieve news content from a broad range of sources.
-
-Create new scrapers and contribute!
+The design philosophy underscores flexibility, allowing integration with any scraper script that aligns with the specified data structure. The infrastructure benefits from each additional source, enriching the system's capability to amass, store, and retrieve news content efficiently.
 
 ## Upcoming Features
 
