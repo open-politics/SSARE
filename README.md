@@ -40,7 +40,9 @@ Then:
    curl -X GET "http://127.0.0.1:6969/search?query=Argentinia&top=5"
    ```
 
-The design philosophy underscores flexibility, allowing integration with any scraper script that aligns with the specified data structure. The infrastructure benefits from each additional source, enriching the system's capability to amass, store, and retrieve news content efficiently.
+The design philosophy underscores flexibility, allowing integration with any scraper script that aligns with the specified data structure. The infrastructure benefits from each additional source, enriching the system's capability to amass, store, and retrieve news content from a broad range of sources.
+
+Create new scrapers and contribute!
 
 ## Upcoming Features
 

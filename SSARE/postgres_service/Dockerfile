@@ -2,9 +2,6 @@ FROM python:3.9
 
 WORKDIR /app
 
-# Setup the start script
-COPY postgres_service/start.sh /start.sh
-RUN chmod +x /start.sh
 
 # Copy the requirements.txt file
 COPY postgres_service/requirements.txt .
@@ -16,4 +13,4 @@ COPY core ./core
 # Copy the main.py and other files from postgres_service
 COPY postgres_service/main.py .
 
-CMD ["/start.sh"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5434"]
