@@ -2,7 +2,7 @@
 
 # Write database environment variables to ini file
 # Pfad zur Konfigurationsdatei
-CONFIG_FILE="app/core/configs/config.conf"
+CONFIG_FILE="core/configs/config.conf"
 
 # Funktion zum Ersetzen von Werten in der Konfigurationsdatei
 replace_config() {

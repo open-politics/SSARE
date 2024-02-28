@@ -9,3 +9,6 @@ notes.py
 qcheck.py
 all.txt
 mains.txt
+
+__pycache__/
+
