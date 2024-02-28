@@ -22,7 +22,7 @@ spec:
         - name: "qdrant-storage"
           readinessProbe:
             httpGet:
-              path: /health
+              path: /metrics
               port: 6333
             initialDelaySeconds: 5
             periodSeconds: 10
@@ -30,7 +30,7 @@ spec:
             failureThreshold: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /metrics
               port: 6333
             initialDelaySeconds: 15
             periodSeconds: 10

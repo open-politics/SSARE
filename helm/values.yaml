@@ -40,7 +40,7 @@ qdrant_service:
 
 redis:
   image:
-    repository: "redis/redis"
+    repository: "redis"
     tag: "latest"
 
 nlp:
