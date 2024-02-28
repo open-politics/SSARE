@@ -81,7 +81,7 @@ services:
       POSTGRES_USER: hello
       POSTGRES_PASSWORD: world
     volumes:
-      - ./core/sql_commands:/docker-entrypoint-initdb.d
+      - ./core/sql_commands:/docker-entrypoint-
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
