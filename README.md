@@ -15,7 +15,7 @@ The engine is adaptable to various sources, requiring only a sourcing cript that
 
 SSARE is a composition of microservices to make this project a scalable and maintainable solution. The services are:
 
-![High Level Architecture](media/ssare_high_level_diagramm.png)
+![High Level Architecture](media/ssare_high_level_diagramm_github.png)
 
 ## Version 1 Deployment
 We are excited to announce that SSARE version 1 is now operational and usable!
