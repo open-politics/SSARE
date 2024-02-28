@@ -20,27 +20,27 @@ spec:
             readOnly: false
       containers:
         - name: "redis"
-          readinessProbe:
-            httpGet:
-              path: /healthz
-              port: 6379
-            initialDelaySeconds: 5
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 10
           livenessProbe:
-            httpGet:
-              path: /healthz
+            tcpSocket:
               port: 6379
-            initialDelaySeconds: 15
-            periodSeconds: 10
+            initialDelaySeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 10
+            periodSeconds: 5
+            failureThreshold: 5
+            successThreshold: 1
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 10
+            timeoutSeconds: 5
+            periodSeconds: 3
           image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
           imagePullPolicy: Always
           ports:
             - name: http
-              containerPort: 6333
+              containerPort: 6379
               protocol: TCP
           volumeMounts:
             - mountPath: "/data"
