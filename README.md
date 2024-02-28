@@ -20,11 +20,12 @@ We are excited to announce that SSARE version 1 is now operational and usable!
 Ensure Docker and docker-compose are installed. 
 Then:
 1. Download the source code by cloning the repository.
-    ```bas`
+    ```bash
     git clone https://github.com/JimVincentW/SSARE.git
     ``` 
 2. Initiate the setup:
    ```bash
+   cd SSARE
    docker-compose up --build
    ```
 3. Execute the initial setup script:
