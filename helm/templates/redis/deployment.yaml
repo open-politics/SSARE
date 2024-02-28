@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "redis"
+spec:
+  selector:
+    matchLabels:
+      app: "redis"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: "redis"
+    spec:
+      serviceAccountName: "ssare"
+      volumes:
+        - name: "redis-data"
+          persistentVolumeClaim:
+            claimName: "redis-data"
+            readOnly: false
+      containers:
+        - name: "redis"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 6379
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 6379
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 6333
+              protocol: TCP
+          volumeMounts:
+            - mountPath: "/data"
+              name: redis-data
+              readOnly: false
+

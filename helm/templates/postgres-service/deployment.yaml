@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "postgres-service"
+spec:
+  selector:
+    matchLabels:
+      app: "postgres-service"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: "postgres-service"
+    spec:
+      serviceAccountName: "ssare"
+      containers:
+        - name: "postgres"
+          env:
+            - name: POSTGRES_USER
+              value: "{{ .Values.postgres_service.postgres_user }}"
+            - name: POSTGRES_PASSWORD
+              value: "{{ .Values.postgres_service.postgres_password }}"
+            - name: POSTGRES_DB
+              value: "{{ .Values.postgres_service.postgres_db }}"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 5434
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 5434
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          image: "{{ .Values.postgres_service.image.repository }}:{{ .Values.postgres_service.image.tag }}"
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 6969
+              protocol: TCP

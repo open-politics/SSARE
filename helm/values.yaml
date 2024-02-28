@@ -1,0 +1,49 @@
+storage:
+  storageClassName: "longhorn"
+
+postgres_storage:
+  storage:
+    storageClass: "longhorn"
+  username: "ssare"
+  database: "ssare"
+
+postgres_service:
+  image:
+    repository: "registry.docker.io/jimvincetw/postgres_service"
+    tag: "latest"
+
+main_core_app:
+  image:
+    repository: "registry.docker.io/jimvincetw/main_core_app"
+    tag: "latest"
+
+scraper:
+  image:
+    repository: "registry.docker.io/jimvincetw/scraper_service"
+    tag: "latest"
+
+qdrant_storage:
+  image:
+    repository: "registry.docker.io/qdrant/qdrant"
+    tag: "latest"
+
+qdrant_service:
+  image:
+    repository: "registry.docker.io/jimvincetw/qdrant_service"
+    tag: "latest"
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  ingress:
+    className: "nginx"
+    hosts:
+      - host: "qdrant-service.example.com"
+
+redis:
+  image:
+    repository: "registry.docker.io/redis/redis"
+    tag: "latest"
+
+nlp:
+  image:
+    repository: "registry.docker.io/jimvincetw/nlp_service"
+    tag: "latest"

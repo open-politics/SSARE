@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "qdrant-service"
+spec:
+  selector:
+    matchLabels:
+      app: "qdrant-service"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: "qdrant-service"
+    spec:
+      serviceAccountName: "ssare"
+      containers:
+        - name: "qdrant"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 6969
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 6969
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          image: "{{ .Values.qdrant_service.image.repository }}:{{ .Values.qdrant_service.image.tag }}"
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 6969
+              protocol: TCP
