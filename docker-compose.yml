@@ -92,10 +92,6 @@ services:
     build: 
       context: ./SSARE
       dockerfile: ./postgres_service/Dockerfile
-    environment:
-      POSTGRES_DB: root
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password
     ports:
       - "5434:5434"
     networks:
