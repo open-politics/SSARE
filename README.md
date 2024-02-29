@@ -12,7 +12,7 @@ SSARE serves as an efficient and scalable resource for semantic search and artic
 
 SSARE is an always up to date political news RAG endpoint.
 
-The engine is adaptable to various sources, requiring only a sourcing cript that outputs the data in the format of a dataframe with the columns "url," "headline," and "paragraphs." Once integrated, SSARE processes these articles using embeddings models of your choice(upcoming, currently hardcoded), stores their vector representations in a Qdrant vector database, and maintains a full in a PostgreSQL database. 
+The engine is adaptable to various sources, requiring only a sourcing script that outputs the data in the format of a dataframe with the columns "url," "headline," and "paragraphs." Once integrated, SSARE processes these articles using embeddings models of your choice(upcoming, currently hardcoded), stores their vector representations in a Qdrant vector database, and maintains a full in a PostgreSQL database. 
 
 SSARE is a composition of microservices to make this project a scalable and maintainable solution.
 
