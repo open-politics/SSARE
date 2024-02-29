@@ -3,3 +3,4 @@ uvicorn
 httpx
 python-multipart
 redis
+jinja2
