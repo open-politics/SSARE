@@ -18,6 +18,7 @@ templates = Jinja2Templates(directory="templates")
 
 app = FastAPI()
 router = APIRouter()
+app.include_router(router)
 status_message = "Ready to start scraping."
 
 redis_channel_mappings = {
@@ -36,6 +37,7 @@ service_urls = {
     "nlp_service": "http://nlp_service:0420",
     "qdrant_service": "http://qdrant_service:6969",
     "qdrant_storage": "http://qdrant_storage:6333",
+    "scraper_service": "http://scraper_service:8081",
 }
 
 ### Healthcheck & Monitoring
@@ -83,7 +85,8 @@ async def trigger_scraping_sequence(background_tasks: BackgroundTasks):
     global status_message
     status_message = "Scraping initiated..."
     background_tasks.add_task(execute_scraping_sequence)
-    return {"message": "Scraping sequence initiated"}
+    return HTMLResponse(content="<div>Scraping sequence initiated</div>")
+
 
 @app.get("/check_services")
 async def check_services():
