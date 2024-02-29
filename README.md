@@ -87,12 +87,19 @@ Current limitations include the limited number of scrapers, alongside the unavai
 
 
 ## Architecture and Storage
-SSARE's architecture fosters communication through a decoupled microservices design, ensuring scalability and maintainability. The system is composed of the following services:
-- [] (details to be added)
+SSARE's architecture fosters communication through a decoupled microservices design, ensuring scalability and maintainability.Redis stores task queues. The system is composed of the following services:
+-  Scraper Service
+-  Vectorization/NLP Service
+-  Qdrant Service
+-  PostgreSQL Service
+-  API Service
 
-The scrape jobs are created with Celery. 
+Services communicate and signal each other by producing flags and pushings tasks and data to Redis queues.
 
-Regarding storage, SSARE employs PostgreSQL for data retention and Qdrant for semantic recommendations, ensuring a robust and responsive search and retrieval system.
+The scrape jobs are parallelized with Celery.
+
+Regarding storage, SSARE employs PostgreSQL for data retention and Qdrant as a vector storage.
+
 
 ## Licensing
 SSARE is distributed under the MIT License, with the license document available for reference within the project repository.
