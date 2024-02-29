@@ -52,7 +52,7 @@ Then:
    curl -X GET "http://127.0.0.1:6969/search?query=Argentinia&top=5"
    ```
 
-If you want use the UI:
+If you want to use the UI:
 1. Trigger a scraping run.
 2. Wait for the scraping to finish.
 3. Use the search bar to query for articles.
