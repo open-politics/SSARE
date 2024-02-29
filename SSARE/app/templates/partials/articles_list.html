@@ -1,0 +1,10 @@
+{% for article in articles %}
+<div class="article">
+    <div class="headline">{{ article.payload.headline }}</div>
+    <div class="source">{{ article.payload.source }} - <a href="{{ article.payload.url }}" target="_blank">Read More</a></div>
+    <div class="score">Score: {{ article.score }}</div>
+    <div class="preview">
+        {{ article.payload.paragraphs | replace('\n', '<br>') }}
+    </div>
+</div>
+{% endfor %}
