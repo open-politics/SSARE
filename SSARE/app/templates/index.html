@@ -86,6 +86,14 @@
     </style>
 </head>
 <body>
+    <div id="status">Click the button to start scraping</div>
+    <div id="scraping-status" hx-get="/scraping_status" hx-trigger="every 5s" hx-swap="innerHTML">
+        Ready to start scraping.
+    </div>
+    <button hx-post="/trigger_scraping_sequence" hx-target="#scraping-status" hx-swap="innerHTML">
+        Trigger Scraping
+    </button>    
+    
     <form hx-get="/" hx-target="#articles" hx-trigger="submit">
         <input type="text" name="search_query" placeholder="Search articles..." value="{{ search_query }}">
         <button type="submit">Search</button>
