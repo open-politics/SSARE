@@ -26,6 +26,9 @@ For a more detailed overview, please refer to the [Architecture and Storage](#ar
 ## Version 1 Deployment
 We are excited to announce that SSARE version 1 is now operational and usable!
 
+You can call the api with a query and get the top n results back.
+You can also use the UI if you go to http://localhost:8081/.
+
 ### Getting Started
 Ensure Docker and docker-compose are installed.
 
@@ -48,6 +51,11 @@ Then:
    ```bash
    curl -X GET "http://127.0.0.1:6969/search?query=Argentinia&top=5"
    ```
+
+If you want use the UI:
+1. Trigger a scraping run.
+2. Wait for the scraping to finish.
+3. Use the search bar to query for articles.
 
 The design philosophy underscores flexibility, allowing integration with any scraper script that aligns with the specified data structure. The infrastructure benefits from each additional source, enriching the system's capability to amass, store, and retrieve news content efficiently.
 
