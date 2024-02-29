@@ -6,7 +6,7 @@ Always up-to-date news RAG endpoint for semantic search and article recommendati
 ![SSARE](media/banner.jpg)
 
 ## Introduction
-SSARE stands for Semantic Search Article Recommendation Engine, an open-source service that comfortably orchestrates scraping, processing into vector representations and querying of news articles. 
+SSARE stands for Semantic Search Article Recommendation Engine, an open-source service that comfortably orchestrates scraping, processing into vector representations, storing and querying of news articles. 
 
 SSARE serves as an efficient and scalable resource for semantic search and article recommendations, catering primarily to news data.
 
