@@ -43,7 +43,8 @@ async def healthcheck():
 #- Dashboard
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, search_query: str = "culture and arts"):
-    qdrant_service_url = 'http://127.0.0.1:6969/search'
+    # Use the internal service URL for qdrant_service you defined in service_urls
+    qdrant_service_url = service_urls["qdrant_service"] + '/search'
     
     async with httpx.AsyncClient() as client:
         response = await client.get(
@@ -54,7 +55,11 @@ async def read_root(request: Request, search_query: str = "culture and arts"):
             }
         )
     
-    articles = response.json()
+    # Ensure the response is successful before proceeding to parse the JSON
+    if response.is_success:
+        articles = response.json()
+    else:
+        articles = []  # Or handle the error as you see fit
     
     # Check if the request is from HTMX
     if "HX-Request" in request.headers:
