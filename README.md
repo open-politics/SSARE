@@ -57,10 +57,10 @@ The design philosophy underscores flexibility, allowing integration with any scr
 The project's trajectory includes plans for enhanced service orchestration (with Kubernetes) and expanded scraper support, all aimed at bolstering the engine's functionality and reach.
 
 ### Participation: Script Contributions
-We welcome contributions from passionate activists, enthusiastic data scientists, and dedicated developers. Your expertise can greatly enhance our repository, expanding the breadth of our political news coverage. Join us in shaping the future of SSARE and making a meaningful impact on the world of news analysis and recommendation systems. Together, let's create a platform that empowers individuals to stay informed and engaged. 
+We welcome contributions from passionate activists, enthusiastic data scientists, and dedicated developers. Your expertise can greatly enhance our repository, expanding the breadth of our political news coverage. 
 
 ## Practical Instructions
-Here's a concise guide to utilizing SSARE:
+Here's a concise guide to starting up SSARE:
 
 - Deploy and construct the environment using:
   ```bash
@@ -70,7 +70,7 @@ Here's a concise guide to utilizing SSARE:
   ```bash
   python full.py
   ```
-- For custom scraper integration, scripts should yield "url," "headline," and "paragraphs." Store your script at:
+- For custom scraper integration, scripts should yield "url," "headline," "paragraphs." and "source". Store your script at:
   ```
   SSARE/scraper_service/scrapers
   ```
