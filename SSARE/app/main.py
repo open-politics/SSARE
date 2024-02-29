@@ -10,7 +10,7 @@ from redis.asyncio import Redis
 
 ### Configuration & Mapping
 config = load_config()["postgresql"]
-templates = Jinja2Templates(directory="app/templates")
+templates = Jinja2Templates(directory="templates")
 
 
 app = FastAPI()
