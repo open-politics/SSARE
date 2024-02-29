@@ -1,11 +1,16 @@
-from fastapi import FastAPI, HTTPException
 import httpx
 import os
+from fastapi import FastAPI, HTTPException
+from fastapi import Request
+from fastapi.templating import Jinja2Templates
 from core.utils import load_config
 from redis.asyncio import Redis
 
+
 ### Configuration & Mapping
 config = load_config()["postgresql"]
+templates = Jinja2Templates(directory="app/templates")
+
 
 app = FastAPI()
 
@@ -18,7 +23,6 @@ redis_channel_mappings = {
 }
 
 runtime_url = "http://main_core_app:8080"
-
 
 service_urls = {
     "main_core_app": runtime_url,
@@ -34,6 +38,30 @@ service_urls = {
 async def healthcheck():
     return {"message": "OK"}, 200
 
+## Monitoring
+#- Dashboard
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request, search_query: str = "culture and arts"):
+    qdrant_service_url = 'http://127.0.0.1:6969/search'
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            qdrant_service_url,
+            params={
+                "query": search_query,
+                "top": 25,
+            }
+        )
+    
+    articles = response.json()
+    
+    # Check if the request is from HTMX
+    if "HX-Request" in request.headers:
+        # If it is an HTMX request, return only the articles list part
+        return templates.TemplateResponse("partials/articles_list.html", {"request": request, "articles": articles})
+    else:
+        # For a normal request, return the entire page
+        return templates.TemplateResponse("index.html", {"request": request, "articles": articles, "search_query": search_query})
 
 @app.get("/check_services")
 async def check_services():

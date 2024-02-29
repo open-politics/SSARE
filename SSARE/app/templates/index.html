@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Article Display</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        /* Your CSS styles */
+    </style>
+</head>
+<body>
+    <form hx-get="/" hx-target="#articles" hx-trigger="submit">
+        <input type="text" name="search_query" placeholder="Search articles..." value="{{ search_query }}">
+        <button type="submit">Search</button>
+    </form>
+    <div id="articles">
+        <!-- The articles will be loaded here -->
+        {% include "partials/articles_list.html" %}
+    </div>
+</body>
+</html>
