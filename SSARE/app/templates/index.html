@@ -6,7 +6,83 @@
     <title>Article Display</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        /* Your CSS styles */
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        form {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            width: 300px;
+            padding: 10px;
+            margin-right: 10px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .article {
+            background-color: #fff;
+            margin-bottom: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .headline {
+            font-size: 20px;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .source {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .source a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        .source a:hover {
+            text-decoration: underline;
+        }
+
+        .score {
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .preview {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #666;
+        }
     </style>
 </head>
 <body>
