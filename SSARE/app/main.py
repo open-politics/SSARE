@@ -4,6 +4,7 @@ import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi import Request
+from fastapi.background import BackgroundTasks
 from fastapi import APIRouter
 from fastapi.templating import Jinja2Templates
 from core.utils import load_config
