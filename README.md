@@ -8,9 +8,9 @@ Always up-to-date news RAG endpoint for semantic search and article recommendati
 ## Introduction
 SSARE stands for Semantic Search Article Recommendation Engine, an open-source service that comfortably orchestrates scraping, processing into vector representations, storing and querying of news articles. 
 
-SSARE serves as an efficient and scalable resource for semantic search and article recommendations, catering primarily to news data.
+SSARE serves as an efficient and scalable resource for semantic search and article recommendations, catering primarily to political news data.
 
-SSARE is an always up to date political news RAG endpoint.
+**SSARE is an always up to date political news RAG endpoint.**
 
 The engine is adaptable to various sources, requiring only a sourcing script that outputs the data in the format of a dataframe with the columns:
 | url | headline | paragraphs | source |
@@ -27,10 +27,69 @@ For a more detailed overview, please refer to the [Architecture and Storage](#ar
 
 
 ## Version 1 Deployment
-We are excited to announce that SSARE version 1 is now operational and usable!
+Version 1 is online. Please refer to the [Getting Started](#getting-started) section for deployment instructions.
 
-You can call the api with a query and get the top n results back.
-You can also use the UI if you go to http://localhost:8081/.
+
+
+## Example Use Case
+Insert any sourcing or scraping script into the scraper_service/scrapers folder. 
+A simple scraping script can look like this:
+```python
+import asyncio
+import pandas as pd
+from bs4 import BeautifulSoup
+import aiohttp
+
+
+
+async def scrape_cnn_articles(session):
+    base_url = 'https://www.cnn.com'
+    async with session.get(base_url) as response:
+        data = await response.text()
+        soup = BeautifulSoup(data, features="html.parser")
+        all_urls = [base_url + a['href'] for a in soup.find_all('a', href=True) 
+                    if a['href'] and a['href'][0] == '/' and a['href'] != '#']
+
+    def url_is_article(url, current_year='2024'):
+        return 'cnn.com/{}/'.format(current_year) in url and '/politics/' in url
+
+    article_urls = [url for url in all_urls if url_is_article(url)]
+    tasks = [process_article_url(session, url) for url in article_urls]
+    articles = await asyncio.gather(*tasks)
+    return pd.DataFrame(articles, columns=['url', 'headline', 'paragraphs'])
+
+# Async function to process each article URL
+async def process_article_url(session, url):
+    try:
+        async with session.get(url) as response:
+            article_data = await response.text()
+            article_soup = BeautifulSoup(article_data, features="html.parser")
+            headline = article_soup.find('h1', class_='headline__text')
+            headline_text = headline.text.strip() if headline else 'N/A'
+            article_paragraphs = article_soup.find_all('div', class_='article__content')
+            cleaned_paragraph = ' '.join([p.text.strip() for p in article_paragraphs])
+            print(f"Processed {url}")
+            
+            return url, headline_text, cleaned_paragraph
+    except Exception:
+        return url, 'N/A', ''
+
+
+async def main():
+    async with aiohttp.ClientSession() as session:
+        df = await scrape_cnn_articles(session)
+        df.to_csv('/app/scrapers/data/dataframes/cnn_articles.csv', index=False)
+        df.head(3)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+SSARE will execute all scripts in the scrapers folder and process the articles. 
+They are vectorized and stored in a Qdrant vector database.
+
+The API endpoint can be queried for semantic search and article recommendations for your LLM or research project.
 
 ### Getting Started
 Ensure Docker and docker-compose are installed.
@@ -71,16 +130,6 @@ The project's trajectory includes plans for enhanced service orchestration (with
 We welcome contributions from passionate activists, enthusiastic data scientists, and dedicated developers. Your expertise can greatly enhance our repository, expanding the breadth of our political news coverage. 
 
 ## Practical Instructions
-Here's a concise guide to starting up SSARE:
-
-- Deploy and construct the environment using:
-  ```bash
-  docker-compose up --build
-  ```
-- Verify service functionality:
-  ```bash
-  python full.py
-  ```
 - For custom scraper integration, scripts should yield "url," "headline," "paragraphs." and "source". Store your script at:
   ```
   SSARE/scraper_service/scrapers
@@ -91,7 +140,9 @@ Here's a concise guide to starting up SSARE:
   ```
   The orchestration service will process your script once implemented.
 
-If your additional scripts need scraping libraries other than BeautifulSoup, please add them to the requirements.txt file in the scraper_service folder (and create a pull request).
+If your additional scripts need scraping libraries other than BeautifulSoup, please add them to the requirements.txt file in the scraper_service folder (and create a pull request). 
+
+If you want to use your own embeddings models, you need to change the dim size in the code of the qdrant service and the model name in the nlp service.
 
 ## Important Notes
 Current limitations include the limited number of scrapers, alongside the unavailability of querying the postgres database directly.
