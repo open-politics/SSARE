@@ -84,7 +84,7 @@ async def healthcheck():
 @app.get("/flags")
 async def produce_flags():
     await redis_conn_flags.delete("scrape_sources")
-    flags = ["cnn", "pynews"]
+    flags = ["cnn", "pynews", "bbc"]
     for flag in flags:
         await redis_conn_flags.lpush("scrape_sources", flag)
     return {"message": f"Flags produced: {', '.join(flags)}"}
