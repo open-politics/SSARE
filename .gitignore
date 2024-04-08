@@ -3,3 +3,5 @@ __pycache__/
 all.txt
 mains.txt
 z_dev_scripts/
+copy_all.py
+copy_mains.py
