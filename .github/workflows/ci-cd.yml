@@ -41,3 +41,17 @@ jobs:
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }} && \
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:latest && \
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:latest
+      - name: Buidl and Push Docker Image for NLP Service
+        run: |
+          cd SSARE
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/nlp_service:${{ github.sha }} -f ./nlp_service/Dockerfile .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/nlp_service:${{ github.sha }} && \
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/nlp_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/nlp_service:latest && \
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/nlp_service:latest
+      - name: Build and Push Docker Image for Qdrant Service
+        run: |
+          cd SSARE
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/qdrant_service:${{ github.sha }} -f ./qdrant_service/Dockerfile .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/qdrant_service:${{ github.sha }} && \
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/qdrant_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/qdrant_service:latest && \
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/qdrant_service:latest

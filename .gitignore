@@ -2,6 +2,7 @@ __pycache__/
 .DS_Store
 all.txt
 mains.txt
+.idea/
 z_dev_scripts/
 copy_all.py
 copy_mains.py
