@@ -189,3 +189,6 @@ async def search(query: str, top: int):
     except Exception as e:
         logger.error(f"Search error: {str(e)}")  # Log any exceptions for debugging
         raise HTTPException(status_code=400, detail=str(e))
+
+
+
