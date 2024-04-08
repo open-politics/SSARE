@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "qdrant-storage"
+spec:
+  selector:
+    matchLabels:
+      app: "qdrant-storage"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: "qdrant-storage"
+    spec:
+      serviceAccountName: "ssare"
+      volumes:
+        - name: "qdrant-storage"
+          persistentVolumeClaim:
+            claimName: "qdrant-storage"
+            readOnly: false
+      containers:
+        - name: "qdrant-storage"
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: 6333
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: 6333
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          image: "{{ .Values.qdrant_storage.image.repository }}:{{ .Values.qdrant_storage.image.tag }}"
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 6333
+              protocol: TCP
+          volumeMounts:
+            - mountPath: "/qdrant/data"
+              name: qdrant-storage
+              readOnly: false
+

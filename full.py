@@ -36,6 +36,11 @@ async def test_ssare_pipeline():
 
         # Wait for raw articles to be stored - adjust sleep time as needed
         await asyncio.sleep(10)
+        await client.post(f"{services['postgres_service']}/deduplicate_articles")
+        print("Articles deduplicated")
+
+        # Wait for articles to be deduplicated - adjust sleep time as needed
+        await asyncio.sleep(10)
         
         # Create embedding jobs
         embedding_jobs_result = await client.post(f"{services['postgres_service']}/create_embedding_jobs")
@@ -47,12 +52,13 @@ async def test_ssare_pipeline():
         # Wait for embedding jobs to be created - adjust sleep time as needed
         await asyncio.sleep(10)
 
+
         # Trigger Embedding Creation
-        await client.post(f"{services['nlp_service']}/generate_embeddings", timeout=70)
+        await client.post(f"{services['nlp_service']}/generate_embeddings", timeout=400)
         print("Embeddings generated")
 
         # Wait for embedding process - adjust sleep time as needed
-        await asyncio.sleep(30)
+        await asyncio.sleep(60)
 
         # Store Embeddings
         await client.post(f"{services['postgres_service']}/store_articles_with_embeddings")
@@ -61,6 +67,7 @@ async def test_ssare_pipeline():
         # Wait for embeddings to be stored - adjust sleep time as needed
         await asyncio.sleep(10)
 
+        
 
         # Trigger pushing articles to queue in PostgreSQL service
         await client.post(f"{services['postgres_service']}/trigger_qdrant_queue_push")
