@@ -1,6 +1,17 @@
 from prefect import task, flow
 import httpx
-from main import service_urls
+
+
+runtime_url = "http://main_core_app:8080"
+
+service_urls = {
+    "main_core_app": runtime_url,
+    "postgres_service": "http://postgres_service:5434",
+    "nlp_service": "http://nlp_service:0420",
+    "qdrant_service": "http://qdrant_service:6969",
+    "qdrant_storage": "http://qdrant_storage:6333",
+    "scraper_service": "http://scraper_service:8081",
+}
 
 @task
 def produce_flags():
