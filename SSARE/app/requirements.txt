@@ -4,3 +4,4 @@ httpx
 python-multipart
 redis
 jinja2
+prefect
