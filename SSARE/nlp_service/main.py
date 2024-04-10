@@ -19,14 +19,11 @@ config = load_config()['nlp']
 
 app = FastAPI()
 
-<<<<<<< HEAD
 token = config['HUGGINGFACE_TOKEN']
 
 
 model = SentenceTransformer("jinaai/jina-embeddings-v2-base-en", use_auth_token=token)
-=======
-model = SentenceTransformer("jinaai/jina-embeddings-v2-base-en")
->>>>>>> main-switch2rabbitmq
+
 
 @app.get("/healthz")
 async def healthcheck():
