@@ -139,12 +139,12 @@ services:
       - PREFECT_SERVER_UI_API_URL=http://prefect_server:4200/api
 
   prefect_agent:
-    image: prefecthq/prefect:latest
-    command: prefect agent start -q default
-    depends_on:
-      - prefect_server
-    environment:
-      - PREFECT_SERVER_API_URL=http://prefect_server:4200
+  image: prefecthq/prefect:latest
+  command: prefect agent start -q default
+  depends_on:
+    - prefect_server  
+  environment:
+    - PREFECT_SERVER_API_URL=http://prefect_server:4200
 
 networks:
   app_network:
