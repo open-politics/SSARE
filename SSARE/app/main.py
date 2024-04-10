@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from core.utils import load_config
 from redis.asyncio import Redis
-from orchestration import scraping_flow
+from .orchestration import scraping_flow
 
 ### Configuration & Mapping
 config = load_config()["postgresql"]
