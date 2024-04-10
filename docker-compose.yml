@@ -129,7 +129,7 @@ services:
           path: .
 
   prefect_server:
-    image: prefecthq/prefect:latest
+    image: docker pull prefecthq/prefect:2-python3.11-conda
     ports:
       - "4200:4200"
     command: prefect server start
@@ -142,7 +142,7 @@ services:
       - app_network
 
   prefect_agent:
-    image: prefecthq/prefect:2.3.0-python3.10
+    image: docker pull prefecthq/prefect:2-python3.11-conda
     restart: always
     entrypoint: ["prefect", "agent", "start", "-q", "YOUR_WORK_QUEUE_NAME"]
     environment:
