@@ -147,8 +147,8 @@ services:
       - prefect_server  
     environment:
       - PREFECT_SERVER_API_URL=http://prefect_server:4200
-  networks:
-        - app_network
+    networks:
+          - app_network
 
 networks:
   app_network:
