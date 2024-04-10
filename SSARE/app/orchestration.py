@@ -1,7 +1,6 @@
 from prefect import task, flow
 import httpx
 
-
 runtime_url = "http://main_core_app:8080"
 
 service_urls = {
