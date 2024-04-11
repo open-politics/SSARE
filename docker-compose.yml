@@ -21,8 +21,6 @@ services:
       - scraper_service
       - postgres_service
       - redis
-    volumes:
-      - ./flows:/app/flows
     develop:
       watch:
         - action: sync
