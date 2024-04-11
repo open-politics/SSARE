@@ -159,6 +159,7 @@ services:
       - app_network
     depends_on:
       - prefect_server
+    command: pip install prefect
 
 networks:
   app_network:
