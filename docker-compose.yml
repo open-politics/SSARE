@@ -166,6 +166,8 @@ services:
       - PREFECT_API_URL=http://prefect_server:4200/api
     networks:
       - app_network
+    depends_on:
+      - prefect_server
 
   prefect_cli:
     image: prefecthq/prefect:2.11.5-python3.11
@@ -177,13 +179,11 @@ services:
       - PREFECT_API_URL=http://prefect_server:4200/api
     networks:
       - app_network
+    depends_on:
+      - prefect_server
 
-
+volumes:
+  prefect:
 
 networks:
   app_network:
-
-volumes:
-  postgres_data:
-  prefect:
-  prefect_db:
