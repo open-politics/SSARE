@@ -15,6 +15,7 @@ COPY app/flows ./flows
 # Copy the HTML templates
 COPY app/templates ./templates
 
+
 # Copy the main.py file
 COPY app/main.py .
 
