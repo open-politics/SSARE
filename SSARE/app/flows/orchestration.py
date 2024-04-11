@@ -1,5 +1,7 @@
 from prefect import task, flow, get_run_logger
 import httpx
+from prefect.task_runners import SequentialTaskRunner
+
 
 runtime_url = "http://main_core_app:8080"
 
@@ -67,7 +69,7 @@ def store_embeddings_in_qdrant():
     return response.status_code == 200
 
 @flow
-def scraping_flow():
+def scraping_flow(task_runner=SequentialTaskRunner()):
     flags_result = produce_flags()
     if not flags_result:
         raise ValueError("Failed to produce flags.")
