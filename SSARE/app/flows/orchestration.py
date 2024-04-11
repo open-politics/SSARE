@@ -16,60 +16,60 @@ service_urls = {
 }
 
 @task
-def produce_flags():
+def produce_flags(raise_on_failure=True)):
     response = httpx.get(f"{service_urls['postgres_service']}/flags")
     get_run_logger().info(f"produce_flags: {response.status_code}")
     return response.status_code == 200
 
 @task
-def create_scrape_jobs():
+def create_scrape_jobs(raise_on_failure=True)):
     response = httpx.post(f"{service_urls['scraper_service']}/create_scrape_jobs")
     get_run_logger().info(f"create_scrape_jobs: {response.status_code}")
     return response.status_code == 200
 
 @task
-def store_raw_articles():
+def store_raw_articles(raise_on_failure=True)):
     response = httpx.post(f"{service_urls['postgres_service']}/store_raw_articles")
     get_run_logger().info(f"store_raw_articles: {response.status_code}")
     return response.status_code == 200
 
 @task
-def deduplicate_articles():
+def deduplicate_articles(raise_on_failure=True)):
     response = httpx.post(f"{service_urls['postgres_service']}/deduplicate_articles")
     get_run_logger().info(f"deduplicate_articles: {response.status_code}")
     return response.status_code == 200
 
 @task
-def create_embedding_jobs():
+def create_embedding_jobs(raise_on_failure=True)):
     response = httpx.post(f"{service_urls['postgres_service']}/create_embedding_jobs")
     get_run_logger().info(f"create_embedding_jobs: {response.status_code}")
     return response.status_code == 200
 
 @task
-def generate_embeddings():
+def generate_embeddings(raise_on_failure=True)):
     response = httpx.post(f"{service_urls['nlp_service']}/generate_embeddings", timeout=400)
     get_run_logger().info(f"generate_embeddings: {response.status_code}")
     return response.status_code == 200
 
 @task
-def store_articles_with_embeddings():
+def store_articles_with_embeddings(raise_on_failure=True)):
     response = httpx.post(f"{service_urls['postgres_service']}/store_articles_with_embeddings")
     get_run_logger().info(f"store_articles_with_embeddings: {response.status_code}")
     return response.status_code == 200
 
 @task
-def push_articles_to_qdrant_queue():
+def push_articles_to_qdrant_queue(raise_on_failure=True)):
     response = httpx.post(f"{service_urls['postgres_service']}/trigger_qdrant_queue_push")
     get_run_logger().info(f"push_articles_to_qdrant_queue: {response.status_code}")
     return response.status_code == 200
 
 @task
-def store_embeddings_in_qdrant():
+def store_embeddings_in_qdrant(raise_on_failure=True)):
     response = httpx.post(f"{service_urls['qdrant_service']}/store_embeddings")
     get_run_logger().info(f"store_embeddings_in_qdrant: {response.status_code}")
     return response.status_code == 200
 
-@flow
+@flow(name="scraping-flow")
 def scraping_flow(task_runner=SequentialTaskRunner()):
     flags_result = produce_flags()
     if not flags_result:
