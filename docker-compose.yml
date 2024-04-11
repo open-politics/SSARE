@@ -21,13 +21,6 @@ services:
       - scraper_service
       - postgres_service
       - redis
-    develop:
-      watch:
-        - action: sync
-          path: .
-          target: /app
-        - action: rebuild
-          path: .
 
   scraper_service:
     build: 
@@ -37,13 +30,6 @@ services:
       - "8081:8081"
     networks:
       - app_network
-    develop:
-      watch:
-        - action: sync
-          path: .
-          target: /app
-        - action: rebuild
-          path: .
     depends_on:
       - redis
   
@@ -74,6 +60,7 @@ services:
 
   postgres_db:
     image: postgres:latest
+    restart: always
     environment:
       POSTGRES_DB: ssare_db
       POSTGRES_USER: hello
@@ -94,17 +81,7 @@ services:
       - "5434:5434"
     networks:
       - app_network
-    develop:
-      watch:
-        - action: sync
-          path: .
-          target: /app
-          ignore: 
-            - requirements.txt
-        - action: rebuild
-          path: .
     depends_on:
-      - redis
       - postgres_db
       
   nlp_service:
