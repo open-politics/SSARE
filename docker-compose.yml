@@ -159,7 +159,7 @@ services:
       - app_network
 
   prefect_agent:
-    image: 2.16-python3.11-conda
+    image: prefecthq/prefect:2.16-python3.11-conda
     restart: always
     entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "agent", "start", "-q", "default"]
     environment:
@@ -169,7 +169,7 @@ services:
 
 
   prefect_cli:
-    image: 2.16-python3.11-conda
+    image: prefecthq/prefect:2.16-python3.11-conda
     entrypoint: "tail -f /dev/null"
     working_dir: "/root/flows"
     volumes:
