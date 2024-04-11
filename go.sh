@@ -1,41 +1,19 @@
 #!/bin/bash
 
-# Set the path to your Docker Compose file
-COMPOSE_FILE="./docker-compose.yml"
+# Start the services using Docker Compose
+docker-compose up -d
 
-# Set the path to your Prefect flows directory
-FLOWS_DIR="./flows"
-
-# Set the path to your orchestration.py file
-ORCHESTRATION_FILE="./SSARE/app/orchestration.py"
-
-# Create the flows directory if it doesn't exist
-mkdir -p "$FLOWS_DIR"
-
-# Copy the orchestration.py file to the flows directory
-cp "$ORCHESTRATION_FILE" "$FLOWS_DIR"
-
-# Build and start the services
-docker-compose -f "$COMPOSE_FILE" up -d --build
-
-# Wait for the Prefect Server to be ready
-echo "Waiting for Prefect Server to be ready..."
-until docker-compose -f "$COMPOSE_FILE" exec prefect_server prefect server info >/dev/null 2>&1; do
-    sleep 1
+# Wait for the Prefect server to be ready
+until docker-compose exec prefect_server prefect server health-check &> /dev/null
+do
+    echo "Waiting for Prefect server to be ready..."
+    sleep 5
 done
-echo "Prefect Server is ready!"
 
-# Create a deployment for the scraping_flow
-docker-compose -f "$COMPOSE_FILE" run --rm prefect_cli prefect deployment build /root/flows/orchestration.py:scraping_flow -n "Scraping Flow Deployment" -q default
+# Register the flow with the Prefect server
+docker-compose exec prefect_cli prefect deployment build /root/flows/orchestration.py:scraping_flow -n "Scraping Flow" --apply
 
-# Apply the deployment
-docker-compose -f "$COMPOSE_FILE" run --rm prefect_cli prefect deployment apply "Scraping Flow Deployment"
+# Start the flow run
+docker-compose exec prefect_cli prefect deployment run "Scraping Flow"
 
-# Trigger the scraping_flow
-docker-compose -f "$COMPOSE_FILE" run --rm prefect_cli prefect deployment run "Scraping Flow Deployment"
-
-echo "Scraping flow has been triggered!"
-
-# Display the status of the services
-echo "Services status:"
-docker-compose -f "$COMPOSE_FILE" ps
+echo "Services and pipelines launched successfully!"
