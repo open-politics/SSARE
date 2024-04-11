@@ -1,6 +1,7 @@
 from prefect import task, flow, get_run_logger
 import httpx
 from prefect.task_runners import SequentialTaskRunner
+from prefect.deployments import Deployment
 
 
 runtime_url = "http://main_core_app:8080"
@@ -108,4 +109,9 @@ def scraping_flow(task_runner=SequentialTaskRunner()):
 
 
 if __name__ == "__main__":
-    scraping_flow.serve(name="orchestration-flow")
+    deployment = Deployment.build_from_flow(
+        flow=scraping_flow,
+        name="scraping-flow",
+        work_queue_name="default",
+    )
+    deployment.apply()

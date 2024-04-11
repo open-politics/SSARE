@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from core.utils import load_config
 from redis.asyncio import Redis
 from flows.orchestration import scraping_flow
+from prefect.client import Client
 
 ### Configuration & Mapping
 config = load_config()["postgresql"]
@@ -76,11 +77,10 @@ async def get_scraping_status():
     return {"status": status_message}
 
 @app.post("/trigger_scraping_sequence")
-async def trigger_scraping_sequence(background_tasks: BackgroundTasks):
-    global status_message
-    status_message = "Scraping initiated..."
-    background_tasks.add_task(scraping_flow)
-    return HTMLResponse(content="<div>Scraping sequence initiated</div>")
+async def trigger_scraping_flow():
+    async with Client() as client:
+        await client.create_flow_run(flow_name="scraping-flow")
+    return {"message": "Scraping flow triggered"}
 
 @app.get("/check_services")
 async def check_services():
