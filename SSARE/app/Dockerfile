@@ -14,7 +14,6 @@ COPY app/templates ./templates
 
 # Copy the main.py file
 COPY app/main.py .
-COPY app/orchestration.py .
 
 # Copy the config.ini file
 COPY app/config.ini .
