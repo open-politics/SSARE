@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY core ./core
 
 # Copy the flows directory from the parent directory
-COPY ./flows ./flows
+COPY app/flows ./flows
 
 # Copy the HTML templates
 COPY app/templates ./templates
