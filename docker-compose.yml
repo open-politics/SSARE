@@ -147,8 +147,8 @@ services:
       - prefect:/root/.prefect
     entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
     environment:
-      - PREFECT_UI_URL=http://localhost:4200
-      - PREFECT_API_URL=http://localhost:4200/api
+      - PREFECT_UI_URL=http://prefect_server:4200
+      - PREFECT_API_URL=http://prefect_server:4200/api
       - PREFECT_SERVER_API_HOST=0.0.0.0
       - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres:postgres@prefect_database:5432/prefect
     ports:
@@ -163,13 +163,15 @@ services:
     restart: always
     entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "agent", "start", "-q", "default"]
     environment:
-      - PREFECT_API_URL=http://0.0.0.0:4200/api
+      - PREFECT_API_URL=http://prefect_server:4200/api
+    volumes:
+      - prefect:/root/.prefect
     networks:
       - app_network
 
 
   prefect_cli:
-    image: prefecthq/prefect:2.11.5-python3.11
+    image: prefecthq/prefect:2-python3.11-conda
     entrypoint: "tail -f /dev/null"
     working_dir: "/root/flows"
     volumes:
@@ -188,3 +190,4 @@ volumes:
   postgres_data:
   prefect:
   prefect_db:
+  prefect:
