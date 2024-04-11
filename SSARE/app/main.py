@@ -79,7 +79,7 @@ async def get_scraping_status():
 @app.post("/trigger_scraping_sequence")
 async def trigger_scraping_flow():
     async with get_client() as client:
-        await client.create_flow_run(flow="scraping_flow")
+        await client.create_flow_run(flow="scraping-flow")
     return {"message": "Scraping flow triggered"}
 
 @app.get("/check_services")
