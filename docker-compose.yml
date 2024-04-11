@@ -126,7 +126,21 @@ services:
         - action: rebuild
           path: .
 
-  prefect_server:
+  prefect_database:
+    image: postgres:15.2-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=prefect
+    volumes:
+      - ./data/prefect_db:/var/lib/postgresql/data
+      - ./data/prefect_db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app_network
+
+
+   prefect_server:
     image: prefecthq/prefect:2-python3.11-conda
     restart: always
     volumes:
@@ -170,6 +184,8 @@ services:
 
 networks:
   app_network:
+    driver: bridge
+    
 
 volumes:
   postgres_data:
