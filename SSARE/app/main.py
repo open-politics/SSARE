@@ -78,9 +78,12 @@ async def get_scraping_status():
 
 @app.post("/trigger_scraping_sequence")
 async def trigger_scraping_flow():
-    async with get_client() as client:
-        await client.create_flow_run(flow_name="scraping-flow")
-    return {"message": "Scraping flow triggered"}
+    client = get_client()
+    try:
+        flow_run_id = await client.create_flow_run(flow_id="scraping-flow")
+        return {"message": "Scraping flow triggered", "flow_run_id": flow_run_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to trigger scraping flow: {str(e)}")
 
 @app.get("/check_services")
 async def check_services():
