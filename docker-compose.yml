@@ -172,10 +172,6 @@ networks:
   app_network:
 
 volumes:
-  prefect:
-  prefect_db:
-
-volumes:
   postgres_data:
   prefect:
   prefect_db:
