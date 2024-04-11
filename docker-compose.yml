@@ -126,20 +126,6 @@ services:
         - action: rebuild
           path: .
 
-  prefect_database:
-    image: postgres:15.2-alpine
-    restart: always
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=prefect
-    volumes:
-      - ./data/prefect_db:/var/lib/postgresql/data
-      - ./data/prefect_db/init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - app_network
-
-
   prefect_server:
     image: prefecthq/prefect:2-python3.11-conda
     restart: always
@@ -149,7 +135,7 @@ services:
     environment:
       - PREFECT_UI_URL=http://localhost:4200
       - PREFECT_API_URL=http://localhost:4200
-      - PREFECT_SERVER_API_HOST=localhost
+      - PREFECT_SERVER_API_HOST=0.0.0.0
       - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres:postgres@prefect_database:5432/prefect
     ports:
       - "4200:4200"
@@ -166,9 +152,11 @@ services:
       - PREFECT_API_URL=http://prefect_server:4200/api
     networks:
       - app_network
+    depends_on:
+      - prefect_server
 
   prefect_cli:
-    image: prefecthq/prefect:2.11.5-python3.11
+    image: prefecthq/prefect:2-python3.11-conda
     entrypoint: "tail -f /dev/null"
     working_dir: "/root/flows"
     volumes:
@@ -177,13 +165,18 @@ services:
       - PREFECT_API_URL=http://prefect_server:4200/api
     networks:
       - app_network
-
-
+    depends_on:
+      - prefect_server
 
 networks:
   app_network:
 
 volumes:
+  prefect:
+  prefect_db:
+
+volumes:
   postgres_data:
   prefect:
   prefect_db:
+  postgres:
