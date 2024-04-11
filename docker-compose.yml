@@ -164,8 +164,6 @@ services:
     entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "agent", "start", "-q", "default"]
     environment:
       - PREFECT_API_URL=http://prefect_server:4200/api
-    volumes:
-      - prefect:/root/.prefect
     networks:
       - app_network
 
