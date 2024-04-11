@@ -138,7 +138,7 @@ services:
       - ./data/prefect_db/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - app_network
-
+    
 
    prefect_server:
     image: prefecthq/prefect:2-python3.11-conda
@@ -185,7 +185,7 @@ services:
 networks:
   app_network:
     driver: bridge
-    
+
 
 volumes:
   postgres_data:
