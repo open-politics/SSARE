@@ -15,6 +15,8 @@ services:
       dockerfile: ./app/Dockerfile
     ports:
       - "8080:8080"
+    volumes:
+      - ./flows:/app/flows  
     networks:
       - app_network
     depends_on:
@@ -149,7 +151,7 @@ services:
 
   prefect_cli:
     image: prefecthq/prefect:2.16-python3.11-conda
-    entrypoint: "prefect execute scraping-flow/orchestration-flow"
+    entrypoint: "tail -f /dev/null"
     working_dir: "/root/flows"
     volumes:
       - ./flows:/root/flows
@@ -159,7 +161,8 @@ services:
       - app_network
     depends_on:
       - prefect_server
-    command: pip install prefect
+
+
 
 networks:
   app_network:
