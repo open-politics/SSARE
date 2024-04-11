@@ -163,7 +163,7 @@ services:
     restart: always
     entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "agent", "start", "-q", "default"]
     environment:
-      - PREFECT_API_URL=http://prefect_server:4200
+      - PREFECT_API_URL=http://prefect_server:4200/api
     networks:
       - app_network
 
