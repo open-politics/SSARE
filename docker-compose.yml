@@ -190,4 +190,3 @@ volumes:
   postgres_data:
   prefect:
   prefect_db:
-  prefect:
