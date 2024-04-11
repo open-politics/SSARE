@@ -17,6 +17,7 @@ services:
       - "8080:8080"
     volumes:
       - ./flows:/app/flows  
+    entrypoint: python flows/orchestration.py
     networks:
       - app_network
     depends_on:
