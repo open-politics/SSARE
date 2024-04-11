@@ -105,3 +105,5 @@ def scraping_flow():
         raise ValueError("Failed to store embeddings in Qdrant.")
 
 
+if __name__ == "__main__":
+    scraping_flow.serve(name="my-first-deployment")
