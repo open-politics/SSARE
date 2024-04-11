@@ -159,7 +159,7 @@ services:
       - app_network
 
   prefect_agent:
-    image: prefecthq/prefect:2.11.5-python3.11
+    image: prefecthq/prefect:2-python3.11-conda
     restart: always
     entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "agent", "start", "-q", "default"]
     environment:
