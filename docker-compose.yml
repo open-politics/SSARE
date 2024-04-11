@@ -166,6 +166,8 @@ services:
       - PREFECT_API_URL=http://prefect_server:4200/api
     networks:
       - app_network
+    depends_on:
+      - prefect_server
 
 
   prefect_cli:
