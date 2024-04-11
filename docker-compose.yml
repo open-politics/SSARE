@@ -169,7 +169,7 @@ services:
 
   prefect_cli:
     image: prefecthq/prefect:2.11.5-python3.11
-    entrypoint: "bash"
+    entrypoint: "tail -f /dev/null"
     working_dir: "/root/flows"
     volumes:
       - ./flows:/root/flows
