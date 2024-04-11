@@ -130,10 +130,10 @@ services:
       - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres:postgres@prefect_database:5432/prefect
     ports:
       - "4200:4200"
-    networks:
-      - app_network
     depends_on:
       - prefect_database
+    networks:
+      - app_network
 
   prefect_agent:
     image: prefecthq/prefect:2.16-python3.11-conda
@@ -159,7 +159,6 @@ services:
       - app_network
     depends_on:
       - prefect_server
-      - prefect_agent
 
 networks:
   app_network:
