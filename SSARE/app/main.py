@@ -113,16 +113,21 @@ async def get_redis_queue_length(redis_db: int, queue_key: str):
     try:
         redis_conn = Redis(host='redis', port=6379, db=redis_db)
         queue_length = await redis_conn.llen(queue_key)
+        return queue_length  # Add this line to return the queue length
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Redis error: {str(e)}")
-
+    
 @app.get("/check_channels")
 async def check_channels():
     channel_lengths = {}
     for channel, db_info in redis_channel_mappings.items():
-        queue_length = await get_redis_queue_length(db_info['db'], db_info['key'])
-        channel_lengths[channel] = queue_length
+        try:
+            queue_length = await get_redis_queue_length(db_info['db'], db_info['key'])
+            channel_lengths[channel] = queue_length
+        except HTTPException as e:
+            channel_lengths[channel] = f"Error: {str(e)}"  # Set a default value in case of an error
     return channel_lengths
+
 
 @app.get("/healthcheck")
 def print_health():

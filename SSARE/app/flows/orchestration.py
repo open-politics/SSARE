@@ -1,6 +1,5 @@
 from prefect import task, flow, get_run_logger
 import httpx
-import prefect
 
 runtime_url = "http://main_core_app:8080"
 
