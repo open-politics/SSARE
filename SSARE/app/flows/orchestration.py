@@ -104,3 +104,5 @@ def scraping_flow():
     store_result = store_embeddings_in_qdrant()
     if not store_result:
         raise ValueError("Failed to store embeddings in Qdrant.")
+
+
