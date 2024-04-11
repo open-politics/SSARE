@@ -69,7 +69,7 @@ def store_embeddings_in_qdrant(raise_on_failure=True)):
     get_run_logger().info(f"store_embeddings_in_qdrant: {response.status_code}")
     return response.status_code == 200
 
-@flow(name="scraping-flow")
+@flow(name="scraping-flow", persist_result=True)
 def scraping_flow(task_runner=SequentialTaskRunner()):
     flags_result = produce_flags()
     if not flags_result:
