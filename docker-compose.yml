@@ -147,12 +147,12 @@ services:
       - prefect:/root/.prefect
     entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
     environment:
-      - PREFECT_UI_URL=http://localhost:4200/api
-      - PREFECT_API_URL=http://localhost:4200/api
+      - PREFECT_UI_URL=http://localhost:4200
+      - PREFECT_API_URL=http://prefect_server:4200
       - PREFECT_SERVER_API_HOST=0.0.0.0
       - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres:postgres@prefect_database:5432/prefect
     ports:
-      - 4200:4200
+      - "4200:4200"
     depends_on:
       - prefect_database
     networks:
@@ -163,11 +163,9 @@ services:
     restart: always
     entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "agent", "start", "-q", "default"]
     environment:
-      - PREFECT_API_URL=http://prefect_server:4200/api
+      - PREFECT_API_URL=http://prefect_server:4200
     networks:
       - app_network
-    depends_on:
-      - prefect_server
 
   prefect_cli:
     image: prefecthq/prefect:2.11.5-python3.11
@@ -179,11 +177,13 @@ services:
       - PREFECT_API_URL=http://prefect_server:4200/api
     networks:
       - app_network
-    depends_on:
-      - prefect_server
 
-volumes:
-  prefect:
+
 
 networks:
   app_network:
+
+volumes:
+  postgres_data:
+  prefect:
+  prefect_db:
