@@ -7,12 +7,21 @@ from core.utils import load_config
 from redis.asyncio import Redis
 from flows.orchestration import scraping_flow
 from prefect import get_client
+from fastapi.staticfiles import StaticFiles 
 
-### Configuration & Mapping
+
+
+
+# Configuration & Mapping
 config = load_config()["postgresql"]
 templates = Jinja2Templates(directory="templates")
 
+# El App
 app = FastAPI()
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")  # new line
+
 router = APIRouter()
 app.include_router(router)
 status_message = "Ready to start scraping."

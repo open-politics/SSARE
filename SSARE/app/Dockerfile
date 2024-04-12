@@ -12,9 +12,9 @@ COPY core ./core
 # Copy the flows directory from the parent directory
 COPY app/flows ./flows
 
-# Copy the HTML templates
+# Copy the HTML templatesa & static files
 COPY app/templates ./templates
-
+COPY app/static ./static
 
 # Copy the main.py file
 COPY app/main.py .
