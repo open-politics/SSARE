@@ -98,6 +98,8 @@ services:
     depends_on:
       - redis
       - postgres_service
+    environment:
+      - PREFECT_API_URL=http://prefect_server:4200/api
     develop:
       watch:
         - action: sync
