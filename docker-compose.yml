@@ -100,13 +100,12 @@ services:
       - postgres_service
     environment:
       - PREFECT_API_URL=http://prefect_server:4200/api
-    develop:
-      watch:
-        - action: sync
-          path: .
-          target: /app
-        - action: rebuild
-          path: .
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
 
   prefect_database:
     image: postgres:15.2-alpine
