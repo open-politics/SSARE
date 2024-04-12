@@ -13,21 +13,30 @@
 
 </head>
 <body>
-    <div id="status">Click the button to start scraping</div>
-    <div id="scraping-status" hx-get="/scraping_status" hx-trigger="every 5s" hx-swap="innerHTML">
-        Ready to start scraping.
-    </div>
-    <button hx-post="/trigger_scraping_sequence" hx-target="#scraping-status" hx-swap="innerHTML">
-        Trigger Scraping
-    </button>    
-    
-    <form hx-get="/" hx-target="#articles" hx-trigger="submit">
-        <input type="text" name="search_query" placeholder="Search articles..." value="{{ search_query }}">
-        <button type="submit">Search</button>
-    </form>
-    <div id="articles">
-        <!-- The articles will be loaded here -->
-        {% include "partials/articles_list.html" %}
-    </div>
+    <div class="flex flex-col items-center justify-center min-h-screen bg-gray-900">
+        <div class="text-white text-xl mb-8" id="status">Click the button to start scraping</div>
+        <div class="text-white mb-8" id="scraping-status" hx-get="/scraping_status" hx-trigger="every 5s" hx-swap="innerHTML">
+          Ready to start scraping.
+        </div>
+        <button class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded mb-8" hx-post="/trigger_scraping_sequence" hx-target="#scraping-status" hx-swap="innerHTML">
+          Trigger Scraping
+        </button>
+      
+        <form class="w-full max-w-sm mb-8" hx-get="/" hx-target="#articles" hx-trigger="submit">
+          <div class="flex items-center border-b border-blue-500 py-2">
+            <input class="appearance-none bg-transparent border-none w-full text-white mr-3 py-1 px-2 leading-tight focus:outline-none" type="text" name="search_query" placeholder="Search articles..." value="{{ search_query }}">
+            <button class="flex-shrink-0 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded" type="submit">
+              Search
+            </button>
+          </div>
+        </form>
+      
+        <div class="w-full max-w-3xl bg-white bg-opacity-10 rounded-lg shadow-lg p-6" id="articles">
+          <!-- The articles will be loaded here -->
+          {% include "partials/articles_list.html" %}
+        </div>
+      </div>
+      
 </body>
 </html>
+a
