@@ -11,7 +11,7 @@ from core.utils import load_config
 from prefect import flow, task, get_run_logger
 
 logging.basicConfig(level=logging.INFO)
-logger = get_run_logger()
+logger = logging.getLogger(__name__)
 
 """
 This Service runs on port 0420 and is responsible for generating embeddings for articles.
@@ -33,6 +33,7 @@ async def healthcheck():
 
 @task
 async def retrieve_articles_from_redis(redis_conn_raw):
+    logger = get_run_logger()
     raw_articles_json = await redis_conn_raw.lrange('articles_without_embedding_queue', 0, -1)
     logger.info(f"Retrieved {len(raw_articles_json)} articles from Redis")
     return raw_articles_json
@@ -40,6 +41,7 @@ async def retrieve_articles_from_redis(redis_conn_raw):
 
 @task
 async def process_article(raw_article_json, model):
+    logger = get_run_logger()
     raw_article = json.loads(raw_article_json.decode('utf-8'))
     article = ArticleBase(**raw_article)
 
@@ -66,12 +68,14 @@ async def process_article(raw_article_json, model):
 
 @task
 async def write_article_to_redis(redis_conn_processed, article_with_embeddings):
+    logger = get_run_logger()
     await redis_conn_processed.lpush('articles_with_embeddings', json.dumps(article_with_embeddings))
     logger.info(f"Article with embeddings written to Redis: {article_with_embeddings['url']}")
 
 
 @flow
 async def generate_embeddings_flow():
+    logger = get_run_logger()
     try:
         redis_conn_raw = await Redis(host='redis', port=6379, db=5)
         redis_conn_processed = await Redis(host='redis', port=6379, db=6)
