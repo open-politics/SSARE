@@ -23,6 +23,13 @@ services:
       - scraper_service
       - postgres_service
       - redis
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+        - action: rebuild
+          path: .
 
   scraper_service:
     build: 
