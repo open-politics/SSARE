@@ -6,6 +6,7 @@
     <title>Article Display</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="/static/output.css">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 
 
     <!-- Include Htmx library -->
@@ -36,7 +37,14 @@
           {% include "partials/articles_list.html" %}
         </div>
       </div>
-      
+      <div class="relative inline-block">
+        <button class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded" data-tooltip="Click to trigger scraping">
+          Trigger Scraping
+        </button>
+        <div class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip">
+          Click to trigger scraping
+          <div class="tooltip-arrow" data-popper-arrow></div>
+        </div>
+      </div> 
 </body>
 </html>
-a
