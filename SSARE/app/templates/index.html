@@ -46,74 +46,7 @@
           {% include "partials/articles_list.html" %}
         </div>
       </div>
-      <style>
-        .custom-purple-border {
-            border-color: #7c3aed;
-        }
-        .custom-purple-bg {
-            background-color: #4c1d95;
-        }
-        .custom-purple-text {
-            color: #7c3aed;
-        }
-        .custom-purple-button {
-            background-color: #7c3aed;
-            color: white;
-        }
-        .custom-purple-button:hover {
-            background-color: #6d28d9;
-        }
-        .custom-toggle-bg {
-            background-color: #312e81;
-        }
-    </style>
-<body class="bg-gray-100">
-    <div class="flex justify-center items-center h-screen">
-        <div class="bg-gray-800 p-6 rounded-lg shadow-lg custom-purple-border">
-            <div class="flex flex-col gap-4">
-                <input type="text" placeholder="I'm looking for..." class="p-2 rounded-md text-gray-300 bg-gray-700 border border-gray-600 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                <div class="flex gap-4">
-                    <button class="flex items-center gap-2 px-4 py-2 rounded-md text-gray-300 bg-gray-700 border border-gray-600 focus:outline-none hover:bg-gray-600">
-                        <span class="material-icons">filter_list</span>
-                        Site Filter
-                    </button>
-                    <select class="px-4 py-2 rounded-md text-gray-300 bg-gray-700 border border-gray-600 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                        <option>Any Time</option>
-                        <option>Last 24 hours</option>
-                        <option>Past week</option>
-                        <option>Past month</option>
-                        <option>Past year</option>
-                    </select>
-                </div>
-                <div class="flex justify-between items-center">
-                    <div class="text-sm text-gray-400">
-                        Converts your query into a good Metaphor prompt.<br>
-                        See "Guide" for how to prompt Metaphor expertly!
-                    </div>
-                    <div class="flex items-center gap-4">
-                        <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                            <input type="checkbox" name="toggle" id="toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
-                            <label for="toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer custom-toggle-bg"></label>
-                        </div>
-                        <label for="toggle" class="text-gray-300">Autoprompt</label>
-                        <button class="px-6 py-2 rounded-md custom-purple-button hover:custom-purple-button">Find</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <script>
-        // Toggle switch functionality
-        const toggle = document.querySelector('.toggle-checkbox');
-        const toggleLabel = document.querySelector('.toggle-label');
-        toggle.addEventListener('change', function() {
-            if (this.checked) {
-                toggleLabel.style.backgroundColor = '#7c3aed';
-            } else {
-                toggleLabel.style.backgroundColor = '#312e81';
-            }
-        });
-    </script> 
+
 </body>
 </html>
 
