@@ -126,7 +126,6 @@ services:
     networks:
       - app_network
 
-
   prefect_server:
     image: prefecthq/prefect:2.16-python3.11-conda
     restart: always
@@ -156,7 +155,6 @@ services:
     depends_on:
       - prefect_server
 
-
   prefect_cli:
     image: prefecthq/prefect:2.16-python3.11-conda
     entrypoint: "tail -f /dev/null"
@@ -169,8 +167,6 @@ services:
       - app_network
     depends_on:
       - prefect_server
-
-
 
 networks:
   app_network:
