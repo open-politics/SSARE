@@ -115,6 +115,14 @@ services:
     volumes:
       - ./data/prefect_db:/var/lib/postgresql/data
       - ./data/prefect_db:/docker-entrypoint-initdb.d
+    command: 
+      - "sh"
+      - "-c" 
+      - |
+        mkdir -p /var/lib/postgresql/data && 
+        chmod 0700 /var/lib/postgresql/data && 
+        initdb -D /var/lib/postgresql/data && 
+        postgres
     networks:
       - app_network
 
