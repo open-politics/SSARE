@@ -29,13 +29,7 @@ services:
       - redis
       - prefect_server
       - prefect_agent
-    develop:
-      watch:
-        - action: sync
-          path: .
-          target: /app
-        - action: rebuild
-          path: .
+
 
   scraper_service:
     build: 
@@ -58,13 +52,7 @@ services:
       - "6969:6969"
     networks:
       - app_network
-    develop:
-      watch:
-        - action: sync
-          path: .
-          target: /app
-        - action: rebuild
-          path: .
+
       
   qdrant_storage:
     image: qdrant/qdrant:latest
