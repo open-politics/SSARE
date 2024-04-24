@@ -69,9 +69,13 @@ async def process_article(raw_article_json, model):
 @task
 async def write_article_to_redis(redis_conn_processed, article_with_embeddings):
     logger = get_run_logger()
-    await redis_conn_processed.lpush('articles_with_embeddings', json.dumps(article_with_embeddings))
-    logger.info(f"Article with embeddings written to Redis: {article_with_embeddings['url']}")
-
+    try:
+        await redis_conn_processed.lpush('articles_with_embeddings', json.dumps(article_with_embeddings))
+        logger.info(f"Article with embeddings written to Redis: {article_with_embeddings['url']}")
+    except Exception as e:
+        logger.error(f"Error writing article to Redis: {e}")
+        await redis_conn_processed.close()
+        raise e
 
 @flow
 async def generate_embeddings_flow():

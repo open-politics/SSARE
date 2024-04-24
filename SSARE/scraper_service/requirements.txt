@@ -6,3 +6,5 @@ bs4
 pandas
 aiohttp
 sqlalchemy
+prefect
+prefect-ray

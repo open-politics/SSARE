@@ -11,6 +11,7 @@ from redis.asyncio import Redis
 from contextlib import asynccontextmanager
 import logging
 from core.models import ArticleBase
+from prefect import task, flow
 
 """"
 This Service runs on port 8081 and is responsible for scraping articles.
@@ -58,6 +59,8 @@ def get_scraper_config():
     with open("scrapers/scrapers_config.json") as f:
         return json.load(f)
 
+
+@task
 @app.post("/create_scrape_jobs")
 async def create_scrape_jobs():
     """
@@ -73,17 +76,19 @@ async def create_scrape_jobs():
         it will push the data to Redis Queue 1 - channel "raw_articles_queue".
 
     """
+
     redis_conn_flags = await Redis(host='redis', port=6379, db=0)  # For flags
-    logger.info("Creating scrape jobs")
     flags = await redis_conn_flags.lrange('scrape_sources', 0, -1)
     flags = [flag.decode('utf-8') for flag in flags]
+    logger.info(f"Creating scrape jobs for {flags}")
 
     config_json = get_scraper_config()
     if not all(flag in config_json["scrapers"].keys() for flag in flags):
         raise HTTPException(status_code=400, detail="Invalid flags provided.")
     logger.info("Scrape jobs created")
-    result = scrape_data_task.delay()
-    logger.info(f"Scrape data task created with ID: {result.id}")
+
+    result = scrape_data_task(flags)
+    logger.info(f"Scrape data task: {result}")
     return {"message": "Scraping triggered successfully."}
         
 
