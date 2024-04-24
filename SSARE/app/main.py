@@ -85,12 +85,13 @@ async def read_root(request: Request, search_query: str = "culture and arts"):
 async def get_scraping_status():
     return {"status": status_message}
 
+import asyncio
+
 @app.post("/trigger_scraping_sequence")
 async def trigger_scraping_flow():
-    client = get_client()
     try:
-        flow_run_id = await client.create_flow_run(flow_id="scraping-flow")
-        return {"message": "Scraping flow triggered", "flow_run_id": flow_run_id}
+        asyncio.create_task(scraping_flow())
+        return {"message": "Scraping flow triggered"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to trigger scraping flow: {str(e)}")
 
@@ -105,13 +106,15 @@ async def check_services():
             service_statuses[service] = str(e)
     return service_statuses
 
+import subprocess
+
 @app.post("/trigger_scraping")
 async def trigger_scraping():
-    response = await httpx.post(service_urls["scraper_service"] + "/create_scrape_jobs")
-    if response.status_code == 200:
-        return {"message": "Scraping jobs triggered successfully."}
-    else:
-        raise HTTPException(status_code=response.status_code, detail="Failed to trigger scraping jobs.")
+    try:
+        subprocess.run(["python", "flows/orchestration.py"], check=True)
+        return {"message": "Scraping flow triggered"}
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to trigger scraping flow: {str(e)}")
 
 @app.post("/store_embeddings_in_qdrant")
 async def store_embeddings_in_qdrant():

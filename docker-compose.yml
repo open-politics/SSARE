@@ -13,16 +13,22 @@ services:
     build: 
       context: ./SSARE
       dockerfile: ./app/Dockerfile
+    restart: always
     ports:
       - "8080:8080"
     volumes:
-      - ./flows:/app/flows  
+      - ./flows:/app/flows
+    entrypoint: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
     networks:
       - app_network
+    environment:
+      - PREFECT_API_URL=http://prefect_server:4200/api
     depends_on:
       - scraper_service
-      - postgres_service
+      - postgres_service 
       - redis
+      - prefect_server
+      - prefect_agent
     develop:
       watch:
         - action: sync
@@ -37,6 +43,8 @@ services:
       dockerfile: ./scraper_service/Dockerfile
     ports:
       - "8081:8081"
+    environment:
+      - PREFECT_API_URL=http://prefect_server:4200/api
     networks:
       - app_network
     depends_on:
@@ -97,6 +105,7 @@ services:
     build: 
       context: ./SSARE
       dockerfile: ./nlp_service/Dockerfile
+    restart: always
     ports:
       - "0420:0420"
     networks:
@@ -109,9 +118,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4G
+          memory: 6G
         reservations:
-          memory: 2G
+          memory: 4G
 
   prefect_database:
     image: postgres:15.2-alpine
@@ -133,10 +142,11 @@ services:
       - prefect:/root/.prefect
     entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
     environment:
-      - PREFECT_UI_URL=http://prefect_server:4200
-      - PREFECT_API_URL=http://prefect_server:4200/api
+      - PREFECT_UI_URL=http://localhost:4200
+      - PREFECT_API_URL=http://localhost:4200
       - PREFECT_SERVER_API_HOST=0.0.0.0
       - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres:postgres@prefect_database:5432/prefect
+      - PREFECT_UI_API_URL=http://localhost:4200/api
     ports:
       - "4200:4200"
     depends_on:
@@ -147,7 +157,7 @@ services:
   prefect_agent:
     image: prefecthq/prefect:2.16-python3.11-conda
     restart: always
-    entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "agent", "start", "-q", "default"]
+    command: prefect worker start -p default
     environment:
       - PREFECT_API_URL=http://prefect_server:4200/api
     networks:
@@ -157,16 +167,13 @@ services:
 
   prefect_cli:
     image: prefecthq/prefect:2.16-python3.11-conda
-    entrypoint: "tail -f /dev/null"
-    working_dir: "/root/flows"
-    volumes:
-      - ./flows:/root/flows
     environment:
       - PREFECT_API_URL=http://prefect_server:4200/api
     networks:
       - app_network
     depends_on:
       - prefect_server
+      - prefect_agent
 
 networks:
   app_network:
