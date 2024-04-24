@@ -115,12 +115,7 @@ services:
       - postgres_service
     environment:
       - PREFECT_API_URL=http://prefect_server:4200/api
-    deploy:
-      resources:
-        limits:
-          memory: 6G
-        reservations:
-          memory: 4G
+
 
   prefect_database:
     image: postgres:15.2-alpine
