@@ -112,9 +112,9 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=prefect
-    # volumes:
-    #   - ./data/prefect_db/data:/var/lib/postgresql/data
-    #   - ./data/prefect_db/init:/docker-entrypoint-initdb.d
+    volumes:
+      - ./data/prefect_db/data:/var/lib/postgresql/data
+      - ./data/prefect_db/init:/docker-entrypoint-initdb.d
     networks:
       - app_network
 
@@ -123,7 +123,7 @@ services:
     restart: always
     volumes:
       - prefect:/root/.prefect
-    command: prefect worker start -p default
+    entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
     environment:
       - PREFECT_UI_URL=http://localhost:4200
       - PREFECT_API_URL=http://localhost:4200
