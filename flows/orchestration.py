@@ -1,8 +1,7 @@
 from prefect import task, flow, get_run_logger
 import httpx
-from prefect.task_runners import SequentialTaskRunner
 from prefect.deployments import Deployment
-
+from prefect_ray.task_runners import RayTaskRunner
 
 runtime_url = "http://main_core_app:8080"
 
@@ -69,7 +68,7 @@ async def store_embeddings_in_qdrant(raise_on_failure=True):
         response = await client.post(f"{service_urls['qdrant_service']}/store_embeddings") 
     return response.status_code == 200
 
-@flow(task_runner=SequentialTaskRunner()) 
+@flow(task_runner=RayTaskRunner()) 
 async def scraping_flow(): 
     flags_result = await produce_flags()
     if not flags_result: 
