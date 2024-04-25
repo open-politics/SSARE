@@ -168,6 +168,18 @@ services:
     depends_on:
       - prefect_server
 
+  geo_service:
+    build: 
+      context: ./SSARE
+      dockerfile: ./geo_service/Dockerfile
+    ports: 
+      - "3690:3690"
+    networks:
+      - app_network
+    
+
+
+
 networks:
   app_network:
 
