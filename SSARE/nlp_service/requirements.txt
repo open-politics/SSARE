@@ -8,3 +8,4 @@ redis
 transformers
 sentence-transformers
 prefect
+prefect-ray

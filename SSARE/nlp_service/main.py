@@ -9,6 +9,9 @@ from pydantic import ValidationError
 import logging
 from core.utils import load_config
 from prefect import flow, task, get_run_logger
+import asyncio
+from prefect_ray.task_runners import RayTaskRunner
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -77,7 +80,7 @@ async def write_article_to_redis(redis_conn_processed, article_with_embeddings):
         await redis_conn_processed.close()
         raise e
 
-@flow
+@flow(task_runner=RayTaskRunner())
 async def generate_embeddings_flow():
     logger = get_run_logger()
     try:
@@ -87,12 +90,15 @@ async def generate_embeddings_flow():
         raw_articles_json = await retrieve_articles_from_redis(redis_conn_raw)
         logger.info("Starting embeddings generation process")
 
-        for raw_article_json in raw_articles_json:
-            try:
-                article_with_embeddings = await process_article(raw_article_json, model)
-                await write_article_to_redis(redis_conn_processed, article_with_embeddings)
-            except Exception as e:
-                logger.error(f"Error processing article: {e}")
+        # Create a list of coroutine objects for processing articles
+        tasks = [process_article(raw_article_json, model) for raw_article_json in raw_articles_json]
+        
+        # Run tasks concurrently and wait for all to complete
+        articles_with_embeddings = await asyncio.gather(*tasks)
+
+        # Write processed articles back to Redis
+        write_tasks = [write_article_to_redis(redis_conn_processed, article) for article in articles_with_embeddings]
+        await asyncio.gather(*write_tasks)
 
         logger.info("Embeddings generation process completed")
         return {"message": "Embeddings generated"}
