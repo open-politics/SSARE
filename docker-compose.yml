@@ -141,6 +141,7 @@ services:
     image: prefecthq/prefect:2.16-python3.11-conda
     restart: always
     command: prefect worker start -p default
+    environment:
       - PREFECT_API_URL=http://prefect_server:4200/api
     networks:
       - app_network
