@@ -1,4 +1,4 @@
-storage:
+tstorage:
   storageClassName: "longhorn"
 
 postgres_storage:
