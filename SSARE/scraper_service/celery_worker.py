@@ -9,6 +9,7 @@ from redis import Redis
 from pydantic import ValidationError
 from prefect import task, flow
 from prefect_ray.task_runners import RayTaskRunner
+from prefect.task_runners import ConcurrentTaskRunner, SequentialTaskRunner
 
 """ 
 This Script is creating Celery tasks for scraping data from news sources.
@@ -72,7 +73,7 @@ def scrape_single_source(flag: str):
         raise e
 
 
-@flow(task_runner=RayTaskRunner())
+@flow(task_runner=SequentialTaskRunner())
 def scrape_data_task(flags):
     for flag in flags:
         scrape_single_source.submit(flag)
