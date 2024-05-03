@@ -3,7 +3,6 @@ __pycache__/
 all.txt
 mains.txt
 .idea/
-z_dev_scripts/
 copy_all.py
 copy_mains.py
 node_modules/
