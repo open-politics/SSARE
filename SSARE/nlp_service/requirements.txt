@@ -9,3 +9,4 @@ transformers
 sentence-transformers
 prefect
 prefect-ray
+tenacity

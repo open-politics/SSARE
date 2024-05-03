@@ -103,6 +103,11 @@ services:
       - postgres_service
     environment:
       - PREFECT_API_URL=http://prefect_server:4200/api
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 
   prefect_database:

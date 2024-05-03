@@ -4,9 +4,11 @@ from core.models import ArticleBase
 import json
 import logging
 from core.utils import load_config
-from redis.asyncio import Redis
+from redis import Redis
 import asyncio
 from prefect import task, flow
+from tenacity import retry, wait_fixed, stop_after_attempt, retry_if_exception_type
+import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -20,23 +22,20 @@ model = SentenceTransformer("jinaai/jina-embeddings-v2-base-en", use_auth_token=
 async def healthcheck():
     return {"message": "NLP Service Running"}, 200
 
-async def retrieve_articles_from_redis(redis_conn_raw, batch_size=1000):
+
+@task
+def retrieve_articles_from_redis(redis_conn_raw, batch_size=200):
     raw_articles_json = []
-    while True:
-        batch = await redis_conn_raw.lrange('articles_without_embedding_queue', 0, batch_size - 1)
-        if not batch:
-            break
-        raw_articles_json.extend(batch)
-        await redis_conn_raw.ltrim('articles_without_embedding_queue', batch_size, -1)
-    logger.info(f"Retrieved {len(raw_articles_json)} articles from Redis")
+    batch = redis_conn_raw.lrange('articles_without_embedding_queue', 0, batch_size - 1)
+    raw_articles_json.extend(batch)
+    redis_conn_raw.ltrim('articles_without_embedding_queue', batch_size, -1)
     return raw_articles_json
 
-async def process_article(raw_article_json):
-    raw_article = json.loads(raw_article_json.decode('utf-8'))
+@task
+def process_article(raw_article_json):
+    raw_article = json.loads(raw_article_json)
     article = ArticleBase(**raw_article)
-
-    embeddings = model.encode(article.headline + " ".join(article.paragraphs[:5])).tolist()
-
+    embeddings = model.encode(article.headline + " ".join(article.paragraphs[:500])).tolist()
     article_with_embeddings = {
         "headline": article.headline,
         "paragraphs": article.paragraphs,
@@ -46,45 +45,44 @@ async def process_article(raw_article_json):
         "source": article.source,
         "stored_in_qdrant": 0
     }
-
     logger.info(f"Generated embeddings for article: {article.url}, Embeddings Length: {len(embeddings)}")
     return article_with_embeddings
 
-async def write_articles_to_redis(redis_conn_processed, articles_with_embeddings):
+@task
+def write_articles_to_redis(redis_conn_processed, articles_with_embeddings):
     serialized_articles = [json.dumps(article) for article in articles_with_embeddings]
-    await redis_conn_processed.lpush('articles_with_embeddings', *serialized_articles)
-    logger.info(f"Wrote {len(articles_with_embeddings)} articles with embeddings to Redis")
-
-async def generate_embeddings_flow(redis_conn_raw, redis_conn_processed, batch_size=1000):
-    logger.info("Starting embeddings generation process")
-    
-    try:
-        raw_articles_json = await retrieve_articles_from_redis(redis_conn_raw, batch_size)
-        articles_with_embeddings = await asyncio.gather(*[process_article(raw_article_json) for raw_article_json in raw_articles_json])
-        await write_articles_to_redis(redis_conn_processed, articles_with_embeddings)
+    if serialized_articles:  # Check if the list is not empty
+        redis_conn_processed.lpush('articles_with_embeddings', *serialized_articles)
+        logger.info(f"Wrote {len(articles_with_embeddings)} articles with embeddings to Redis")
+    else:
+        logger.info("No articles to write to Redis")
         
-        logger.info("Embeddings generation process completed")
-    except Exception as e:
-        logger.exception(f"Error in generate_embeddings_flow: {e}")
-        raise e
+@flow
+def generate_embeddings_flow(batch_size: int):
+    logger.info("Starting embeddings generation process")
+    redis_conn_raw = Redis(host='redis', port=6379, db=5, decode_responses=True)
+    redis_conn_processed = Redis(host='redis', port=6379, db=6, decode_responses=True)
 
-@app.post("/generate_embeddings")
-async def generate_embeddings(batch_size: int = 1000):
     try:
-        async with Redis(host='redis', port=6379, db=5) as redis_conn_raw, \
-                   Redis(host='redis', port=6379, db=6) as redis_conn_processed:
-            try:
-                await generate_embeddings_flow(redis_conn_raw, redis_conn_processed, batch_size)
-                return {"message": "Embeddings generated successfully"}
-            except Exception as e:
-                logger.exception(f"Error generating embeddings: {e}")
-                raise HTTPException(status_code=500, detail="Error generating embeddings")
-    except Exception as e:
-        logger.exception(f"Error connecting to Redis: {e}")
-        raise HTTPException(status_code=500, detail="Error connecting to Redis")
+        raw_articles_json = retrieve_articles_from_redis(redis_conn_raw, batch_size)
+        articles_with_embeddings = [process_article(raw_article_json) for raw_article_json in raw_articles_json]
+        write_articles_to_redis(redis_conn_processed, articles_with_embeddings)
+    finally:
+        redis_conn_raw.close()
+        redis_conn_processed.close()
+        time.sleep(1)  # Ensure all connections are closed properly
+
+    logger.info("Embeddings generation process completed")
+
+    
+@app.post("/generate_embeddings")
+def generate_embeddings(batch_size: int = 1000):
+    logger.debug("GENERATING EMBEDDINGS")
+    generate_embeddings_flow(batch_size)
+    return {"message": "Embeddings generated successfully"}
 
 @app.get("/generate_query_embeddings")
-async def generate_query_embedding(query: str):
+def generate_query_embedding(query: str):
     try:
         embeddings = model.encode(query).tolist()
         logger.info(f"Generated embeddings for query: {query}, Embedding Length: {len(embeddings)}")
