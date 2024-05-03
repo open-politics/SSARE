@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy import Column, Integer, String, Float
@@ -13,6 +13,11 @@ from contextlib import asynccontextmanager
 import logging
 from redis.asyncio import Redis
 from core.utils import load_config
+from sqlalchemy.dialects.postgresql import JSONB
+from pydantic import BaseModel
+
+class ErrorResponseModel(BaseModel):
+    detail: str
 
 config = load_config()['postgresql']
 
@@ -25,13 +30,30 @@ Base = declarative_base()
 
 class Article(Base):
     __tablename__ = "articles"
-    url = Column(String, primary_key=True)
-    headline = Column(String)
-    paragraphs = Column(String)  # Assuming JSON stored as string
-    source = Column(String)
-    embeddings = Column(ARRAY(Float))  # Assuming embeddings as array of floats
-    embeddings_created = Column(Integer, default=0)
-    stored_in_qdrant = Column(Integer, default=0)
+    url = Column(String, primary_key=True)  # Url & Unique Identifier
+    headline = Column(String)  # Headline
+    paragraphs = Column(String)  # Text
+    source = Column(String)  # 'cnn'
+    embeddings = Column(ARRAY(Float))  # [3223, 2342, ..]
+    entities = Column(JSONB)  # Change this line
+    geocodes = Column(ARRAY(JSONB))  # JSON objects for geocodes
+    embeddings_created = Column(Integer, default=0)  # Flag
+    stored_in_qdrant = Column(Integer, default=0)  # Flag
+    entities_extracted = Column(Integer, default=0)  # Flag
+    geocoding_created = Column(Integer, default=0)  # Flag
+
+class FullArticleModel(BaseModel):
+    url: str
+    headline: str
+    paragraphs: str
+    source: Optional[str]
+    embeddings: Optional[List[float]]
+    embeddings_created: int
+    stored_in_qdrant: int
+    entities: Optional[List[Dict[str, Any]]]  # Assuming entities are stored as a list of dictionaries
+    entities_extracted: int
+    geocodes: Optional[List[Dict[str, Any]]]  # Assuming geocodes are stored as a list of dictionaries
+    geocoding_created: int
 
 # Pydantic models for request and response validation
 class ArticleModel(BaseModel):
@@ -89,19 +111,53 @@ async def produce_flags():
         await redis_conn_flags.lpush("scrape_sources", flag)
     return {"message": f"Flags produced: {', '.join(flags)}"}
 
-app.get('/articles', response_model=List[ArticleModel])
-async def get_articles(embeddings_created: Optional[int] = None, stored_in_qdrant: Optional[int] = None, skip: int = 0, limit: int = 10, session: AsyncSession = Depends(get_session)):
+@app.get("/articles", response_model=List[FullArticleModel])
+async def get_articles_by_url_and_flags(
+    url: Optional[str] = None,
+    embeddings_created: Optional[int] = None,
+    stored_in_qdrant: Optional[int] = None,
+    entities_extracted: Optional[int] = None,
+    geocoding_created: Optional[int] = None,
+    skip: int = 0, 
+    limit: int = 10, 
+    session: AsyncSession = Depends(get_session)
+):
     async with session.begin():
         query = select(Article)
+        if url is not None:
+            query = query.filter(Article.url == url)
         if embeddings_created is not None:
             query = query.filter(Article.embeddings_created == embeddings_created)
         if stored_in_qdrant is not None:
             query = query.filter(Article.stored_in_qdrant == stored_in_qdrant)
+        if entities_extracted is not None:
+            query = query.filter(Article.entities_extracted == entities_extracted)
+        if geocoding_created is not None:
+            query = query.filter(Article.geocoding_created == geocoding_created)
+        
         query = query.offset(skip).limit(limit)
         result = await session.execute(query)
         articles = result.scalars().all()
-        return articles
-    
+        
+        # Convert articles to FullArticleModel
+        articles_data = [
+            FullArticleModel(
+                url=article.url,
+                headline=article.headline,
+                paragraphs=article.paragraphs,
+                source=article.source,
+                embeddings=article.embeddings,
+                embeddings_created=article.embeddings_created,
+                stored_in_qdrant=article.stored_in_qdrant,
+                entities=json.loads(article.entities) if article.entities else None,
+                entities_extracted=article.entities_extracted,
+                geocodes=[json.loads(geo) for geo in article.geocodes] if article.geocodes else None,
+                geocoding_created=article.geocoding_created
+            ) for article in articles
+        ]
+        
+        return articles_data
+
 from sqlalchemy import select, insert, update
 
 @app.post("/store_raw_articles")
@@ -278,3 +334,64 @@ async def deduplicate_articles(session: AsyncSession = Depends(get_session)):
         return {"message": "Duplicate articles deleted successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/create_entity_extraction_jobs")
+async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_session)):
+    """
+    This function reads from the PostgreSQL /articles table where entities_extracted = 0.
+    It adds articles needing entity extraction to the Redis queue 'articles_without_entities_queue'.
+    """
+    logger.info("Starting to create entity extraction jobs.")
+    try:
+        async with session.begin():
+            query = select(Article).where(Article.entities_extracted == 0).limit(3)
+            result = await session.execute(query)
+            articles_needing_entities = result.scalars().all()
+
+        redis_conn = await Redis(host='redis', port=6379, db=2)  # Use a different Redis DB or adjust index as needed
+
+        for article in articles_needing_entities:
+            article_dict = {
+                'url': article.url,
+                'headline': article.headline,
+                'paragraphs': article.paragraphs
+            }
+            await redis_conn.lpush('articles_without_entities_queue', json.dumps(article_dict))
+
+        logger.info(f"Entity extraction jobs for {len(articles_needing_entities)} articles created.")
+        return {"message": "Entity extraction jobs created successfully."}
+    except Exception as e:
+        logger.error(f"Error creating entity extraction jobs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/create_geocoding_jobs")
+async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
+    """
+    This function reads from the PostgreSQL /articles table where geocoding_created = 0.
+    It adds articles needing geocoding to the Redis queue 'articles_without_geocoding_queue',
+    including their extracted entities that might contain location names.
+    """
+    logger.info("Starting to create geocoding jobs.")
+    try:
+        async with session.begin():
+            query = select(Article).where(Article.geocoding_created == 0)
+            result = await session.execute(query)
+            articles_needing_geocoding = result.scalars().all()
+
+        redis_conn = await Redis(host='redis', port=6379, db=3)  # Use a different Redis DB or adjust index as needed
+
+        for article in articles_needing_geocoding:
+             article_dict = {
+                'url': article.url,
+                'headline': article.headline,
+                'paragraphs': article.paragraphs,
+                'entities': json.dumps(article.entities)  # Ensure entities are serialized if they are not already a string
+            }
+        await redis_conn.lpush('articles_without_geocoding_queue', json.dumps(article_dict))
+
+        logger.info(f"Geocoding jobs for {len(articles_needing_geocoding)} articles created, including entities data.")
+        return {"message": "Geocoding jobs created successfully, including entities."}
+    except Exception as e:
+        logger.error(f"Error creating geocoding jobs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
