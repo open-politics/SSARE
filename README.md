@@ -82,54 +82,7 @@ Before we can make use of our own scraping intelligence brain. Let's install it.
    - Using the UI at: `http://localhost:8080`
 
 
-![Simple UI](media/scraping_ui_empty.png)
-
-3. Use the provided script to retrieve entities:
-   ```python
-   import requests
-   from collections import Counter, defaultdict
-
-   def print_sorted_gpe_entities(x):
-       url = 'http://localhost:5434/articles'
-       params = {
-           'geocoding_created': 0,
-           'limit': 200,
-           'embeddings_created': 1,
-           'entities_extracted': 1
-       }
-
-       entity_type = 'NORP'
-       response = requests.get(url, params=params)
-       if response.status_code == 200:
-           data = response.json()
-
-           gpe_counter = Counter()
-           gpe_articles = defaultdict(list)
-
-           for article in data:
-               entities = article['entities']
-               for entity in entities:
-                   if entity['tag'] == entity_type:
-                       entity_name = entity['text']
-                       gpe_counter[entity_name] += 1
-                       if article['headline']:
-                           gpe_articles[entity_name].append(article['headline'])
-                       else:
-                           gpe_articles[entity_name].append(article['url'])
-
-           sorted_gpes = gpe_counter.most_common(x)
-           sorted_gpes = list(reversed(sorted_gpes))
-           for gpe, count in sorted_gpes:
-               print(f"{entity_type}: {gpe}, Count: {count}")
-               print("Associated Articles:")
-               for article in set(gpe_articles[gpe]):
-                   print(f" - {article}")
-               print("\n")
-       else:
-           print('API request failed.')
-
-   print_sorted_gpe_entities(10)
-   ```
+![Simple UI](media/ui_preview_empty.png)
 
 ## EASY! Add any source
 Insert any sourcing or scraping script into the scraper_service/scrapers folder. 
@@ -186,57 +139,89 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+
 SSARE will execute all scripts in the scrapers folder and process the articles. 
 They are vectorized and stored in a Qdrant vector database.
-
 The API endpoint can be queried for semantic search and article recommendations for your LLM or research project.
 
-### Install
-Ensure Docker and docker-compose are installed.
-
-Then:
-
-3. Execute the initial setup script:
-   ```bash
-   python full.py
-   ```
-   Wait (initial scraping/ processing may take a few minutes).
-4. Query the API (Vector Search)
-   ```bash
-   curl -X GET "http://127.0.0.1:6969/search?query=Argentinia&top=5"
-   ```
-5. Query the database via the api_playground.py in z_dev_scripts (or run default):
-   ```python
-   python z_dev_scripts/api_playground.py
-   ```
-
-If you want to use the UI:
-1. Trigger a scraping run.
-2. Wait for the scraping to finish.
-3. Use the search bar to query for articles.
 
 The design philosophy underscores flexibility, allowing integration with any scraper script that aligns with the specified data structure. The infrastructure benefits from each additional source, enriching the system's capability to amass, store, and retrieve news content efficiently.
 
-## Upcoming Features
+## Other potential use cases:
+
+1. Use the provided script to retrieve entities most prominent in your data, here 'NORP' - 'affiliation':
+   ```python
+   import requests
+   from collections import Counter, defaultdict
+
+   def print_sorted_gpe_entities(x):
+       url = 'http://localhost:5434/articles'
+       params = {
+           'geocoding_created': 0,
+           'limit': 200,
+           'embeddings_created': 1,
+           'entities_extracted': 1
+       }
+
+       entity_type = 'NORP'
+       response = requests.get(url, params=params)
+       if response.status_code == 200:
+           data = response.json()
+
+           gpe_counter = Counter()
+           gpe_articles = defaultdict(list)
+
+           for article in data:
+               entities = article['entities']
+               for entity in entities:
+                   if entity['tag'] == entity_type:
+                       entity_name = entity['text']
+                       gpe_counter[entity_name] += 1
+                       if article['headline']:
+                           gpe_articles[entity_name].append(article['headline'])
+                       else:
+                           gpe_articles[entity_name].append(article['url'])
+
+           sorted_gpes = gpe_counter.most_common(x)
+           sorted_gpes = list(reversed(sorted_gpes))
+           for gpe, count in sorted_gpes:
+               print(f"{entity_type}: {gpe}, Count: {count}")
+               print("Associated Articles:")
+               for article in set(gpe_articles[gpe]):
+                   print(f" - {article}")
+               print("\n")
+       else:
+           print('API request failed.')
+
+   print_sorted_gpe_entities(10)
+   ```
+
+This script, sorting for NORP will return an output like this
+````json
+NORP: Democratic, Count: 19
+Associated Articles:
+ - Biden presents Medal of Freedom to key political allies, civil rights leaders, celebrities and politicians
+ - House Democrats announce they would save Speaker Mike Johnson if Marjorie Taylor Greene triggers her effort to oust him
+ - Takeaways from Day 10 of the Donald Trump hush money trial
+ - Who is Hope Hicks, longtime Trump aide who is testifying in NY hush money case?
+ - Arizona Senate votes to repeal Civil War-era near-total abortion ban
+ - Biden left without an easy solution as campus protests heat up
+
+
+NORP: Indian, Count: 20
+Associated Articles:
+ - "Daughters Lost": Ex Wrestler After BJP Fields Brij Bhushan's Son In Polls
+ - India T20 World Cup Squad Press Conference: Ajit Agarkar says Rinku Singh and Shubman Gill have done ‘nothing wrong’
+ - Thomas Cup 2024 QF Highlights: Lakshya the solitary winner as India’s title defence ends 1-3 after defeat against China
+````
+
 
 ### Future Roadmap
-The project's trajectory includes plans for enhanced service orchestration (with Kubernetes) and expanded scraper support, all aimed at bolstering the engine's functionality and reach.
+The project's trajectory includes plans for enhanced service orchestration (with Kubernetes) and expanded scraper support (looking forwards to creating "flavours" of information spaces), all aimed at bolstering the engine's functionality and reach.
 
 ### Participation: Script Contributions
-We welcome contributions from passionate activists, enthusiastic data scientists, and dedicated developers. Your expertise can greatly enhance our repository, expanding the breadth of our political news coverage. 
+We welcome contributions from passionate activists, enthusiastic data scientists, and dedicated developers. Your expertise can greatly enhance the project, expanding the breadth of our political news coverage. 
 
-## Practical Instructions
-- For custom scraper integration, scripts should yield "url," "headline," "paragraphs." and "source". Store your script at:
-  ```
-  SSARE/scraper_service/scrapers
-  ```
-  Update the scraper configuration accordingly:
-  ```
-  SSARE/scraper_service/scrapers/scrapers_config.json
-  ```
-  The orchestration service will process your script once implemented.
-
-If your additional scripts need scraping libraries other than BeautifulSoup, please add them to the requirements.txt file in the scraper_service folder (and create a pull request). 
 
 If you want to use your own embeddings models, you need to change the dim size in the code of the qdrant service and the model name in the nlp service.
 
