@@ -20,13 +20,35 @@ The engine is adaptable to various sources, requiring only a sourcing script tha
 
 Once integrated, SSARE processes these articles using embeddings models of your choice(upcoming, currently hardcoded), stores their vector representations in a Qdrant vector database, and maintains a full copy in a PostgreSQL database. 
 
-SSARE is a composition of microservices to make this project a scalable and maintainable solution.
+Furthermore all articles text is undergoing Named Entity Recognition (NER) where entities such as geo-political entities, affiliations or organisation names.
 
-This is a high-level overview of the architecture:
+The GPE (Geoplolitical Entity) tags are geocoded, meaning for the recognised location "Berlin" it returns the latitude and longitude.
+
+**THE FINAL RESULT** is a database with articles saved and this data schema (as pydantic model):
+````python
+class Article(Base):
+    __tablename__ = "articles"
+    url = Column(String, primary_key=True)  # Url & Unique Identifier
+    headline = Column(String)  # Headline
+    paragraphs = Column(String)  # Text
+    source = Column(String)  # 'cnn'
+    embeddings = Column(ARRAY(Float))  # [3223, 2342, ..]
+    entities = Column(JSONB)  # JSONB for storing entities
+    geocodes = Column(ARRAY(JSONB))  # JSON objects for geocodes
+    embeddings_created = Column(Integer, default=0)  # Flag
+    stored_in_qdrant = Column(Integer, default=0)  # Flag
+    entities_extracted = Column(Integer, default=0)  # Flag
+    geocoding_created = Column(Integer, default=0)  # Flag
+````
+
+That can be used in a lot of ways already, have fun!
+
+
+## High Level Diagramm:
 
 ![High Level Architecture](media/ssare_high_level_diagramm_github.png)
+(A bit outdated, no NER & Geocoding here, will swap asap)
 
-For a more detailed overview, please refer to the [Architecture and Storage](#architecture-and-storage) section.
 
 ## Quickstart
 1. Run the following command to start the services:
@@ -212,13 +234,17 @@ SSARE's architecture fosters communication through a decoupled microservices des
 -  Vectorization/NLP Service
 -  Qdrant Service
 -  PostgreSQL Service
+-  Entity Service
+-  Geocoding Service
 -  API Service
 
 Services communicate and signal each other by producing flags and pushings tasks and data to Redis queues.
 
-The scrape jobs are parallelized with Celery.
+The scrape jobs are parallelized with Celery, Prefect and async functions where possible. 
 
 Regarding storage, SSARE employs PostgreSQL for data retention and Qdrant as a vector storage.
+
+A simpler and wholistic data contract solution for project-wide usage would be greatly appreciated.
 
 
 ## Licensing
