@@ -15,11 +15,11 @@ an open-source service that comfortably orchestrates: \
 
 **Delivering:**  
     - An up to date Vector Search endpoint for RAG/ LLM applications \
-    - An up to date news database for lots of other applications \\
-    - A ressource to track entities over arbitrary sources with simple sorting scripts (like affiliations, organisations)
+    - An up to date news database for lots of other applications \
+    - A ressource to track entities over arbitrary sources with simple sorting scripts (like affiliations, organisations) \
     - Geojson for article locations on a map
 
-Sping up your own news brain!
+Spin up your own news brain!
 
 
 ![SSARE](media/banner.jpg)
@@ -30,18 +30,16 @@ Sping up your own news brain!
 
 SSARE serves as an efficient and scalable resource for semantic search and article recommendations, catering primarily to political news data.
 
-**SSARE is an always up to date political news RAG endpoint.**
-
 The engine is adaptable to various sources, requiring only a sourcing script that outputs the data in the format of a dataframe with the columns:
 | url | headline | paragraphs | source |
 
 Once integrated, SSARE processes these articles using embeddings models of your choice(upcoming, currently hardcoded), stores their vector representations in a Qdrant vector database, and maintains a full copy in a PostgreSQL database. 
 
-Furthermore all articles text is undergoing Named Entity Recognition (NER) where entities such as geo-political entities, affiliations or organisation names.
+Furthermore all articles' text is undergoing Named Entity Recognition (NER) where entities such as geo-political entities, affiliations or organisation names.
 
 The GPE (Geoplolitical Entity) tags are geocoded, meaning for the recognised location "Berlin" it returns the latitude and longitude.
 
-**THE FINAL RESULT** is a database with articles saved and this data schema (as pydantic model):
+**THE FINAL RESULT** is a live postgres database with articles saved and this data schema (as pydantic model):
 ````python
 class Article(Base):
     __tablename__ = "articles"
@@ -67,17 +65,24 @@ That can be used in a lot of ways already, have fun!
 (A bit outdated, no NER & Geocoding here, will swap asap)
 
 
-## Quickstart
-1. Run the following command to start the services:
+## Introduction
+Before we can make use of our own scraping intelligence brain. Let's install it.
+### Install
+1. Download the source code by cloning the repository.
+    ```bash
+    git clone https://github.com/JimVincentW/SSARE.git
+    ``` 
+2. Initiate the setup:
    ```bash
+   cd SSARE
    docker-compose up --build
    ```
-
 2. Trigger the scraping sequence by either:
    - Calling the API endpoint: `localhost:8080/trigger_scraping_sequence`
    - Using the UI at: `http://localhost:8080`
 
-![Simple UI]
+
+![Simple UI](media/scraping_ui_empty.png)
 
 3. Use the provided script to retrieve entities:
    ```python
@@ -190,15 +195,7 @@ The API endpoint can be queried for semantic search and article recommendations 
 Ensure Docker and docker-compose are installed.
 
 Then:
-1. Download the source code by cloning the repository.
-    ```bash
-    git clone https://github.com/JimVincentW/SSARE.git
-    ``` 
-2. Initiate the setup:
-   ```bash
-   cd SSARE
-   docker-compose up --build
-   ```
+
 3. Execute the initial setup script:
    ```bash
    python full.py
