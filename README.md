@@ -3,6 +3,8 @@
 # Semantic Search Article Recommendation Engine
 Always up-to-date news RAG endpoint for semantic search and article recommendations.
 
+Also: a live news database with vector embeddings, Named Entity Recognition and Geocoding of Geopolitical Entities.
+
 ![SSARE](media/banner.jpg)
 
 ## Introduction
