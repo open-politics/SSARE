@@ -7,6 +7,7 @@ Also: a live news database with vector embeddings, Named Entity Recognition and 
 
 ![SSARE](media/banner.jpg)
 
+
 ## Introduction
 SSARE stands for Semantic Search Article Recommendation Engine, an open-source service that comfortably orchestrates scraping, processing into vector representations, storing and querying of news articles. 
 
@@ -27,13 +28,64 @@ This is a high-level overview of the architecture:
 
 For a more detailed overview, please refer to the [Architecture and Storage](#architecture-and-storage) section.
 
+## Quickstart
+1. Run the following command to start the services:
+   ```bash
+   docker-compose up --build
+   ```
 
-## Version 1 Deployment
-Version 1 is online. Please refer to the [Getting Started](#getting-started) section for deployment instructions.
+2. Trigger the scraping sequence by either:
+   - Calling the API endpoint: `localhost:8080/trigger_scraping_sequence`
+   - Using the UI at: `http://localhost:8080`
 
+3. Use the provided script to retrieve entities:
+   ```python
+   import requests
+   from collections import Counter, defaultdict
 
+   def print_sorted_gpe_entities(x):
+       url = 'http://localhost:5434/articles'
+       params = {
+           'geocoding_created': 0,
+           'limit': 200,
+           'embeddings_created': 1,
+           'entities_extracted': 1
+       }
 
-## Example Use Case
+       entity_type = 'NORP'
+       response = requests.get(url, params=params)
+       if response.status_code == 200:
+           data = response.json()
+
+           gpe_counter = Counter()
+           gpe_articles = defaultdict(list)
+
+           for article in data:
+               entities = article['entities']
+               for entity in entities:
+                   if entity['tag'] == entity_type:
+                       entity_name = entity['text']
+                       gpe_counter[entity_name] += 1
+                       if article['headline']:
+                           gpe_articles[entity_name].append(article['headline'])
+                       else:
+                           gpe_articles[entity_name].append(article['url'])
+
+           sorted_gpes = gpe_counter.most_common(x)
+           sorted_gpes = list(reversed(sorted_gpes))
+           for gpe, count in sorted_gpes:
+               print(f"{entity_type}: {gpe}, Count: {count}")
+               print("Associated Articles:")
+               for article in set(gpe_articles[gpe]):
+                   print(f" - {article}")
+               print("\n")
+       else:
+           print('API request failed.')
+
+   print_sorted_gpe_entities(10)
+   ```
+
+## EASY! Add any source
 Insert any sourcing or scraping script into the scraper_service/scrapers folder. 
 A simple scraping script can look like this:
 ```python
@@ -93,7 +145,7 @@ They are vectorized and stored in a Qdrant vector database.
 
 The API endpoint can be queried for semantic search and article recommendations for your LLM or research project.
 
-### Getting Started
+### Install
 Ensure Docker and docker-compose are installed.
 
 Then:
@@ -111,9 +163,13 @@ Then:
    python full.py
    ```
    Wait (initial scraping/ processing may take a few minutes).
-4. Query the API:
+4. Query the API (Vector Search)
    ```bash
    curl -X GET "http://127.0.0.1:6969/search?query=Argentinia&top=5"
+   ```
+5. Query the database via the api_playground.py in z_dev_scripts (or run default):
+   ```python
+   python z_dev_scripts/api_playground.py
    ```
 
 If you want to use the UI:
