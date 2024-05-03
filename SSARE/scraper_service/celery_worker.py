@@ -50,11 +50,17 @@ def scrape_single_source(flag: str):
             return
 
         csv_file = f"/app/scrapers/data/dataframes/{flag}_articles.csv"
-        if not os.path.exists(csv_file):
+        try:
+            if os.path.getsize(csv_file) == 0:
+                logger.warning(f"CSV file is empty: {csv_file}. Skipping article processing.")
+                return
+            df = pd.read_csv(csv_file)
+        except FileNotFoundError:
             logger.warning(f"CSV file not found: {csv_file}. Skipping article processing.")
             return
-
-        df = pd.read_csv(csv_file)
+        except pd.errors.EmptyDataError:
+            logger.warning(f"No columns to parse from file: {csv_file}. Skipping article processing.")
+            return
         articles = df.to_dict(orient="records")
         redis_conn_articles = Redis(host='redis', port=6379, db=1)
 

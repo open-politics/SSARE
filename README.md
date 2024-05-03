@@ -14,10 +14,12 @@ an open-source service that comfortably orchestrates: \
     news articles.
 
 **Delivering:**  
-    - An up to date Vector Search endpoint for RAG/ LLM applications
-    - An up to date news database for lots of other applications
-    - A resource to create markers for news on a map (location<->article relation)
-    - A ressource to track entities over arbitrary sources with simple sorting scripts (like affiliations)
+    - An up to date Vector Search endpoint for RAG/ LLM applications \
+    - An up to date news database for lots of other applications \\
+    - A ressource to track entities over arbitrary sources with simple sorting scripts (like affiliations, organisations)
+    - Geojson for article locations on a map
+
+Sping up your own news brain!
 
 
 ![SSARE](media/banner.jpg)
@@ -74,6 +76,8 @@ That can be used in a lot of ways already, have fun!
 2. Trigger the scraping sequence by either:
    - Calling the API endpoint: `localhost:8080/trigger_scraping_sequence`
    - Using the UI at: `http://localhost:8080`
+
+![Simple UI]
 
 3. Use the provided script to retrieve entities:
    ```python
