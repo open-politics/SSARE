@@ -1,15 +1,30 @@
 # SSARE 
 🌐🔍🪡 Finding the needle in the haystack
 # Semantic Search Article Recommendation Engine
-Always up-to-date news RAG endpoint for semantic search and article recommendations.
+**Open Source Political Intelligence needs a news brain!**
 
-Also: a live news database with vector embeddings, Named Entity Recognition and Geocoding of Geopolitical Entities.
+**SSARE** stands for Semantic **Search Article Recommendation Engine**: \
+an open-source service that comfortably orchestrates: \
+    - Scraping of arbitrary sourcing scripts \
+    - processing into vector representations \
+    - Named Entity Recognition (like locations, organisation, geo.-pol. entities) \
+    - Geocoding of recognized locations \
+    - Storing and \
+    - Querying of 
+    news articles.
+
+**Delivering:**  
+    - An up to date Vector Search endpoint for RAG/ LLM applications
+    - An up to date news database for lots of other applications
+    - A resource to create markers for news on a map (location<->article relation)
+    - A ressource to track entities over arbitrary sources with simple sorting scripts (like affiliations)
+
 
 ![SSARE](media/banner.jpg)
 
 
 ## Introduction
-SSARE stands for Semantic Search Article Recommendation Engine, an open-source service that comfortably orchestrates scraping, processing into vector representations, storing and querying of news articles. 
+
 
 SSARE serves as an efficient and scalable resource for semantic search and article recommendations, catering primarily to political news data.
 
