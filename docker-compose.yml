@@ -13,16 +13,12 @@ services:
     build: 
       context: ./SSARE
       dockerfile: ./app/Dockerfile
-    restart: always
     ports:
       - "8080:8080"
     volumes:
       - ./flows:/app/flows
-    entrypoint: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
     networks:
       - app_network
-    environment:
-      - PREFECT_API_URL=http://prefect_server:4200/api
     depends_on:
       - scraper_service
       - postgres_service 
@@ -37,8 +33,6 @@ services:
       dockerfile: ./scraper_service/Dockerfile
     ports:
       - "8081:8081"
-    environment:
-      - PREFECT_API_URL=http://prefect_server:4200/api
     networks:
       - app_network
     depends_on:
@@ -108,6 +102,47 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+      
+  geo_service:
+    build: 
+      context: ./SSARE
+      dockerfile: ./geo_service/Dockerfile
+    restart: always
+    ports:
+      - "3690:3690"
+    networks:
+      - app_network
+    depends_on:
+      - redis
+      - postgres_service
+    environment:
+      - PREFECT_API_URL=http://prefect_server:4200/api
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  entity_service:
+    build: 
+      context: ./SSARE
+      dockerfile: ./entity_service/Dockerfile
+    restart: always
+    ports:
+      - "1290:1290"
+    networks:
+      - app_network
+    depends_on:
+      - redis
+      - postgres_service
+    environment:
+      - PREFECT_API_URL=http://prefect_server:4200/api
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 
 
   prefect_database:

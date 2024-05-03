@@ -11,7 +11,9 @@ service_urls = {
     "nlp_service": "http://nlp_service:0420",
     "qdrant_service": "http://qdrant_service:6969",
     "qdrant_storage": "http://qdrant_storage:6333",
+    "geo_service": "http://geo_service:3690",
     "scraper_service": "http://scraper_service:8081",
+    "entity_service": "http://entity_service:1290", 
 }
 
 @task
@@ -68,6 +70,24 @@ async def store_embeddings_in_qdrant(raise_on_failure=True):
         response = await client.post(f"{service_urls['qdrant_service']}/store_embeddings") 
     return response.status_code == 200
 
+@task
+async def create_entity_extraction_jobs(raise_on_failure=True):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(f"{service_urls['postgres_service']}/create_entity_extraction_jobs")
+    return response.status_code == 200
+
+@task
+async def extract_entities(raise_on_failure=True):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(f"{service_urls['entity_service']}/extract_entities")
+    return response.status_code == 200
+
+@task
+async def geocode_articles(raise_on_failure=True):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(f"{service_urls['geo_service']}/geocode_articles")
+    return response.status_code == 200
+
 @flow(task_runner=RayTaskRunner()) 
 async def scraping_flow(): 
     flags_result = await produce_flags()
@@ -106,3 +126,11 @@ async def scraping_flow():
     if not store_result:
         raise ValueError("Failed to store embeddings in Qdrant.")
 
+    entity_extraction_result = await extract_entities()
+    if not entity_extraction_result:
+        raise ValueError("Failed to extract entities.")
+
+    # Geocode articles after entities have been extracted
+    geocode_result = await geocode_articles()
+    if not geocode_result:
+        raise ValueError("Failed to geocode articles.")
