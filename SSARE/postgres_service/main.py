@@ -13,8 +13,12 @@ from contextlib import asynccontextmanager
 import logging
 from redis.asyncio import Redis
 from core.utils import load_config
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import text
 from pydantic import BaseModel
+from sqlalchemy import func, select
+from sqlalchemy import bindparam
+from sqlalchemy import cast
+from sqlalchemy.dialects.postgresql import JSONB
 
 class ErrorResponseModel(BaseModel):
     detail: str
@@ -35,7 +39,7 @@ class Article(Base):
     paragraphs = Column(String)  # Text
     source = Column(String)  # 'cnn'
     embeddings = Column(ARRAY(Float))  # [3223, 2342, ..]
-    entities = Column(JSONB)  # Change this line
+    entities = Column(JSONB)  # JSONB for storing entities
     geocodes = Column(ARRAY(JSONB))  # JSON objects for geocodes
     embeddings_created = Column(Integer, default=0)  # Flag
     stored_in_qdrant = Column(Integer, default=0)  # Flag
@@ -112,19 +116,21 @@ async def produce_flags():
     return {"message": f"Flags produced: {', '.join(flags)}"}
 
 @app.get("/articles", response_model=List[FullArticleModel])
-async def get_articles_by_url_and_flags(
+async def get_articles(
     url: Optional[str] = None,
     embeddings_created: Optional[int] = None,
     stored_in_qdrant: Optional[int] = None,
     entities_extracted: Optional[int] = None,
     geocoding_created: Optional[int] = None,
+    has_gpe: bool = False,  # New parameter to filter for GPE entities
+    search_text: Optional[str] = None,  # New parameter for text search
     skip: int = 0, 
     limit: int = 10, 
     session: AsyncSession = Depends(get_session)
 ):
     async with session.begin():
         query = select(Article)
-        if url is not None:
+        if url:
             query = query.filter(Article.url == url)
         if embeddings_created is not None:
             query = query.filter(Article.embeddings_created == embeddings_created)
@@ -134,6 +140,16 @@ async def get_articles_by_url_and_flags(
             query = query.filter(Article.entities_extracted == entities_extracted)
         if geocoding_created is not None:
             query = query.filter(Article.geocoding_created == geocoding_created)
+        if has_gpe:
+            query = query.filter(Article.entities.op('@>')(cast('[{"entity_type":"GPE"}]', JSONB)))
+        if search_text:
+            # Search in headline or paragraphs
+            query = query.filter(
+                or_(
+                    Article.headline.ilike(f'%{search_text}%'), 
+                    Article.paragraphs.ilike(f'%{search_text}%')
+                )
+            )
         
         query = query.offset(skip).limit(limit)
         result = await session.execute(query)
@@ -344,7 +360,7 @@ async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_sess
     logger.info("Starting to create entity extraction jobs.")
     try:
         async with session.begin():
-            query = select(Article).where(Article.entities_extracted == 0).limit(3)
+            query = select(Article).where(Article.entities_extracted == 0).limit(50)
             result = await session.execute(query)
             articles_needing_entities = result.scalars().all()
 
@@ -356,7 +372,7 @@ async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_sess
                 'headline': article.headline,
                 'paragraphs': article.paragraphs
             }
-            await redis_conn.lpush('articles_without_entities_queue', json.dumps(article_dict))
+            await redis_conn.lpush('articles_without_entities_queue', json.dumps(article_dict, ensure_ascii=False))
 
         logger.info(f"Entity extraction jobs for {len(articles_needing_entities)} articles created.")
         return {"message": "Entity extraction jobs created successfully."}
@@ -367,31 +383,38 @@ async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_sess
 @app.post("/create_geocoding_jobs")
 async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
     """
-    This function reads from the PostgreSQL /articles table where geocoding_created = 0.
-    It adds articles needing geocoding to the Redis queue 'articles_without_geocoding_queue',
-    including their extracted entities that might contain location names.
+    This function reads from the PostgreSQL /articles table where geocoding_created = 0
+    and entities_extracted = 1. It adds articles that need geocoding and contain at least one
+    GPE entity to the Redis queue 'articles_without_geocoding_queue'.
     """
     logger.info("Starting to create geocoding jobs.")
     try:
         async with session.begin():
-            query = select(Article).where(Article.geocoding_created == 0)
+            # Ensure the JSON is cast to jsonb for PostgreSQL to understand it
+            jsonb_filter = bindparam('jsonb_filter', value='[{"entity_type":"GPE"}]', type_=JSONB)
+            query = select(Article).where(
+                Article.embeddings_created == 1,
+                Article.entities_extracted == 1,
+                Article.geocoding_created == 1,
+                Article.entities.op('@>')(jsonb_filter)
+            )
+        # Execute the query with the correct jsonb parameter
             result = await session.execute(query)
             articles_needing_geocoding = result.scalars().all()
 
-        redis_conn = await Redis(host='redis', port=6379, db=3)  # Use a different Redis DB or adjust index as needed
-
+        # Proceed to push these filtered articles to Redis
+        redis_conn = await Redis(host='redis', port=6379, db=3)
         for article in articles_needing_geocoding:
-             article_dict = {
+            article_dict = {
                 'url': article.url,
                 'headline': article.headline,
                 'paragraphs': article.paragraphs,
-                'entities': json.dumps(article.entities)  # Ensure entities are serialized if they are not already a string
+                'entities': json.dumps(article.entities, ensure_ascii=False)
             }
-        await redis_conn.lpush('articles_without_geocoding_queue', json.dumps(article_dict))
+            await redis_conn.lpush('articles_without_geocoding_queue', json.dumps(article_dict, ensure_ascii=False))
 
         logger.info(f"Geocoding jobs for {len(articles_needing_geocoding)} articles created, including entities data.")
         return {"message": "Geocoding jobs created successfully, including entities."}
     except Exception as e:
         logger.error(f"Error creating geocoding jobs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

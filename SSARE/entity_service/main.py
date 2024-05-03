@@ -60,7 +60,7 @@ async def extract_entities(session: AsyncSession = Depends(get_session)):
             # Ensure entities_json is an array of JSON objects
             entities_data = [{"text": entity[0], "tag": entity[1]} for entity in entities]
             entities_json = json.dumps(entities_data)
-            logger.info(entities_data)
+            logger.info(entities_json)
 
             async with session.begin():
                 query = update(Article).where(Article.url == article['url']).values(entities=entities_json, entities_extracted=1)

@@ -7,6 +7,7 @@ from sqlalchemy import update
 import json
 from redis.asyncio import Redis
 from geopy.geocoders import Nominatim
+import logging
 
 # Placeholder imports
 from core.utils import load_config  # Make sure this is correctly imported or defined
@@ -46,6 +47,9 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
     async with async_session() as session:
         yield session
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Geocoding endpoint
 @app.post("/geocode_articles")
 async def geocode_articles(session: AsyncSession = Depends(get_session)):
@@ -53,37 +57,49 @@ async def geocode_articles(session: AsyncSession = Depends(get_session)):
     geojson = GeoJSON(features=[])
     redis_conn = await Redis(host='redis', port=6379, db=3)
 
+    # Existing code where you retrieve data from Redis
+    queue_contents = await redis_conn.lrange('articles_without_geocoding_queue', 0, -1)
+    queue_contents = [item.decode('utf-8') for item in queue_contents]
+    logger.info(f"Current queue contents: {queue_contents}")
+
+    # Decoding the JSON data pulled from the queue
     article_data_json = await redis_conn.rpop('articles_without_geocoding_queue')
     if article_data_json:
+        article_data_json = article_data_json.decode('utf-8')  # Decode the bytes to string
         article_data = json.loads(article_data_json)
-        location_articles = {}
-        for article in article_data:
-            for entity in article['entities']:
-                if entity['entity_type'] == "GPE":
-                    if entity['text'] not in location_articles:
-                        location_articles[entity['text']] = []
-                    location_articles[entity['text']].append({
-                        'headline': article['headline'],
-                        'url': article['url']
-                    })
+        logger.info(article_data_json)
 
-        for location, articles in location_articles.items():
-            try:
-                location_geo = geolocator.geocode(location)
-                if location_geo:
-                    feature = GeoFeature(
-                        properties={"location": location, "articles": articles},
-                        geometry={"type": "Point", "coordinates": [location_geo.longitude, location_geo.latitude]}
-                    )
-                    geojson.features.append(feature)
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
+        if article_data_json and 'entities' in article_data and isinstance(article_data['entities'], list):
+            location_articles = {}
+            for article in article_data:
+                for entity in article['entities']:
+                    if entity['entity_type'] == "GPE":
+                        if entity['text'] not in location_articles:
+                            location_articles[entity['text']] = []
+                        location_articles[entity['text']].append({
+                            'headline': article['headline'],
+                            'url': article['url']
+                        })
 
-        urls = [article['url'] for article in article_data]
-        async with session.begin():
-            query = update(Article).where(Article.url.in_(urls)).values(geocoding_created=1)
-            await session.execute(query)
-        return geojson
+            for location, articles in location_articles.items():
+                try:
+                    location_geo = geolocator.geocode(location)
+                    if location_geo:
+                        feature = GeoFeature(
+                            properties={"location": location, "articles": articles},
+                            geometry={"type": "Point", "coordinates": [location_geo.longitude, location_geo.latitude]}
+                        )
+                        geojson.features.append(feature)
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=str(e))
+
+            urls = [article['url'] for article in article_data]
+            async with session.begin():
+                query = update(Article).where(Article.url.in_(urls)).values(geocoding_created=1)
+                await session.execute(query)
+            return geojson
+        else:
+            return {"message": "No valid entities available for geocoding."}
     else:
         return {"message": "No articles available for geocoding."}
 
