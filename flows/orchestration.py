@@ -73,19 +73,25 @@ async def store_embeddings_in_qdrant(raise_on_failure=True):
 @task
 async def create_entity_extraction_jobs(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{service_urls['postgres_service']}/create_entity_extraction_jobs")
+        response = await client.post(f"{service_urls['postgres_service']}/create_entity_extraction_jobs", timeout=400)
     return response.status_code == 200
 
 @task
 async def extract_entities(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{service_urls['entity_service']}/extract_entities")
+        response = await client.post(f"{service_urls['entity_service']}/extract_entities", timeout=400)
+    return response.status_code == 200
+
+@task
+async def create_geocoding_jobs(raise_on_failure=True):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(f"{service_urls['postgres_service']}/create_geocoding_jobs", timeout=400)
     return response.status_code == 200
 
 @task
 async def geocode_articles(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{service_urls['geo_service']}/geocode_articles")
+        response = await client.post(f"{service_urls['geo_service']}/geocode_articles", timeout=400)
     return response.status_code == 200
 
 @flow(task_runner=RayTaskRunner()) 
@@ -125,8 +131,16 @@ async def scraping_flow():
     store_result = await store_embeddings_in_qdrant()
     if not store_result:
         raise ValueError("Failed to store embeddings in Qdrant.")
+    
+    extraction_jobs = await create_entity_extraction_jobs()
+    if not extraction_jobs:
+        raise ValueError("Failed to generate create_entity_extraction_jobs jobs")
 
     entity_extraction_result = await extract_entities()
+    if not entity_extraction_result:
+        raise ValueError("Failed to extract entities.")
+    
+    create_geocoding_result = await create_geocoding_jobs()
     if not entity_extraction_result:
         raise ValueError("Failed to extract entities.")
 
