@@ -1,9 +1,10 @@
-# SSARE 
-🌐🔍🪡 Finding the needle in the haystack
-# Semantic Search Article Recommendation Engine
-**Open Source Political Intelligence needs a news brain!**
+# SSARE 🌐📰🔍🧠🗺️🪡📊🤖🗄️🔧 
+Open Source Political Intelligence needs a news brain! 
 
-**SSARE** stands for Semantic **Search Article Recommendation Engine**: \
+On a mission to find the **#NeedleInTheHayStack**
+
+**SSARE** stands for Semantic **Search Article Recommendation Engine**: 
+
 an open-source service that comfortably orchestrates: \
     - Scraping of arbitrary sourcing scripts \
     - processing into vector representations \
@@ -15,12 +16,14 @@ an open-source service that comfortably orchestrates: \
 
 **Delivering:**  
     - An up to date Vector Search endpoint for RAG/ LLM applications \
-    - An up to date news database for lots of other applications \
+    - An up to date news SQL database for lots of other applications \
     - A ressource to track entities over arbitrary sources with simple sorting scripts (like affiliations, organisations) \
     - Geojson for article locations on a map
 
-Spin up your own news brain!
+**Spin up your own news brain!**
 
+*Semantic Search Engine? \
+Semantic Search is process that retrieves related articles by contextual similarity of situations described in natural language. A retrieval technique which opens up new paradigms of information ranking and retrieval. It is a quite popular choice to enhance Large Language Models with a "memory" of relevant articles. This project hopes to combine the ammenities of a classical SQL database with a vector database*
 
 ![SSARE](media/banner.jpg)
 
@@ -35,9 +38,9 @@ The engine is adaptable to various sources, requiring only a sourcing script tha
 
 Once integrated, SSARE processes these articles using embeddings models of your choice(upcoming, currently hardcoded), stores their vector representations in a Qdrant vector database, and maintains a full copy in a PostgreSQL database. 
 
-Furthermore all articles' text is undergoing Named Entity Recognition (NER) where entities such as geo-political entities, affiliations or organisation names.
+Furthermore all articles' text is undergoing Named Entity Recognition (NER) where entities such as geo-political entities, affiliations, persons or organisation names.
 
-The GPE (Geoplolitical Entity) tags are geocoded, meaning for the recognised location "Berlin" it returns the latitude and longitude.
+The GPE (Geoplolitical Entity) tags are the geoencoded, e.g. for the recognised location "Berlin" it returns the latitude and longitude and passes a geojson file.
 
 **THE FINAL RESULT** is a live postgres database with articles saved and this data schema (as pydantic model):
 ````python
@@ -184,7 +187,7 @@ The design philosophy underscores flexibility, allowing integration with any scr
    print_sorted_gpe_entities(10)
    ```
 
-This script, sorting for NORP will return an output like this
+This script, sorting for NORP will return an output like this:
 ````json
 NORP: Democratic, Count: 19
 Associated Articles:
