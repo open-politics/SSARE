@@ -6,12 +6,12 @@ On a mission to find the **#NeedleInTheHayStack**
 **SSARE** stands for Semantic **Search Article Recommendation Engine**: 
 
 an open-source service that comfortably orchestrates: \
-    - Scraping of arbitrary sourcing scripts \
+    - scraping of arbitrary sourcing scripts \
     - processing into vector representations \
-    - Named Entity Recognition (like locations, organisation, geo.-pol. entities) \
-    - Geocoding of recognized locations \
-    - Storing and \
-    - Querying of 
+    - Named Entity Recognition (like locations, persons, organisation, geo.-pol. entities) \
+    - geocoding of recognized locations \
+    - by storing \
+    - and querying of 
     news articles.
 
 **Delivering:**  
