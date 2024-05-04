@@ -283,7 +283,7 @@ Produce a set of features derived from the locations present in your data. This 
 
 
 
-### Future Roadmap
+### Roadmap
 The project's trajectory includes plans for enhanced service orchestration (with Kubernetes) and expanded scraper support (looking forwards to creating "flavours" of information spaces), all aimed at bolstering the engine's functionality and reach.
 
 - [x] Scraping of arbitrary sourcing scripts
