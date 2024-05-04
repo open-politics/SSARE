@@ -216,7 +216,7 @@ Use the provided script to retrieve entities most prominent in your data, here '
    ```
 
 This script, sorting for NORP (affiliation) will return an output like this:
-````json
+````text
 
 NORP: Republicans, Count: 17
 Associated Articles:
