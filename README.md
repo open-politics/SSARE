@@ -10,15 +10,14 @@ an open-source service that comfortably orchestrates: \
     - processing into vector representations \
     - Named Entity Recognition (like locations, persons, organisation, geo.-pol. entities) \
     - geocoding of recognized locations \
-    - by storing \
-    - and querying of 
-    news articles.
+    - storing \
+    - and querying of news articles.
 
 **Delivering:**  
-    - An up to date Vector Search endpoint for RAG/ LLM applications \
+    - An up to date Vector Search news retrieval endpoint for RAG/ LLM applications \
     - An up to date news SQL database for lots of other applications \
     - A ressource to track entities over arbitrary sources with simple sorting scripts (like affiliations, organisations) \
-    - Geojson for article locations on a map
+    - Geojson for article locations or related entities on a map
 
 **Spin up your own news brain!**
 
