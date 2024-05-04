@@ -216,24 +216,62 @@ Use the provided script to retrieve entities most prominent in your data, here '
    print_sorted_gpe_entities(10)
    ```
 
-This script, sorting for NORP will return an output like this:
+This script, sorting for NORP (affiliation) will return an output like this:
 ````json
+
+NORP: Republicans, Count: 17
+Associated Articles:
+ - Biden left without an easy solution as campus protests heat up
+ - House Democrats announce they would save Speaker Mike Johnson if Marjorie Taylor Greene triggers her effort to oust him
+ - Arizona Senate votes to repeal Civil War-era near-total abortion ban
+
+
+NORP: Israeli, Count: 19
+Associated Articles:
+ - Blinken met Netanyahu in Israel as US ramps up push for a ceasefire deal
+ - Biden left without an easy solution as campus protests heat up
+
+
 NORP: Democratic, Count: 19
 Associated Articles:
  - Biden presents Medal of Freedom to key political allies, civil rights leaders, celebrities and politicians
  - House Democrats announce they would save Speaker Mike Johnson if Marjorie Taylor Greene triggers her effort to oust him
+ - Arizona Senate votes to repeal Civil War-era near-total abortion ban
  - Takeaways from Day 10 of the Donald Trump hush money trial
  - Who is Hope Hicks, longtime Trump aide who is testifying in NY hush money case?
- - Arizona Senate votes to repeal Civil War-era near-total abortion ban
  - Biden left without an easy solution as campus protests heat up
 
 
 NORP: Indian, Count: 20
 Associated Articles:
- - "Daughters Lost": Ex Wrestler After BJP Fields Brij Bhushan's Son In Polls
- - India T20 World Cup Squad Press Conference: Ajit Agarkar says Rinku Singh and Shubman Gill have done ‘nothing wrong’
  - Thomas Cup 2024 QF Highlights: Lakshya the solitary winner as India’s title defence ends 1-3 after defeat against China
+ - India T20 World Cup Squad Press Conference: Ajit Agarkar says Rinku Singh and Shubman Gill have done ‘nothing wrong’
+ - "Daughters Lost": Ex Wrestler After BJP Fields Brij Bhushan's Son In Polls
 ````
+You can sort, mix, match and filter over these entitues:
+````json
+    tag_meaning = {
+        'CARDINAL': 'cardinal value',
+        'DATE': 'date value',
+        'EVENT': 'event name',
+        'FAC': 'building name',
+        'GPE': 'geo-political entity',
+        'LANGUAGE': 'language name',
+        'LAW': 'law name',
+        'LOC': 'location name',
+        'MONEY': 'money name',
+        'NORP': 'affiliation',
+        'ORDINAL': 'ordinal value',
+        'ORG': 'organization name',
+        'PERCENT': 'percent value',
+        'PERSON': 'person name',
+        'PRODUCT': 'product name',
+        'QUANTITY': 'quantity value',
+        'TIME': 'time value',
+        'WORK_OF_ART': ''
+    }
+````
+
 
 2. GeoJSON
 
