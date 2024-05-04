@@ -22,8 +22,8 @@ an open-source service that comfortably orchestrates: \
 
 **Spin up your own news brain!**
 
-*Semantic Search Engine? \
-Semantic Search is process that retrieves related articles by contextual similarity of situations described in natural language. A retrieval technique which opens up new paradigms of information ranking and retrieval. It is a quite popular choice to enhance Large Language Models with a "memory" of relevant articles. This project hopes to combine the ammenities of a classical SQL database with a vector database*
+***Semantic Search Engine?** \
+**Semantic Search** is a process that retrieves related articles by contextual similarity of situations described in natural language. A retrieval technique which opens **up new paradigms of information ranking and retrieval**. It is a quite popular choice ***to enhance Large Language Models with a "memory"*** of relevant articles. This project hopes to combine the amenities of a classical SQL database with a vector database and deliver a **useful, scalable and collectively engineered data stream** that is unprecedented.*
 
 ![SSARE](media/banner.jpg)
 
@@ -33,8 +33,9 @@ Semantic Search is process that retrieves related articles by contextual similar
 
 SSARE serves as an efficient and scalable resource for semantic search and article recommendations, catering primarily to political news data.
 
-The engine is adaptable to various sources, requiring only a sourcing script that outputs the data in the format of a dataframe with the columns:
-| url | headline | paragraphs | source |
+The engine is adaptable to various sources, requiring only a sourcing script that outputs the data in the format of a dataframe with the columns: 
+
+**|| url | headline | paragraphs | source ||** <-- This is all your script needs to produce
 
 Once integrated, SSARE processes these articles using embeddings models of your choice(upcoming, currently hardcoded), stores their vector representations in a Qdrant vector database, and maintains a full copy in a PostgreSQL database. 
 
@@ -209,6 +210,15 @@ Associated Articles:
 
 ### Future Roadmap
 The project's trajectory includes plans for enhanced service orchestration (with Kubernetes) and expanded scraper support (looking forwards to creating "flavours" of information spaces), all aimed at bolstering the engine's functionality and reach.
+
+- [x] Scraping of arbitrary sourcing scripts
+- [x] Processing into vector representations
+- [x] Named Entity Recognition (locations, organizations, geo-political entities)
+- [ ] Geocoding of recognized locations
+- [x] Storing and querying of news articles with
+    - [x] Querying by entity
+    - [x] Vector Search
+
 
 ### Participation: Script Contributions
 We welcome contributions from passionate activists, enthusiastic data scientists, and dedicated developers. Your expertise can greatly enhance the project, expanding the breadth of our political news coverage. 
