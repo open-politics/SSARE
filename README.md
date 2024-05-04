@@ -22,22 +22,41 @@ an open-source service that comfortably orchestrates: \
 
 **Spin up your own news brain!**
 
+- [Introduction](#introduction)
+- [Getting Started](#getting-started)
+- [Install](#install)
+- [EASY! Add any source](#easy-add-any-source)
+- [Architecture and Storage](#architecture-and-storage)
+- [Overview](#overview)
+- [High Level Diagram](#high-level-diagram)
+- [Services](#services)
+- [Usage](#usage)
+- [Use Cases](#Use-Cases)
+    - [Entity Ranking](#entity-ranking)
+    - [GeoJSON](#GepJSON)
+- [Future Roadmap](#future-roadmap)
+- [Participation: Script Contributions](#participation-script-contributions)
+- [Important Notes](#important-notes)
+- [Licensing](#licensing)
+
+
 ***Semantic Search Engine?** \
 **Semantic Search** is a process that retrieves related articles by contextual similarity of situations described in natural language. A retrieval technique which opens **up new paradigms of information ranking and retrieval**. It is a quite popular choice ***to enhance Large Language Models with a "memory"*** of relevant articles. This project hopes to combine the amenities of a classical SQL database with a vector database and deliver a **useful, scalable and collectively engineered data stream** that is unprecedented.*
 
-![SSARE](media/banner.jpg)
 
+
+
+![SSARE](media/banner.jpg)
 
 ## Introduction
 
-
 SSARE serves as an efficient and scalable resource for semantic search and article recommendations, catering primarily to political news data.
 
-The engine is adaptable to various sources, requiring only a sourcing script that outputs the data in the format of a dataframe with the columns: 
+The engine is adaptable to any article/ document, requiring only a sourcing script that outputs the data in the format of a dataframe with the columns: 
 
 **|| url | headline | paragraphs | source ||** <-- This is all your script needs to produce
 
-Once integrated, SSARE processes these articles using embeddings models of your choice(upcoming, currently hardcoded), stores their vector representations in a Qdrant vector database, and maintains a full copy in a PostgreSQL database. 
+Once integrated, SSARE processes these articles using embeddings models of your choice (upcoming, currently hardcoded), stores their vector representations in a Qdrant vector database, and maintains a full copy in a PostgreSQL database. 
 
 Furthermore all articles' text is undergoing Named Entity Recognition (NER) where entities such as geo-political entities, affiliations, persons or organisation names.
 
@@ -59,6 +78,14 @@ class Article(Base):
     entities_extracted = Column(Integer, default=0)  # Flag
     geocoding_created = Column(Integer, default=0)  # Flag
 ````
+
+PLUS
+
+A qdrant vector storage that retrieves articles by semantic search:
+![High Level Architecture](media/scraping_ui.png)
+
+
+
 
 That can be used in a lot of ways already, have fun!
 
@@ -139,9 +166,10 @@ The API endpoint can be queried for semantic search and article recommendations 
 
 The design philosophy underscores flexibility, allowing integration with any scraper script that aligns with the specified data structure. The infrastructure benefits from each additional source, enriching the system's capability to amass, store, and retrieve news content efficiently.
 
-## Other potential use cases:
+## Use Cases:
 
-1. Use the provided script to retrieve entities most prominent in your data, here 'NORP' - 'affiliation':
+1. Entity Ranking
+Use the provided script to retrieve entities most prominent in your data, here 'NORP' - 'affiliation':
    ```python
    import requests
    from collections import Counter, defaultdict
@@ -207,12 +235,23 @@ Associated Articles:
  - Thomas Cup 2024 QF Highlights: Lakshya the solitary winner as India’s title defence ends 1-3 after defeat against China
 ````
 
+2. GeoJSON
+
+Produce a set of features derived from the locations present in your data. This can enable visualisations like open politics "Open Globe" interface (with the json intentionally displayed):
+![High Level Architecture](media/opol_globe.png)
+
+
+
+
+
+
 
 ### Future Roadmap
 The project's trajectory includes plans for enhanced service orchestration (with Kubernetes) and expanded scraper support (looking forwards to creating "flavours" of information spaces), all aimed at bolstering the engine's functionality and reach.
 
 - [x] Scraping of arbitrary sourcing scripts
 - [x] Processing into vector representations
+    - [] Custom embedding models
 - [x] Named Entity Recognition (locations, organizations, geo-political entities)
 - [ ] Geocoding of recognized locations
 - [x] Storing and querying of news articles with
