@@ -79,7 +79,8 @@ DATABASE_URL = (
 )
 engine = create_async_engine(DATABASE_URL, echo=False)
 
-AsyncSessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+AsyncSessionLocal = sessionmaker(bind=engine,
+ class_=AsyncSession, expire_on_commit=False)
 
 # Redis connections
 redis_conn_flags = Redis(host='redis', port=6379, db=0)  # For flags
@@ -110,7 +111,7 @@ async def healthcheck():
 @app.get("/flags")
 async def produce_flags():
     await redis_conn_flags.delete("scrape_sources")
-    flags = ["cnn", "pynews", "bbc"]
+    flags = ["cnn", "bbc", "dw"]
     for flag in flags:
         await redis_conn_flags.lpush("scrape_sources", flag)
     return {"message": f"Flags produced: {', '.join(flags)}"}

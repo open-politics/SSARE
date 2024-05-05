@@ -1,53 +1,66 @@
-import asyncio
-import aiohttp
-from bs4 import BeautifulSoup
+from playwright.sync_api import Playwright, sync_playwright, expect
+from urllib.parse import urljoin
 import pandas as pd
+import os
+from newspaper import Article
 
-# Async function to fetch the HTML content of a given URL using aiohttp instead of requests
-async def fetch_html_content(session, url):
-    async with session.get(url) as response:
-        return await response.text()
+def scrape_articles(page, base_url, visited_urls, max_depth, current_depth=0):
+    if current_depth >= max_depth:
+        return
+    
+    links = page.query_selector_all('a')
+    article_urls = []
+    
+    for link in links:
+        href = link.get_attribute('href')
+        if href and ("news/world" in href or "politics" in href):
+            absolute_url = urljoin(base_url, href)
+            if absolute_url not in visited_urls:
+                visited_urls.add(absolute_url)
+                article_urls.append(absolute_url)
+    
+    data = []
+    for url in article_urls:
+        print(url)
+        article = Article(url)
+        article.download()
+        article.parse()
+        
+        data.append({
+            "url": url,
+            "headline": article.title,
+            "paragraphs": article.text,
+            "source": "BBC News"
+        })
+        
+        scrape_articles(page, url, visited_urls, max_depth, current_depth + 1)
+    
+    # Create a DataFrame from the scraped data
+    df = pd.DataFrame(data)
+    return df
 
-# Function to extract article URLs from the BBC News World page (kept synchronous since it processes HTML content locally)
-def extract_article_urls(page_html):
-    soup = BeautifulSoup(page_html, 'html.parser')
-    article_elements = soup.find_all('li', class_='ssrcss-13h7haz-ListItem')
-    article_urls = [element.find('a', class_='ssrcss-1mrs5ns-PromoLink')['href'] for element in article_elements if element.find('a', class_='ssrcss-1mrs5ns-PromoLink')]
-    return article_urls
+def run(playwright: Playwright) -> None:
+    browser = playwright.chromium.launch(headless=True)
+    context = browser.new_context()
+    page = context.new_page()
+    base_url = "https://www.bbc.com"
+    page.goto(base_url + "/news")
+    
+    visited_urls = set()
+    max_depth = 1  # Adjust the depth as needed
+    df = scrape_articles(page, base_url, visited_urls, max_depth)
+    
+    context.close()
+    browser.close()
+    
+    # Print the DataFrame
+    print(df)
+    
+    # Create the directory if it doesn't exist
+    os.makedirs('/root/SSARE/SSARE/scraper_service/scrapers/data', exist_ok=True)
+    
+    # Save the DataFrame to a CSV file
+    df.to_csv('/root/SSARE/SSARE/scraper_service/scrapers/data/bbc_articles.csv', index=False)
 
-# Function to extract paragraphs from an article page (kept synchronous for the same reason as above)
-def extract_paragraphs(article_html):
-    soup = BeautifulSoup(article_html, 'html.parser')
-    paragraphs = soup.find_all('p')
-    return [paragraph.text for paragraph in paragraphs]
-
-# Async function to process each article URL
-async def process_article_url(session, base_url, article_url):
-    full_article_url = f"{base_url}{article_url}" if not article_url.startswith(base_url) else article_url
-    article_html = await fetch_html_content(session, full_article_url)
-    paragraphs = extract_paragraphs(article_html)
-    # Assuming headline can be extracted similarly (update selector as needed)
-    headline = 'N/A'
-    soup = BeautifulSoup(article_html, 'html.parser')
-    headline_element = soup.find('h1')
-    if headline_element:
-        headline = headline_element.text.strip()
-    return {'url': full_article_url, 'headline': headline, 'paragraphs': paragraphs, 'source': 'bbc'}
-
-# Main async script
-async def main():
-    base_url = 'https://www.bbc.com'
-    news_page_url = f"{base_url}/news/world"
-    async with aiohttp.ClientSession() as session:
-        news_page_html = await fetch_html_content(session, news_page_url)
-        article_urls = extract_article_urls(news_page_html)
-        tasks = [process_article_url(session, base_url, url) for url in article_urls]
-        articles = await asyncio.gather(*tasks)
-        df = pd.DataFrame(articles)
-
-        # Show the DataFrame head
-        print(df.head())
-
-if __name__ == "__main__":
-    asyncio.run(main())
-
+with sync_playwright() as playwright:
+    run(playwright)

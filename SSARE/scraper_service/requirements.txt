@@ -8,3 +8,5 @@ aiohttp
 sqlalchemy
 prefect
 prefect-ray
+playwright
+newspaper4k

@@ -1,7 +1,7 @@
 from celery import Celery
 import json
 import os
-from core.models import ArticleBase
+from core.models import ArticleBase, ArticlePydantic
 import pandas as pd
 import subprocess
 import logging
@@ -66,16 +66,16 @@ def scrape_single_source(flag: str):
 
         for article_data in articles:
             try:
-                validated_article = ArticleBase(**article_data)
-                article_summary = {k: v[:10] if isinstance(v, str) else v for k, v in validated_article.model_dump().items()}
+                validated_article = ArticlePydantic(**article_data)
+                article_summary = {k: v[:10] if isinstance(v, str) else v for k, v in validated_article.dict().items()}
                 logger.info(f"Storing article summary: {article_summary}")
-                redis_conn_articles.lpush("raw_articles_queue", json.dumps(validated_article.model_dump()))
+                redis_conn_articles.lpush("raw_articles_queue", json.dumps(validated_article.dict()))
             except ValidationError as e:
-                logger.error(f"Validation error: {e.json()}")
+                logger.error(f"Validation error for article from {flag}: {str(e)}")
 
         logger.info(f"Completed scraping for {flag}")
     except Exception as e:
-        logger.error(f"Error in scraping for {flag}: {e}")
+        logger.error(f"Error in scraping for {flag}: {str(e)}")
         raise e
 
 

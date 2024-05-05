@@ -68,7 +68,7 @@ services:
       - ./core/sql_commands:/docker-entrypoint-initdb
       - ./data/postgres:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5431:5432"
     networks:
       - app_network
 

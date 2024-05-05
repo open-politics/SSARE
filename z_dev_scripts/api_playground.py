@@ -11,7 +11,7 @@ def print_sorted_gpe_entities(x):
         'entities_extracted': 1
     }
 
-    entity_type = 'NORP'
+    entity_type = 'PRODUCT'
 
     # Just for Navigation
     tag_meaning = {
