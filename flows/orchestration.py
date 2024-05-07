@@ -2,6 +2,7 @@ from prefect import task, flow, get_run_logger
 import httpx
 from prefect.deployments import Deployment
 from prefect_ray.task_runners import RayTaskRunner
+import asyncio
 
 runtime_url = "http://main_core_app:8080"
 
@@ -128,6 +129,8 @@ async def scraping_flow():
     if not push_to_queue_result:
         raise ValueError("Failed to push articles to Qdrant queue.")
     
+    await asyncio.sleep(5)  # Adjust the delay as needed
+
     store_result = await store_embeddings_in_qdrant()
     if not store_result:
         raise ValueError("Failed to store embeddings in Qdrant.")

@@ -111,17 +111,26 @@ async def store_embeddings():
         points = []  # List to hold all points
 
         while True:
-            articles_with_embedding_json = await redis_conn.rpop('articles_with_embeddings')
-            if articles_with_embedding_json is None:
+            articles_with_embeddings_json = await redis_conn.rpop('articles_with_embeddings')
+            if articles_with_embeddings_json is None:
                 logger.info("No more articles to process.")
                 break
 
-            article_with_embeddings = json.loads(articles_with_embedding_json)
-            
-            # Add a check to prevent re-processing if flag is already set
-            if article_with_embeddings.get("stored_in_qdrant", 0) == 1:
-                logger.info(f"Article already processed: {article_with_embeddings['url']}")
-                continue
+            articles_with_embeddings = json.loads(articles_with_embeddings_json)
+
+            for article_with_embeddings in articles_with_embeddings:
+                if not isinstance(article_with_embeddings, dict):
+                    logger.warning(f"Invalid article format: {article_with_embeddings}")
+                    continue
+                
+                if not isinstance(article_with_embeddings.get("embeddings", []), list):
+                    logger.warning(f"Invalid or missing embeddings for article: {article_with_embeddings.get('url')}")
+                    continue
+                
+                # Add a check to prevent re-processing if flag is already set
+                if article_with_embeddings.get("stored_in_qdrant", 0) == 1:
+                    logger.info(f"Article already processed: {article_with_embeddings.get('url')}")
+                    continue
 
             try:
                 validated_article = ArticleModel(**article_with_embeddings)
@@ -150,7 +159,7 @@ async def store_embeddings():
 
             point = PointStruct(
                 id=uuid.uuid4().hex,  # Use simple UUID string representation
-                vector=article_with_embeddings["embeddings"],  # List of floats
+                vector=validated_article.embeddings,  # List of floats
                 payload=payload
             )
 
@@ -188,7 +197,7 @@ async def store_embeddings():
 
 
 @app.get("/search")
-async def search(query: str, top: int):
+async def search(query: str, top: int = 10):
     try:
         # Convert textual query to embeddings
         logger.info(f"Query: {query}")

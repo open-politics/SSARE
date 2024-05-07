@@ -75,6 +75,7 @@ async def create_scrape_jobs():
         When the scrape_single_source function is complete, 
         it will push the data to Redis Queue 1 - channel "raw_articles_queue".
 
+        TODO Batching?
     """
 
     redis_conn_flags = await Redis(host='redis', port=6379, db=0)  # For flags
@@ -92,6 +93,12 @@ async def create_scrape_jobs():
     return {"message": "Scraping triggered successfully."}
         
 
+@app.get("/health")
+def health_check():
+    """Health check endpoint"""
+    return {"status": "ok"}, 200
+
+# For Helm
 @app.get("/healthz")
 def health_check():
     """Health check endpoint"""

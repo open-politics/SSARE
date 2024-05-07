@@ -26,10 +26,11 @@ def scrape_articles(page, base_url, visited_urls, max_depth, current_depth=0):
         article.download()
         article.parse()
         
+        paragraphs = article.text if article.text else ""
         data.append({
             "url": url,
             "headline": article.title,
-            "paragraphs": article.text,
+            "paragraphs": paragraphs,
             "source": "BBC News"
         })
         

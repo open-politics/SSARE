@@ -17,7 +17,7 @@ app = FastAPI()
 config = load_config()['postgresql']
 
 # Load the NER model
-ner_tagger = SequenceTagger.load("flair/ner-english-ontonotes-fast")
+ner_tagger = SequenceTagger.load("flair/ner-english-ontonotes-large")
 
 # SQLAlchemy setup
 Base = declarative_base()

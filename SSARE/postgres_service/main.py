@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy import bindparam
 from sqlalchemy import cast
+from sqlalchemy import or_
 from sqlalchemy.dialects.postgresql import JSONB
 
 class ErrorResponseModel(BaseModel):
@@ -98,7 +99,7 @@ async def lifespan(app: FastAPI):
         # Create tables here
         await conn.run_sync(Base.metadata.create_all)
     yield  # The application is now running
-    # Cleanup logic here (if any)
+
 
 app = FastAPI(lifespan=lifespan)
 

@@ -6,3 +6,4 @@ redis
 jinja2
 prefect
 prefect-ray
+asyncio
