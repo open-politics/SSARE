@@ -1,10 +1,64 @@
+<style>
+    .article {
+        position: relative;
+        overflow: hidden; /* Hide overflow by default */
+        transition: all 0.3s ease-in-out;
+        max-height: 200px; /* Initial max-height */
+        backdrop-filter: blur(20px); /* Big backdrop blur */
+        background-color: rgba(29, 39, 94, 0.8); /* Dark look with transparency */
+    }
+    .article.expanded {
+        max-height: 500px; /* Increased max-height when expanded */
+        overflow-y: auto; /* Enable vertical scrolling */
+    }
+    .preview::before {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 30px;
+        background: linear-gradient(to bottom, transparent, rgba(10, 25, 47, 0.8)); /* Dark gradient */
+        pointer-events: none;
+        display: block;
+    }
+    .article.expanded .preview::before {
+        display: none; /* Hide gradient when expanded */
+    }
+</style>
 {% for article in articles %}
-<div class="article text-white">
-    <div class="headline">{{ article.headline }}</div>
-    <div class="source">{{ article.source }} - <a href="{{ article.url }}" target="_blank">Read More</a></div>
-    <div class="score">Score: {{ article.score }}</div>
-    <div class="preview">
-        {{ article.paragraphs | replace('\n', '<br>') }}
+<div class="article bg-blue-900/50 text-white/80 p-4 rounded-lg shadow-lg" data-full-text="{{ article.paragraphs }}" data-truncated-text="{{ article.paragraphs | truncate(250, true, '...') }}">
+    <div class="headline text-lg font-bold text-fluorescent-green/80 mb-2">{{ article.headline }}</div>
+    <div class="source mb-2">{{ article.source }} - <a href="{{ article.url }}" target="_blank" class="text-fluorescent-green/80 hover:text-fluorescent-green-light/80">Read More</a></div>
+    <div class="score mb-2">Score: {{ article.score }}</div>
+    <div class="preview" style="white-space: pre-line;">
+        {{ article.paragraphs | truncate(200, true, '...') }}
     </div>
+    <button class="show-more mt-2 bg-blue-500/50 hover:bg-blue-700/50 text-white/80 font-bold py-1 px-2 rounded transition duration-300 ease-in-out">Show More</button>
 </div>
 {% endfor %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.body.addEventListener('click', function(event) {
+            if (event.target.classList.contains('show-more')) {
+                const article = event.target.closest('.article');
+                const preview = article.querySelector('.preview');
+                const isExpanded = article.classList.toggle('expanded');
+                
+                if (isExpanded) {
+                    preview.textContent = article.getAttribute('data-full-text');
+                    event.target.textContent = 'Show Less';
+                    preview.classList.add('overflow-y-auto'); // Add vertical scrolling to preview
+                    preview.classList.remove('overflow-hidden'); // Ensure overflow is not hidden
+                } else {
+                    preview.textContent = article.getAttribute('data-truncated-text');
+                    event.target.textContent = 'Show More';
+                    preview.classList.remove('overflow-y-auto'); // Remove vertical scrolling from preview
+                    preview.classList.add('overflow-hidden'); // Reapply hidden overflow
+                }
+
+                console.log('Toggle expand/collapse for:', article);
+            }
+        });
+    });
+</script>

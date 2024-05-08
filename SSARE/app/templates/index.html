@@ -7,37 +7,54 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="/static/output.css">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-
-
-    <!-- Include Htmx library -->
     <script src="https://unpkg.com/htmx.org@1.5.0/dist/htmx.js"></script>
+    <style>
+        .bg-dark-blue {
+            background-color: #0a192f;
+        }
 
+        .text-fluorescent-green {
+            color: #32ff7e;
+        }
+
+        .text-fluorescent-green-light {
+            color: #7effaf;
+        }
+
+        .reflection {
+            position: relative;
+            overflow: hidden;
+        }
+
+        
+    </style>
 </head>
-<body>
-    <div class="flex flex-col items-center justify-center min-h-screen bg-gray-900">
-        <div class="text-white text-xl mb-8" id="status">Click the button to start scraping</div>
-        <div class="text-white mb-8" id="scraping-status" hx-get="/scraping_status" hx-trigger="every 5s" hx-swap="innerHTML">
-          Ready to start scraping.
-        </div>
-        <button class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded mb-8" hx-post="/trigger_scraping_sequence" hx-target="#scraping-status" hx-swap="innerHTML">
-          Trigger Scraping
-        </button>
-      
-        <form class="w-full max-w-sm mb-8" hx-get="/" hx-target="#articles" hx-trigger="submit">
-          <div class="flex items-center border-b border-blue-500 py-2">
-            <input class="appearance-none bg-transparent border-none w-full text-white mr-3 py-1 px-2 leading-tight focus:outline-none" type="text" name="search_query" placeholder="Search articles..." value="{{ search_query }}">
-            <button class="flex-shrink-0 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded" type="submit">
-              Search
+<body class="bg-dark-blue text-white font-poppins">
+    <div class="container mx-auto px-4">
+      <div class="flex flex-col items-center justify-center min-h-screen">
+          <h1 class="text-4xl font-bold text-center py-10">SSARE Vector Retrieval</h1>
+            <div class="text-fluorescent-green text-xl mb-8" id="status">Click the button to start scraping</div>
+            <div class="text-fluorescent-green mb-8" id="scraping-status" hx-get="/scraping_status" hx-trigger="every 5s" hx-swap="innerHTML">
+              Ready to start scraping.
+            </div>
+            <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-8 transition duration-300 ease-in-out transform hover:-translate-y-1" hx-post="/trigger_scraping_sequence" hx-target="#scraping-status" hx-swap="innerHTML">
+              Trigger Scraping
             </button>
-          </div>
-        </form>
-       
-        <div class="w-full max-w-3xl bg-white bg-opacity-10 rounded-lg shadow-lg p-6" id="articles">
-          <!-- The articles will be loaded here -->
-          {% include "partials/articles_list.html" %}
+          
+            <form class="w-full max-w-lg mb-8" hx-get="/" hx-target="#articles" hx-trigger="submit">
+              <div class="flex items-center border-b border-blue-500 py-2">
+                <input class="appearance-none bg-transparent border-none w-full text-fluorescent-green mr-3 py-1 px-2 leading-tight focus:outline-none" type="text" name="search_query" placeholder="Search articles..." value="{{ search_query }}">
+                <button class="flex-shrink-0 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out" type="submit">
+                  Search
+                </button>
+              </div>
+            </form>
+           
+            <div class="grid grid-cols-4 gap-4" id="articles">
+              <!-- The articles will be loaded here -->
+              {% include "partials/articles_list.html" %}
+            </div>
         </div>
-      </div>
-
+    </div>
 </body>
 </html>
-

@@ -303,6 +303,7 @@ async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
         raise HTTPException(status_code=400, detail=str(e))
 
 async def push_articles_to_qdrant_upsert_queue(session):
+    ## Pushing articles that have embeddings and are not yet stored in qdrant to the queue
     try:
         async with session.begin():
             query = select(Article).where(Article.stored_in_qdrant == 0).where(Article.embeddings.isnot(None))
@@ -323,6 +324,8 @@ async def push_articles_to_qdrant_upsert_queue(session):
     
 @app.post("/trigger_qdrant_queue_push")
 async def trigger_push_articles_to_queue(session: AsyncSession = Depends(get_session)):
+    ## This is an endpoint intended to async trigger the push_articles_to_qdrant_upsert_queue function
+    ## So the HTTP request can be just dropped off, checks out and the function will be executed in the background
     try:
         await push_articles_to_qdrant_upsert_queue(session)
         return {"message": "Articles pushed to queue successfully."}

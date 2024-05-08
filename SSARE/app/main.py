@@ -85,7 +85,7 @@ async def read_root(request: Request, search_query: str = "culture and arts"):
     if "HX-Request" in request.headers:
         return templates.TemplateResponse("partials/articles_list.html", {"request": request, "articles": articles})
     else:
-        return templates.TemplateResponse("index.html", {"request": request, "articles": articles, "search_query": search_query})
+        return templates.TemplateResponse("index.html", {"request": request, "search_query": search_query})
 
 import asyncio
 
