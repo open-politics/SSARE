@@ -4,8 +4,6 @@
         overflow: hidden; /* Hide overflow by default */
         transition: all 0.3s ease-in-out;
         max-height: 200px; /* Initial max-height */
-        backdrop-filter: blur(20px); /* Big backdrop blur */
-        background-color: rgba(29, 39, 94, 0.8); /* Dark look with transparency */
     }
     .article.expanded {
         max-height: 500px; /* Increased max-height when expanded */
@@ -18,7 +16,7 @@
         left: 0;
         width: 100%;
         height: 30px;
-        background: linear-gradient(to bottom, transparent, rgba(10, 25, 47, 0.8)); /* Dark gradient */
+        background: linear-gradient(to bottom, transparent, #0a192f);
         pointer-events: none;
         display: block;
     }
@@ -27,14 +25,14 @@
     }
 </style>
 {% for article in articles %}
-<div class="article bg-blue-900/50 text-white/80 p-4 rounded-lg shadow-lg" data-full-text="{{ article.paragraphs }}" data-truncated-text="{{ article.paragraphs | truncate(250, true, '...') }}">
-    <div class="headline text-lg font-bold text-fluorescent-green/80 mb-2">{{ article.headline }}</div>
-    <div class="source mb-2">{{ article.source }} - <a href="{{ article.url }}" target="_blank" class="text-fluorescent-green/80 hover:text-fluorescent-green-light/80">Read More</a></div>
+<div class="article bg-blue-900 text-white p-4 rounded-lg shadow-lg" data-full-text="{{ article.paragraphs }}" data-truncated-text="{{ article.paragraphs | truncate(250, true, '...') }}">
+    <div class="headline text-lg font-bold text-fluorescent-green mb-2">{{ article.headline }}</div>
+    <div class="source mb-2">{{ article.source }} - <a href="{{ article.url }}" target="_blank" class="text-fluorescent-green hover:text-fluorescent-green-light">Read More</a></div>
     <div class="score mb-2">Score: {{ article.score }}</div>
     <div class="preview" style="white-space: pre-line;">
         {{ article.paragraphs | truncate(200, true, '...') }}
     </div>
-    <button class="show-more mt-2 bg-blue-500/50 hover:bg-blue-700/50 text-white/80 font-bold py-1 px-2 rounded transition duration-300 ease-in-out">Show More</button>
+    <button class="show-more mt-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded transition duration-300 ease-in-out">Show More</button>
 </div>
 {% endfor %}
 <script>
