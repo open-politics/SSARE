@@ -8,7 +8,10 @@ from redis.asyncio import Redis
 from flows.orchestration import scraping_flow
 from prefect import get_client
 from fastapi.staticfiles import StaticFiles 
+import logging
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 
@@ -55,7 +58,6 @@ async def healthcheck():
 #- Dashboard
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, search_query: str = "culture and arts"):
-    # Use the internal service URL for qdrant_service you defined in service_urls
     qdrant_service_url = service_urls["qdrant_service"] + '/search'
     
     async with httpx.AsyncClient() as client:
@@ -66,24 +68,24 @@ async def read_root(request: Request, search_query: str = "culture and arts"):
                 "top": 25,
             }
         )
-    
-    # Ensure the response is successful before proceeding to parse the JSON
+
     if response.is_success:
-        articles = response.json()
+        articles = response.json()['data']
+        articles = [{
+            'score': article['score'],
+            'headline': article['headline'],
+            'paragraphs': article['paragraphs'],
+            'url': article['url']
+        } for article in articles]
+        logger.info("Response for search was successful")
     else:
-        articles = []  # Or handle the error as you see fit
-    
-    # Check if the request is from HTMX
+        articles = []     
+        logger.info("Response for search was not successful")
+
     if "HX-Request" in request.headers:
-        # If it is an HTMX request, return only the articles list part
         return templates.TemplateResponse("partials/articles_list.html", {"request": request, "articles": articles})
     else:
-        # For a normal request, return the entire page
         return templates.TemplateResponse("index.html", {"request": request, "articles": articles, "search_query": search_query})
-
-@router.get("/scraping_status")
-async def get_scraping_status():
-    return {"status": status_message}
 
 import asyncio
 

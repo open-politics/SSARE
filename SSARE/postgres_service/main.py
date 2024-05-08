@@ -224,7 +224,7 @@ async def update_qdrant_flags(data: Dict[str, List[str]], session: AsyncSession 
 
     try:
         async with session.begin():
-            query = update(Article).where(Article.url.in_(urls)).values(stored_in_qdrant=1)
+            query = update(Article).where(Article.url.in_(urls)).values(stored_in_qdrant=1).where(Article.embeddings.isnot(None))
             result = await session.execute(query)
             await session.commit()  # Explicit commit might be redundant but ensures transaction closure
             logger.info(f"Qdrant flags updated for URLs: {urls}, Rows affected: {result.rowcount}")
@@ -232,6 +232,7 @@ async def update_qdrant_flags(data: Dict[str, List[str]], session: AsyncSession 
     except Exception as e:
         logger.error(f"Error updating Qdrant flags: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.post("/store_articles_with_embeddings")
 async def store_processed_articles(session: AsyncSession = Depends(get_session)):
@@ -254,9 +255,12 @@ async def store_processed_articles(session: AsyncSession = Depends(get_session))
                         # Update existing article
                         logger.info(f"Updating article with embeddings: {article_data['url']}")
                         for key, value in article_data.items():
+                            if key == 'embeddings':
+                                setattr(existing_article, 'embeddings_created', 1 if value else 0)
                             setattr(existing_article, key, value)
                     else:
                         # Create new article and add to session
+                        article_data['embeddings_created'] = 1 if 'embeddings' in article_data else 0
                         article = Article(**article_data)
                         session.add(article)
 
@@ -272,61 +276,50 @@ async def store_processed_articles(session: AsyncSession = Depends(get_session))
 
 @app.post("/create_embedding_jobs")
 async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
-    """
-    This function is triggered by an API. It reads from the PostgreSQL /articles table where embeddings_created = 0.
-    It writes the articles without embeddings to the Redis queue 'articles_without_embedding_queue'.
-    It doesn't trigger the generate_embeddings function in the NLP service. That is done by the scheduler.
-    """
     logger.info("Trying to create embedding jobs.")
     try:
         async with session.begin():
-            query = select(Article).where(Article.embeddings_created == 0)
+            # Select articles where embeddings are not created yet and embeddings are not None
+            query = select(Article).where(or_(Article.embeddings_created == 0, Article.embeddings.isnot(None)))
             result = await session.execute(query)
             articles_without_embeddings = result.scalars().all()
 
         redis_conn_unprocessed_articles = await Redis(host='redis', port=6379, db=5)
-
-        for article in articles_without_embeddings:
-            article_dict = {
+        articles_list = [
+            json.dumps({
                 'url': article.url,
                 'headline': article.headline,
-                'paragraphs': article.paragraphs,
-                'source': article.source,
-                'embeddings': article.embeddings,
-                'embeddings_created': article.embeddings_created,
-                'stored_in_qdrant': article.stored_in_qdrant
-            }
-            await redis_conn_unprocessed_articles.lpush('articles_without_embedding_queue', json.dumps(article_dict))
+                'paragraphs': article.paragraphs
+            }) for article in articles_without_embeddings
+        ]
 
-        return {"message": "Embedding jobs created."}
+        if articles_list:
+            # Using RPUSH for better practice in Redis (list will maintain the order of insertion)
+            await redis_conn_unprocessed_articles.rpush('articles_without_embedding_queue', *articles_list)
+
+        return {"message": f"Embedding jobs created for {len(articles_list)} articles."}
     except Exception as e:
+        logger.error("Failed to create embedding jobs: ", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 async def push_articles_to_qdrant_upsert_queue(session):
     try:
         async with session.begin():
-            query = select(Article).where(Article.stored_in_qdrant == 0)
+            query = select(Article).where(Article.stored_in_qdrant == 0).where(Article.embeddings.isnot(None))
             result = await session.execute(query)
             articles_to_push = result.scalars().all()
+            logger.info(f"Articles to push: {articles_to_push}")
 
-        redis_conn = await Redis(host='redis', port=6379, db=6)  # Adjust the Redis DB index as needed
-
-        for article in articles_to_push:
-            article_dict = {
-                'url': article.url,
-                'headline': article.headline,
-                'paragraphs': article.paragraphs,
-                'source': article.source,
-                'embeddings': article.embeddings,
-                'embeddings_created': article.embeddings_created,
-                'stored_in_qdrant': article.stored_in_qdrant
-            }
-            await redis_conn.lpush('articles_with_embeddings', json.dumps(article_dict))
-
-        logger.info(f"Pushed {len(articles_to_push)} articles to Redis queue 'articles_with_embeddings'")
+        redis_conn = await Redis(host='redis', port=6379, db=6)
+        articles_list = [json.dumps({'url': article.url, 'embeddings': article.embeddings, 'headline':article.headline, 'paragraphs': article.paragraphs, 'source':article.source}) for article in articles_to_push]
+        logger.info(articles_list)
+        if articles_list:
+            await redis_conn.lpush('articles_with_embeddings', *articles_list)
+            logger.info(f"Pushed {len(articles_list)} articles to Redis queue 'articles_with_embeddings'")
     except Exception as e:
-        logger.error(f"Error pushing articles to Redis queue: {e}")
+        logger.error("Error pushing articles to Redis queue: ", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
     
 @app.post("/trigger_qdrant_queue_push")
 async def trigger_push_articles_to_queue(session: AsyncSession = Depends(get_session)):

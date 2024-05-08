@@ -66,6 +66,11 @@ def scrape_single_source(flag: str):
 
         for article_data in articles:
             try:
+                # Print float values for debugging
+                for key, value in article_data.items():
+                    if isinstance(value, float):
+                        logger.info(f"Float value found: {key}: {value}")
+
                 validated_article = ArticlePydantic(**article_data)
                 article_summary = {k: v[:10] if isinstance(v, str) else v for k, v in validated_article.dict().items()}
                 logger.info(f"Storing article summary: {article_summary}")

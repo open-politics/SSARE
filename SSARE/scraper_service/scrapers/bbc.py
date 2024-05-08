@@ -58,10 +58,13 @@ def run(playwright: Playwright) -> None:
     print(df)
     
     # Create the directory if it doesn't exist
-    os.makedirs('/root/SSARE/SSARE/scraper_service/scrapers/data', exist_ok=True)
-    
-    # Save the DataFrame to a CSV file
-    df.to_csv('/root/SSARE/SSARE/scraper_service/scrapers/data/bbc_articles.csv', index=False)
+    os.makedirs('/app/scrapers/data/dataframes', exist_ok=True)
+
+    file_path = '/app/scrapers/data/dataframes/bbc_articles.csv'
+    if not os.path.exists(file_path):
+        # Create an empty DataFrame if the file doesn't exist
+        empty_df = pd.DataFrame(columns=["url", "headline", "paragraphs", "source"])
+        empty_df.to_csv(file_path, index=False)
 
 with sync_playwright() as playwright:
     run(playwright)
