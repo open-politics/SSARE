@@ -7,5 +7,5 @@ copy_all.py
 copy_mains.py
 node_modules/
 data/postgres/
-data/placeholder/
+data/placeholder/store.sqlite3
 data/prefect_db/
