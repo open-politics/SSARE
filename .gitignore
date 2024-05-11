@@ -8,3 +8,4 @@ copy_mains.py
 node_modules/
 data/postgres/
 data/placeholder/
+data/prefect_db/
