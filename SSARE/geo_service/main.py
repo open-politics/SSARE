@@ -117,7 +117,7 @@ async def geocode_articles(session: AsyncSession = Depends(get_session)):
 def call_pelias_api(location, lang=None, placetype=None):
     try:
         # Construct the API URL with optional language and placetype parameters
-        url = f"http://136.243.80.175:3000/parser/search?text={location}"
+        url = f"http://pelias_placeholder:3000/parser/search?text={location}"
         if lang:
             url += f"&lang={lang}"
 
