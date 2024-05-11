@@ -1,17 +1,39 @@
+from typing import List, Optional, Dict, Any, AsyncGenerator
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
-from typing import List, Dict, Any, AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import update
 import json
 from redis.asyncio import Redis
-from geopy.geocoders import Nominatim
 import logging
+from collections import Counter
+import requests
 
 # Placeholder imports
-from core.utils import load_config  # Make sure this is correctly imported or defined
+from core.utils import load_config  # Ensure this is correctly imported or defined
 # from your_project.models import Article  # This should be your SQLAlchemy model import
+from pydantic import BaseModel
+
+from sqlalchemy.orm import declarative_base
+from sqlalchemy import Column, String, ARRAY, Integer, Float
+from sqlalchemy.dialects.postgresql import JSONB
+
+Base = declarative_base()
+
+class Article(Base):
+    __tablename__ = "articles"
+    url = Column(String, primary_key=True)  # Url & Unique Identifier
+    headline = Column(String)  # Headline
+    paragraphs = Column(String)  # Text
+    source = Column(String)  # 'cnn'
+    embeddings = Column(ARRAY(Float))  # [3223, 2342, ..]
+    entities = Column(JSONB)  # JSONB for storing entities
+    geocodes = Column(ARRAY(JSONB))  # JSON objects for geocodes
+    embeddings_created = Column(Integer, default=0)  # Flag
+    stored_in_qdrant = Column(Integer, default=0)  # Flag
+    entities_extracted = Column(Integer, default=0)  # Flag
+    geocoding_created = Column(Integer, default=0)  # Flag
 
 app = FastAPI()
 
@@ -23,7 +45,8 @@ class ArticleEntity(BaseModel):
 class ArticleData(BaseModel):
     url: str
     headline: str
-    entities: List[ArticleEntity]
+    entities: str  # Changed to str to accommodate JSON string
+    paragraphs: str  # New field
 
 class GeoFeature(BaseModel):
     type: str = "Feature"
@@ -53,58 +76,65 @@ logger = logging.getLogger(__name__)
 # Geocoding endpoint
 @app.post("/geocode_articles")
 async def geocode_articles(session: AsyncSession = Depends(get_session)):
-    geolocator = Nominatim(user_agent="geoapiExercises")
-    geojson = GeoJSON(features=[])
     redis_conn = await Redis(host='redis', port=6379, db=3)
-
-    # Existing code where you retrieve data from Redis
-    queue_contents = await redis_conn.lrange('articles_without_geocoding_queue', 0, -1)
-    queue_contents = [item.decode('utf-8') for item in queue_contents]
-    logger.info(f"Current queue contents: {queue_contents}")
-
-    # Decoding the JSON data pulled from the queue
     article_data_json = await redis_conn.rpop('articles_without_geocoding_queue')
+
     if article_data_json:
-        article_data_json = article_data_json.decode('utf-8')  # Decode the bytes to string
+        article_data_json = article_data_json.decode('utf-8')
         article_data = json.loads(article_data_json)
-        logger.info(article_data_json)
+        entities = json.loads(article_data['entities'])
 
-        if article_data_json and 'entities' in article_data and isinstance(article_data['entities'], list):
-            location_articles = {}
-            for article in article_data:
-                for entity in article['entities']:
-                    if entity['entity_type'] == "GPE":
-                        if entity['text'] not in location_articles:
-                            location_articles[entity['text']] = []
-                        location_articles[entity['text']].append({
-                            'headline': article['headline'],
-                            'url': article['url']
-                        })
+        if 'entities' in article_data and isinstance(entities, list):
+            location_entities = [entity for entity in entities if entity['tag'] == "GPE"]
+            location_counts = Counter(entity['text'] for entity in location_entities)
+            total_locations = len(location_entities)
+            location_weights = {location: count / total_locations for location, count in location_counts.items()}
 
-            for location, articles in location_articles.items():
-                try:
-                    location_geo = geolocator.geocode(location)
-                    if location_geo:
-                        feature = GeoFeature(
-                            properties={"location": location, "articles": articles},
-                            geometry={"type": "Point", "coordinates": [location_geo.longitude, location_geo.latitude]}
-                        )
-                        geojson.features.append(feature)
-                except Exception as e:
-                    raise HTTPException(status_code=500, detail=str(e))
+            geocoded_locations = []
+            for location, weight in location_weights.items():
+                coordinates = call_pelias_api(location)
+                if coordinates:
+                    geocoded_locations.append({
+                        "location": location,
+                        "weight": weight,
+                        "coordinates": coordinates
+                    })
+                    logger.info(f"Geocoded location {location} with coordinates {coordinates}.")
+                else:
+                    logger.error(f"Error geocoding location {location}: No coordinates found.")
 
-            urls = [article['url'] for article in article_data]
             async with session.begin():
-                query = update(Article).where(Article.url.in_(urls)).values(geocoding_created=1)
-                await session.execute(query)
-            return geojson
+                update_query = update(Article).where(Article.url == article_data['url']).values(geocodes=geocoded_locations)
+                await session.execute(update_query)
+                await session.commit()
+
+            return {"geocoded_locations": geocoded_locations}
         else:
             return {"message": "No valid entities available for geocoding."}
     else:
         return {"message": "No articles available for geocoding."}
 
+def call_pelias_api(location):
+    try:
+        response = requests.get(f"http://pelias_placeholder:3000/parser/query?text={location}")
+        if response.status_code == 200:
+            data = response.json()
+            # Check if data is a list and has at least one item
+            if isinstance(data, list) and len(data) > 0:
+                coordinates = data[0].get('geom', {}).get('coordinates')
+                if coordinates:
+                    return coordinates
+                else:
+                    logger.error(f"No coordinates found for location: {location}")
+            else:
+                logger.error(f"Unexpected data format or empty response for location: {location}")
+        else:
+            logger.error(f"API call failed with status code: {response.status_code}")
+    except requests.RequestException as e:
+        logger.error(f"API call exception for location {location}: {str(e)}")
+    return None
+
 # Test endpoint
 @app.get("/test")
 def test_endpoint():
     return {"message": "Test endpoint working!"}
-

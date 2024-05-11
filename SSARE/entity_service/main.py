@@ -50,7 +50,10 @@ async def extract_entities(session: AsyncSession = Depends(get_session)):
 
         if article_data:
             article = json.loads(article_data)
-            text = article['paragraphs']
+            url = article['url']
+            headline = article['headline']
+            paragraphs = article['paragraphs']
+            text = headline + paragraphs
             entities = await predict_ner_tags_async(text)
 
             # Log the type and content of entities

@@ -20,11 +20,16 @@ from sqlalchemy import bindparam
 from sqlalchemy import cast
 from sqlalchemy import or_
 from sqlalchemy.dialects.postgresql import JSONB
+from fastapi import APIRouter, HTTPException
+from sqlalchemy import update
+from sqlalchemy.future import select
 
 class ErrorResponseModel(BaseModel):
     detail: str
 
 config = load_config()['postgresql']
+
+router = APIRouter()
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -358,7 +363,7 @@ async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_sess
     logger.info("Starting to create entity extraction jobs.")
     try:
         async with session.begin():
-            query = select(Article).where(Article.entities_extracted == 0).limit(50)
+            query = select(Article).where(Article.entities_extracted == 0)
             result = await session.execute(query)
             articles_needing_entities = result.scalars().all()
 
@@ -382,37 +387,81 @@ async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_sess
 async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
     """
     This function reads from the PostgreSQL /articles table where geocoding_created = 0
-    and entities_extracted = 1. It adds articles that need geocoding and contain at least one
-    GPE entity to the Redis queue 'articles_without_geocoding_queue'.
+    and entities_extracted = 1. It adds these articles to the Redis queue 'articles_without_geocoding_queue'.
     """
     logger.info("Starting to create geocoding jobs.")
     try:
         async with session.begin():
-            # Ensure the JSON is cast to jsonb for PostgreSQL to understand it
-            jsonb_filter = bindparam('jsonb_filter', value='[{"entity_type":"GPE"}]', type_=JSONB)
+            # Prepare the query to select articles needing geocoding
             query = select(Article).where(
-                Article.embeddings_created == 1,
                 Article.entities_extracted == 1,
-                Article.geocoding_created == 1,
-                Article.entities.op('@>')(jsonb_filter)
+                Article.geocoding_created == 0
             )
-        # Execute the query with the correct jsonb parameter
+            # Execute the query
             result = await session.execute(query)
             articles_needing_geocoding = result.scalars().all()
 
-        # Proceed to push these filtered articles to Redis
+        # Connect to Redis
         redis_conn = await Redis(host='redis', port=6379, db=3)
+        # Push articles to the Redis queue
         for article in articles_needing_geocoding:
-            article_dict = {
+            article_data = json.dumps({
                 'url': article.url,
                 'headline': article.headline,
                 'paragraphs': article.paragraphs,
-                'entities': json.dumps(article.entities, ensure_ascii=False)
-            }
-            await redis_conn.lpush('articles_without_geocoding_queue', json.dumps(article_dict, ensure_ascii=False))
+                'entities': article.entities
+            }, ensure_ascii=False)
+            await redis_conn.lpush('articles_without_geocoding_queue', article_data)
 
-        logger.info(f"Geocoding jobs for {len(articles_needing_geocoding)} articles created, including entities data.")
-        return {"message": "Geocoding jobs created successfully, including entities."}
+        logger.info(f"Pushed {len(articles_needing_geocoding)} articles to geocoding queue.")
+        return {"message": "Geocoding jobs created successfully."}
     except Exception as e:
         logger.error(f"Error creating geocoding jobs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/cleanup_flags")
+async def cleanup_flags(session: AsyncSession = Depends(get_session)):
+    try:
+        async with session.begin():
+            # Fix incorrect flags for embeddings
+            embeddings_fix_query = (
+                update(Article)
+                .where(Article.embeddings_created == 1, Article.embeddings == None)
+                .values(embeddings_created=0)
+            )
+            embeddings_fix_result = await session.execute(embeddings_fix_query)
+            logger.info(f"Fixed embeddings_created flags for {embeddings_fix_result.rowcount} articles.")
+
+            # Fix incorrect flags for stored_in_qdrant
+            qdrant_fix_query = (
+                update(Article)
+                .where(Article.stored_in_qdrant == 1, Article.embeddings == None)
+                .values(stored_in_qdrant=0)
+            )
+            qdrant_fix_result = await session.execute(qdrant_fix_query)
+            logger.info(f"Fixed stored_in_qdrant flags for {qdrant_fix_result.rowcount} articles.")
+
+            # Fix incorrect flags for entities_extracted
+            entities_fix_query = (
+                update(Article)
+                .where(Article.entities_extracted == 1, Article.entities == None)
+                .values(entities_extracted=0)
+            )
+            entities_fix_result = await session.execute(entities_fix_query)
+            logger.info(f"Fixed entities_extracted flags for {entities_fix_result.rowcount} articles.")
+
+            # Fix incorrect flags for geocoding_created
+            geocoding_fix_query = (
+                update(Article)
+                .where(Article.geocoding_created == 1, Article.geocodes == None)
+                .values(geocoding_created=0)
+            )
+            geocoding_fix_result = await session.execute(geocoding_fix_query)
+            logger.info(f"Fixed geocoding_created flags for {geocoding_fix_result.rowcount} articles.")
+
+            await session.commit()
+
+        return {"message": "Flag cleanup completed successfully."}
+    except Exception as e:
+        logger.error(f"Error during flag cleanup: {e}")
         raise HTTPException(status_code=500, detail=str(e))

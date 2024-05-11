@@ -26,7 +26,6 @@ services:
       - prefect_server
       - prefect_agent
 
-
   scraper_service:
     build: 
       context: ./SSARE
@@ -37,7 +36,7 @@ services:
       - app_network
     depends_on:
       - redis
-  
+
   qdrant_service:
     build: 
       context: ./SSARE
@@ -47,7 +46,6 @@ services:
     networks:
       - app_network
 
-      
   qdrant_storage:
     image: qdrant/qdrant:latest
     ports:
@@ -82,7 +80,7 @@ services:
       - app_network
     depends_on:
       - postgres_db
-      
+
   nlp_service:
     build: 
       context: ./SSARE
@@ -102,7 +100,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-      
+
   geo_service:
     build: 
       context: ./SSARE
@@ -115,6 +113,7 @@ services:
     depends_on:
       - redis
       - postgres_service
+      - pelias_placeholder  # Ensure geo_service depends on pelias/placeholder
     environment:
       - PREFECT_API_URL=http://prefect_server:4200/api
     logging:
@@ -143,6 +142,16 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  pelias_placeholder:
+       image: pelias/placeholder
+       container_name: pelias_placeholder
+       command: "./cmd/server.sh"
+       ports:
+         - "3000:3000"
+       volumes:
+         - ./data/placeholder:/data/placeholder  # Adjust this path as necessary
+       networks:
+         - app_network
 
 
   prefect_database:
