@@ -86,6 +86,12 @@ async def healthcheck():
 async def healthcheck():
     return {"message": "OK"}, 200
 
+# recreate collection endpoint
+@app.post("/recreate_collection")
+async def recreate_collection_endpoint():
+    recreated_collection_result = recreate_collection(qdrant_client, collection_name, vectors_config)
+    logger.info(f"Recreating collection: {recreated_collection_result}")
+    return {"message": "Collection recreated."}, 200
 
 # 2. INSERT FUNCTION: is async triggered, pulls jobs from pipeline and creates qdrant point structs
 # Can be highly optimized (wink wink)

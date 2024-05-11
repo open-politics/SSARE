@@ -81,6 +81,7 @@ services:
     depends_on:
       - postgres_db
 
+  # this service creates embeddings, will do heavier workloads in the future
   nlp_service:
     build: 
       context: ./SSARE
@@ -101,6 +102,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # this service is used to get geocodes from location names
   geo_service:
     build: 
       context: ./SSARE
@@ -122,6 +124,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # this service is used to get entities from articles
   entity_service:
     build: 
       context: ./SSARE
@@ -142,6 +145,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # This container can be queried to get geocodes from location names
   pelias_placeholder:
        image: pelias/placeholder
        container_name: pelias_placeholder

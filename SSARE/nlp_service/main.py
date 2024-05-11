@@ -9,6 +9,7 @@ import asyncio
 from prefect import task, flow
 from tenacity import retry, wait_fixed, stop_after_attempt, retry_if_exception_type
 import time
+from prefect_ray import RayTaskRunner
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -57,7 +58,7 @@ def write_articles_to_redis(redis_conn_processed, articles_with_embeddings):
     else:
         logger.info("No articles to write to Redis")
         
-@flow
+@flow(task_runner=RayTaskRunner())
 def generate_embeddings_flow(batch_size: int):
     logger.info("Starting embeddings generation process")
     redis_conn_raw = Redis(host='redis', port=6379, db=5, decode_responses=True)

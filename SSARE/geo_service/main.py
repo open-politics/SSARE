@@ -92,7 +92,7 @@ async def geocode_articles(session: AsyncSession = Depends(get_session)):
 
             geocoded_locations = []
             for location, weight in location_weights.items():
-                coordinates = call_pelias_api(location)
+                coordinates = call_pelias_api(location, lang='en')
                 if coordinates:
                     geocoded_locations.append({
                         "location": location,
@@ -114,20 +114,22 @@ async def geocode_articles(session: AsyncSession = Depends(get_session)):
     else:
         return {"message": "No articles available for geocoding."}
 
-def call_pelias_api(location):
+def call_pelias_api(location, lang=None, placetype=None):
     try:
-        response = requests.get(f"http://pelias_placeholder:3000/parser/query?text={location}")
+        # Construct the API URL with optional language and placetype parameters
+        url = f"http://136.243.80.175:3000/parser/search?text={location}"
+        if lang:
+            url += f"&lang={lang}"
+
+        response = requests.get(url)
         if response.status_code == 200:
             data = response.json()
-            # Check if data is a list and has at least one item
-            if isinstance(data, list) and len(data) > 0:
-                coordinates = data[0].get('geom', {}).get('coordinates')
-                if coordinates:
-                    return coordinates
-                else:
-                    logger.error(f"No coordinates found for location: {location}")
-            else:
-                logger.error(f"Unexpected data format or empty response for location: {location}")
+            item_0 = data[0]
+            geometry = item_0['geom']
+            lat = geometry['lat']
+            lon = geometry['lon']
+            coordinates = [lon, lat]
+            return coordinates
         else:
             logger.error(f"API call failed with status code: {response.status_code}")
     except requests.RequestException as e:

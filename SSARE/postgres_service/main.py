@@ -147,10 +147,7 @@ async def get_articles(
             query = query.filter(Article.entities_extracted == entities_extracted)
         if geocoding_created is not None:
             query = query.filter(Article.geocoding_created == geocoding_created)
-        if has_gpe:
-            query = query.filter(Article.entities.op('@>')(cast('[{"entity_type":"GPE"}]', JSONB)))
         if search_text:
-            # Search in headline or paragraphs
             query = query.filter(
                 or_(
                     Article.headline.ilike(f'%{search_text}%'), 
@@ -161,7 +158,6 @@ async def get_articles(
         query = query.offset(skip).limit(limit)
         result = await session.execute(query)
         articles = result.scalars().all()
-        
         # Convert articles to FullArticleModel
         articles_data = [
             FullArticleModel(
@@ -174,11 +170,10 @@ async def get_articles(
                 stored_in_qdrant=article.stored_in_qdrant,
                 entities=json.loads(article.entities) if article.entities else None,
                 entities_extracted=article.entities_extracted,
-                geocodes=[json.loads(geo) for geo in article.geocodes] if article.geocodes else None,
+                geocodes=article.geocodes if article.geocodes else None,
                 geocoding_created=article.geocoding_created
             ) for article in articles
         ]
-        
         return articles_data
 
 from sqlalchemy import select, insert, update
