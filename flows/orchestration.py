@@ -4,6 +4,8 @@ from prefect.deployments import Deployment
 from prefect_ray.task_runners import RayTaskRunner
 import asyncio
 
+
+## TODO: Update to new ports (and maybe eve dynamically)
 runtime_url = "http://main_core_app:8080"
 
 service_urls = {
