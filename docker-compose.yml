@@ -130,6 +130,7 @@ services:
     networks:
       - app_network
 
+  ## Used for r2r testing, easier with a default pgvector image
   postgres_database:
     image: pgvector/pgvector:pg16
     restart: always
