@@ -18,8 +18,6 @@ This Service runs on port 8081 and is responsible for scraping articles.
 
 """
 
-
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -29,10 +27,6 @@ app = FastAPI()
 class Flag(BaseModel):
     flag: str
     
-
-
-
-
 async def setup_redis_connection():
     # Setup Redis connection
     return await Redis(host='redis', port=6379, db=1, decode_responses=True)
@@ -64,6 +58,7 @@ def get_scraper_config():
 @app.post("/create_scrape_jobs")
 async def create_scrape_jobs():
     """
+    ! Celery is being faded out for Prefect/Ray to orchestrate the scraping process
     This function is triggered by an API call from the orchestration container.
     It reads from Redis Queue 0 - channel "scrape_sources" and creates a scraping job for each flag.
     It passes a flag as a string argument to the scrape_single_source function.

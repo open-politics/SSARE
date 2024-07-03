@@ -117,13 +117,13 @@ async def scraping_flow():
     if not embedding_jobs_result:
         raise ValueError("Failed to create embedding jobs.")
     
-    generate_embeddings_result = await generate_embeddings()
-    if not generate_embeddings_result:
-        raise ValueError("Failed to generate embeddings.")
-    
     store_embeddings_result = await store_articles_with_embeddings()
     if not store_embeddings_result:
         raise ValueError("Failed to store articles with embeddings.")
+        
+    generate_embeddings_result = await generate_embeddings()
+    if not generate_embeddings_result:
+        raise ValueError("Failed to generate embeddings.")
     
     push_to_queue_result = await push_articles_to_qdrant_queue()
     if not push_to_queue_result:

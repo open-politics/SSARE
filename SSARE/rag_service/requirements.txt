@@ -1,0 +1,7 @@
+r2r
+pandas
+sqlmodel
+fastapi
+pgvector
+neo4j
+sqlalchemy

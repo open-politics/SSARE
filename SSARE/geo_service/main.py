@@ -114,10 +114,30 @@ async def geocode_articles(session: AsyncSession = Depends(get_session)):
     else:
         return {"message": "No articles available for geocoding."}
 
+@app.get("/get_country_data")
+def get_country_data(country):
+    url = f"https://en.wikipedia.org/w/api.php"
+    params = {
+        "action": "query",
+        "format": "json",
+        "titles": country,
+        "prop": "extracts",
+        "exintro": True,
+        "explaintext": True
+    }
+    response = requests.get(url, params=params)
+    data = response.json()
+    pages = data['query']['pages']
+    for page_id, page_data in pages.items():
+        if 'extract' in page_data:
+            return page_data['extract']
+    return None
+
+@app.get("/call_pelias_api")
 def call_pelias_api(location, lang=None, placetype=None):
     try:
         # Construct the API URL with optional language and placetype parameters
-        url = f"http://pelias_placeholder:3000/parser/search?text={location}"
+        url = f"http://pelias_placeholder:3999/parser/search?text={location}"
         if lang:
             url += f"&lang={lang}"
 

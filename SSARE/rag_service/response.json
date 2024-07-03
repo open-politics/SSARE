@@ -1,4 +1,34 @@
-,
+{
+    "query": "Whats up with french elections?",
+    "follow_up_questions": null,
+    "answer": null,
+    "images": [
+        "https://image.cnbcfm.com/api/v1/image/104415864-GettyImages-670720862.jpg?v=1529474874",
+        "https://cdn.images.express.co.uk/img/dynamic/78/590x/secondary/French-election-results-4014725.jpg?r=1649692057403",
+        "https://75276bc03af26d7c1f58-72b421883bb5b133f34e068afdd7cb11.ssl.cf3.rackcdn.com/2017/04/french-election-policy-impacts-2-updated.png",
+        "https://afdume.org/wp-content/uploads/2022/03/HOW-DO-FRENCH-PRESIDENTIAL-ELECTIONS-WORK.png",
+        "https://e3.365dm.com/17/02/1600x900/d415b5556711a3db6c26c3c0d572ae1d740296b1e7ef943a8979b7d9fc6ceddf_3886572.jpg?20170207134411"
+    ],
+    "results": [
+        {
+            "url": "https://www.politico.eu/article/emmanuel-macron-civil-war-far-right-national-rally-far-left-france-unbowed-france-elections/",
+            "published date": "Mon, 24 Jun 2024 20:50:00 GMT",
+            "title": "Macron warns of 'civil war' if far left or far right wins - POLITICO Europe",
+            "content": "Our readers read next France deepens military ties with Germany, Poland ahead of risky snap election Dagestani official sacked after sons implicated in Sunday\u2019s deadly attacks Balkan tensions burst onto the pitch at Euro 2024 Don\u2019t be \u2018greedy\u2019 in top jobs brawl, Xavier Bettel warns EU conservatives More from Clea Caulcutt French election: Your guide to a vote that is set to shake the EU and NATO Global strategic and financial consequences hang on the outcome of the June 30 and July 7 ballot \u2014 a complex, two-round process that needs some explanation.  In the past days, the French president\u2019s allies have warned of the risks France faces if voters turn to the far right or the far left, in particular the risk of economic turmoil.  France is \u2018going to the dogs,\u2019 Macron\u2019s inner circle despairs In their hour of greatest need for a liberal successor to the country\u2019s president, France\u2019s centrists are in panicky disarray.  The far right\u2019s answer to insecurity \u201creduces people to their religion or their origin\u201d and therefore \u201cpushes people towards civil war,\u201d he said in an interview Monday with the podcast \u201cGeneration Do It Yourself.\u201d  Recent polls suggest the National Rally would win 35 percent in the first\u00a0round on Sunday, ahead of a left wing alliance, which includes the France Unbowed party on 27 percent and Macron\u2019s centrists on 19 percent. ",
+            "score": 0.8376942873001099,
+            "entities": [
+                {
+                    "text": "Macron",
+                    "tag": "PERSON"
+                },
+                {
+                    "text": "France",
+                    "tag": "GPE"
+                },
+                {
+                    "text": "Germany",
+                    "tag": "GPE"
+                },
                 {
                     "text": "Poland",
                     "tag": "GPE"

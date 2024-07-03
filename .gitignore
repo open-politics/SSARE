@@ -9,3 +9,10 @@ node_modules/
 data/postgres/
 data/placeholder/store.sqlite3
 data/prefect_db/
+.env
+data/
+neo4j_db/
+plugins/
+import/
+all.txt
+mains.txt

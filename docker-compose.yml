@@ -14,7 +14,7 @@ services:
       context: ./SSARE
       dockerfile: ./app/Dockerfile
     ports:
-      - "8080:8080"
+      - "8089:8089"
     volumes:
       - ./flows:/app/flows
     networks:
@@ -24,7 +24,7 @@ services:
       - postgres_service 
       - redis
       - prefect_server
-      - prefect_agent
+
 
   scraper_service:
     build: 
@@ -56,14 +56,15 @@ services:
       - app_network
 
   postgres_db:
-    image: postgres:latest
+    build: 
+      context: ./SSARE
+      dockerfile: ./postgres_db/Dockerfile
     restart: always
     environment:
       POSTGRES_DB: ssare_db
       POSTGRES_USER: hello
       POSTGRES_PASSWORD: world
     volumes:
-      - ./core/sql_commands:/docker-entrypoint-initdb
       - ./data/postgres:/var/lib/postgresql/data
     ports:
       - "5431:5432"
@@ -110,12 +111,15 @@ services:
     restart: always
     ports:
       - "3690:3690"
+    expose:
+      - "3690"
     networks:
       - app_network
+      - default
     depends_on:
       - redis
       - postgres_service
-      - pelias_placeholder  # Ensure geo_service depends on pelias/placeholder
+      - pelias_placeholder
     environment:
       - PREFECT_API_URL=http://prefect_server:4200/api
     logging:
@@ -150,16 +154,60 @@ services:
        image: pelias/placeholder
        container_name: pelias_placeholder
        command: "./cmd/server.sh"
+       environment:
+         - PORT=3999
        ports:
-         - "3000:3000"
+         - "3999:3999"
        volumes:
          - ./data/placeholder:/data/placeholder  # Adjust this path as necessary
        networks:
          - app_network
 
+  rag_service:
+    # image: emrgntcmplxty/r2r:main
+    build: 
+      context: ./SSARE
+      dockerfile: ./rag_service/Dockerfile
+    restart: always
+    ports:
+      - "4312:4312"
+    networks:
+      - app_network
+    depends_on:
+      - redis
+      - postgres_service
+    environment:
+      - PREFECT_API_URL=http://prefect_server:4200/api
+      - POSTGRES_HOST=postgres_database
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DBNAME=prefect
+      - POSTGRES_PORT=5432
+      - POSTGRES_VECS_COLLECTION=ssare_vec
+      - OPENAI_API_KEY
+      - R2R_SERVER_URL=http://r2r_server:4343
+    env_file:
+      - .env
 
-  prefect_database:
-    image: postgres:15.2-alpine
+  r2r_server:
+    image: emrgntcmplxty/r2r:main
+    ports:
+      - "4343:4343"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_HOST=postgres_database
+      - POSTGRES_PORT=5432
+      - POSTGRES_DBNAME=prefect
+      - POSTGRES_VECS_COLLECTION=r2r_vecs
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - postgres_database
+    networks:
+      - app_network
+
+  postgres_database:
+    image: pgvector/pgvector:pg16
     restart: always
     environment:
       - POSTGRES_USER=postgres
@@ -167,9 +215,9 @@ services:
       - POSTGRES_DB=prefect
     volumes:
       - ./data/prefect_db/data:/var/lib/postgresql/data
-      - ./data/prefect_db/init:/docker-entrypoint-initdb.d
     networks:
       - app_network
+
 
   prefect_server:
     image: prefecthq/prefect:2.16-python3.11-conda
@@ -181,12 +229,12 @@ services:
       - PREFECT_UI_URL=http://localhost:4200
       - PREFECT_API_URL=http://localhost:4200
       - PREFECT_SERVER_API_HOST=0.0.0.0
-      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres:postgres@prefect_database:5432/prefect
+      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres:postgres@postgres_database:5432/prefect
       - PREFECT_UI_API_URL=http://localhost:4200/api
     ports:
       - "4200:4200"
     depends_on:
-      - prefect_database
+      - postgres_database
     networks:
       - app_network
 
@@ -212,10 +260,62 @@ services:
       - prefect_server
       - prefect_agent
 
+  neo4j:
+    container_name: neo4j
+    image: neo4j:latest
+    ports:
+      - 7474:7474
+      - 7687:7687
+    environment:
+      - NEO4J_AUTH=neo4j/'king kong'
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_import_file_use__neo4j__config=true
+      - NEO4J_PLUGINS=["apoc", "graph-data-science"]
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=prefect
+    volumes:
+      - ./data/neo4j_db/data:/data
+      - ./data/neo4j_db/logs:/logs
+      - ./data/neo4j_db/import:/var/lib/neo4j/import
+      - ./data/neo4j_db/plugins:/plugins
+    networks:
+      - app_network
+      - default
+    
+  kafka:
+  image: confluentinc/cp-kafka:latest
+  depends_on:
+    - zookeeper
+  ports:
+    - "9092:9092"
+  environment:
+    KAFKA_BROKER_ID: 1
+    KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+    KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  networks:
+    - app_network 
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - app_network
+
 networks:
   app_network:
+    external: true
+  default:
+    external: false
 
 volumes:
   postgres_data:
   prefect:
   prefect_db:
+

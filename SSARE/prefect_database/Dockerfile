@@ -1,0 +1,1 @@
+FROM pgvector/pgvector:pg15

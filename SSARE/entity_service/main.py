@@ -97,3 +97,13 @@ def sync_predict_ner_tags(text: str) -> List[Tuple[str, str]]:
 @app.get("/test")
 def test_endpoint():
     return {"message": "Test endpoint working!"}
+
+@app.get("/fetch_entities")
+async def fetch_entities(text: str):
+    try:
+        entities = await predict_ner_tags_async(text)
+        entities_data = [{"text": entity[0], "tag": entity[1]} for entity in entities]
+        return {"entities": entities_data}
+    except Exception as e:
+        logger.error(f"Error fetching entities: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

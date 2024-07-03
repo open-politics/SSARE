@@ -16,23 +16,22 @@ an open-source service that comfortably orchestrates: \
 **Delivering:**  
     - An up to date Vector Search news retrieval endpoint for RAG/ LLM applications \
     - An up to date news SQL database for lots of other applications \
-    - A ressource to track entities over arbitrary sources with simple sorting scripts (like affiliations, organisations) \
+    - A resource to track entities over arbitrary sources with simple sorting scripts (like affiliations, organisations) \
     - Geojson for article locations or related entities on a map
 
 **Spin up your own news brain!**
 
 - [Introduction](#introduction)
-- [Getting Started](#getting-started)
-- [Install](#install)
-- [EASY! Add any source](#easy-add-any-source)
+- [Installation](#installation)
+- [Adding Sources](#adding-sources)
 - [Architecture and Storage](#architecture-and-storage)
-- [Overview](#overview)
+- [Flow Orchestration with Prefect](#flow-orchestration-with-prefect)
 - [High Level Diagram](#high-level-diagram)
 - [Services](#services)
 - [Usage](#usage)
-- [Use Cases](#Use-Cases)
+- [Use Cases](#use-cases)
     - [Entity Ranking](#entity-ranking)
-    - [GeoJSON](#GepJSON)
+    - [GeoJSON](#geojson)
 - [Future Roadmap](#future-roadmap)
 - [Participation: Script Contributions](#participation-script-contributions)
 - [Important Notes](#important-notes)
@@ -108,8 +107,8 @@ Before we can make use of our own scraping intelligence brain. Let's install it.
    docker-compose up --build
    ```
 2. Trigger the scraping sequence by either:
-   - Calling the API endpoint: `localhost:8080/trigger_scraping_sequence`
-   - Using the UI at: `http://localhost:8080`
+   - Calling the API endpoint: `localhost:8089/trigger_scraping_sequence`
+   - Using the UI at: `http://localhost:8089`
 
 
 ![Simple UI](media/ui_preview_empty.png)
@@ -152,11 +151,43 @@ def scrape_cnn_articles():
     df = pd.DataFrame(articles)
     return df
 
+
 # Usage
 cnn_articles_df = scrape_cnn_articles()
 cnn_articles_df.to_csv('cnn_articles.csv', index=False)
 ```
+## Architecture and Storage
+SSARE's architecture fosters communication through a decoupled microservices design, ensuring scalability and maintainability.Redis stores task queues. The system is composed of the following services:
+-  Scraper Service
+-  Vectorization/NLP Service
+-  Qdrant Service
+-  PostgreSQL Service
+-  Entity Service
+-  Geocoding Service
+-  API Service
 
+Services communicate and signal each other by producing flags and pushings tasks and data to Redis queues.
+
+The scrape jobs are parallelized with Celery (fading out), Prefect (fading in) and async functions where possible. 
+
+Regarding storage, SSARE employs PostgreSQL for data retention and Qdrant as a vector storage.
+
+A simpler and wholistic data contract solution for project-wide usage would be greatly appreciated.
+
+
+## Prefect Orchestration
+You can track and modify the orchestration of the different large-scale flows with prefect. 
+You can for example change the taskrunner in the scraper service from 
+flow(task_runner=SequentialTaskRunner())
+def scrape_data_task(flags):
+    for flag in flags:
+        scrape_single_source.submit(flag)
+        logger.info(f"Scraping data for {flag} complete")
+    logger.info("Scraping complete")
+
+to for example a limited ConcurrentTaskRunner, Keep in mind your hardware capabilities.
+Ray can orchestrate your heavier workflows on a even more distributed level. 
+![prefect flows](prefect_flows.png)
 
 SSARE will execute all scripts in the scrapers folder and process the articles. 
 They are vectorized and stored in a Qdrant vector database.
@@ -306,23 +337,6 @@ If you want to use your own embeddings models, you need to change the dim size i
 Current limitations include the limited number of scrapers, alongside the unavailability of querying the postgres database directly.
 
 
-## Architecture and Storage
-SSARE's architecture fosters communication through a decoupled microservices design, ensuring scalability and maintainability.Redis stores task queues. The system is composed of the following services:
--  Scraper Service
--  Vectorization/NLP Service
--  Qdrant Service
--  PostgreSQL Service
--  Entity Service
--  Geocoding Service
--  API Service
-
-Services communicate and signal each other by producing flags and pushings tasks and data to Redis queues.
-
-The scrape jobs are parallelized with Celery, Prefect and async functions where possible. 
-
-Regarding storage, SSARE employs PostgreSQL for data retention and Qdrant as a vector storage.
-
-A simpler and wholistic data contract solution for project-wide usage would be greatly appreciated.
 
 
 ## Licensing

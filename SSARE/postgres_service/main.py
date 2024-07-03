@@ -24,6 +24,8 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import update
 from sqlalchemy.future import select
 
+# Rewriting using SQLModel with async context manager
+
 class ErrorResponseModel(BaseModel):
     detail: str
 
@@ -60,9 +62,9 @@ class FullArticleModel(BaseModel):
     embeddings: Optional[List[float]]
     embeddings_created: int
     stored_in_qdrant: int
-    entities: Optional[List[Dict[str, Any]]]  # Assuming entities are stored as a list of dictionaries
+    entities: Optional[List[Dict[str, Any]]] 
     entities_extracted: int
-    geocodes: Optional[List[Dict[str, Any]]]  # Assuming geocodes are stored as a list of dictionaries
+    geocodes: Optional[List[Dict[str, Any]]] 
     geocoding_created: int
 
 # Pydantic models for request and response validation
