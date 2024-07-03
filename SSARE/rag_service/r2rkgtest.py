@@ -99,3 +99,4 @@ def process_documents():
 # print("\nExecuting query:\n", structured_query)
 # structured_result = neo4j_kg.structured_query(structured_query)
 # print("Structured Query Results:\n", structured_result)
+

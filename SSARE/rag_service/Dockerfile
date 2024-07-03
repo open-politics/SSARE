@@ -11,19 +11,21 @@ ENV POSTGRES_DBNAME=$POSTGRES_DBNAME
 ENV POSTGRES_VECS_COLLECTION=$POSTGRES_VECS_COLLECTION
 ENV OPENAI_API_KEY=$OPENAI_API_KEY
 
-# Install dependencies
+# Install dependencies & poetry
 RUN apt-get update && apt-get install -y \
     git \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install poetry
 
 # Copy custom File and Locks.
 COPY rag_service /app/rag_service
-COPY pyproject.toml /app/pyproject.toml
-COPY poetry.lock /app/poetry.lock
+COPY rag_service/poetry.lock /app/poetry.lock
+COPY rag_service/pyproject.toml /app/pyproject.toml
+COPY rag_service/requirements.txt /app/requirements.txt
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r /app/requirements.txt
-
+RUN poetry install
 
 # Copy the core directory
 COPY core /app/core
