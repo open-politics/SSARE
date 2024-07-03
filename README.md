@@ -337,7 +337,5 @@ If you want to use your own embeddings models, you need to change the dim size i
 Current limitations include the limited number of scrapers, alongside the unavailability of querying the postgres database directly.
 
 
-
-
 ## Licensing
 SSARE is distributed under the MIT License, with the license document available for reference within the project repository.
