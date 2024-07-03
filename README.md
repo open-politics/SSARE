@@ -187,7 +187,7 @@ def scrape_data_task(flags):
 
 to for example a limited ConcurrentTaskRunner, Keep in mind your hardware capabilities.
 Ray can orchestrate your heavier workflows on a even more distributed level. 
-![prefect flows](prefect_flows.png)
+![prefect flows](media/prefect_flows.png)
 
 SSARE will execute all scripts in the scrapers folder and process the articles. 
 They are vectorized and stored in a Qdrant vector database.
