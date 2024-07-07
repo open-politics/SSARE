@@ -8,6 +8,7 @@ from redis.asyncio import Redis
 from flows.orchestration import scraping_flow
 from prefect import get_client
 from fastapi.staticfiles import StaticFiles 
+from fastapi.responses import JSONResponse
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -37,7 +38,7 @@ redis_channel_mappings = {
     "articles_with_embeddings": {"db": 6, "key": "articles_with_embeddings"},
 }
 
-runtime_url = "http://main_core_app:8080"
+runtime_url = "http://main_core_app:8089"
 
 service_urls = {
     "main_core_app": runtime_url,
@@ -103,6 +104,8 @@ async def check_services():
     for service, url in service_urls.items():
         try:
             response = await httpx.get(url + "/health", timeout=10.0)
+            # if not try healthz
+            
             service_statuses[service] = response.status_code
         except httpx.RequestError as e:
             service_statuses[service] = str(e)
@@ -145,6 +148,20 @@ async def check_channels():
             channel_lengths[channel] = f"Error: {str(e)}"  # Set a default value in case of an error
     return channel_lengths
 
+@app.get("/service_health", response_class=JSONResponse)
+async def service_health():
+    health_status = {}
+    async with httpx.AsyncClient() as client:
+        for service, url in service_urls.items():
+            try:
+                response = await client.get(f"{url}/healthz", timeout=5.0)
+                if response.status_code == 200:
+                    health_status[service] = "green"
+                else:
+                    health_status[service] = "red"
+            except httpx.RequestError:
+                health_status[service] = "red"
+    return health_status
 
 @app.get("/healthcheck")
 def print_health():

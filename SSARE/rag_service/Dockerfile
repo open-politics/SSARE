@@ -18,17 +18,23 @@ RUN apt-get update && apt-get install -y \
     && pip install poetry
 
 # Copy custom File and Locks.
-COPY rag_service /app/rag_service
-COPY rag_service/poetry.lock /app/poetry.lock
-COPY rag_service/pyproject.toml /app/pyproject.toml
-COPY rag_service/requirements.txt /app/requirements.txt
+COPY core ./core
+COPY rag_service/poetry.lock .
+COPY rag_service/pyproject.toml .
+COPY rag_service/requirements.txt .
+COPY rag_service/main.py .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 RUN poetry install
 
-# Copy the core directory
-COPY core /app/core
+# Core Packages
+
+# Clone and install R2R
+RUN git clone https://github.com/SciPhi-AI/R2R.git \
+    && cd R2R \
+    && pip install . \
+    && cd ..
 
 # Run the server
 CMD ["poetry", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "4312"]
