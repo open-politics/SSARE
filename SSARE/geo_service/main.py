@@ -10,8 +10,11 @@ import logging
 from collections import Counter
 import requests
 
-# Placeholder imports
-from core.utils import load_config  # Ensure this is correctly imported or defined
+# Import service_urls from core.service_mapping
+from core.service_mapping import ServiceConfig
+
+config=ServiceConfig()
+
 # from your_project.models import Article  # This should be your SQLAlchemy model import
 from pydantic import BaseModel
 
@@ -58,11 +61,11 @@ class GeoJSON(BaseModel):
     features: List[GeoFeature]
 
 # Database setup
-config = load_config()['postgresql']
 DATABASE_URL = (
-    f"postgresql+asyncpg://{config['postgres_user']}:{config['postgres_password']}@"
-    f"{config['postgres_host']}/{config['postgres_db']}"
+    f"postgresql+asyncpg://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
+    f"@postgres_service:{config.ARTICLES_DB_PORT}/{config.ARTICLES_DB_NAME}"
 )
+
 engine = create_async_engine(DATABASE_URL)
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -136,8 +139,9 @@ def get_country_data(country):
 @app.get("/call_pelias_api")
 def call_pelias_api(location, lang=None, placetype=None):
     try:
-        # Construct the API URL with optional language and placetype parameters
-        url = f"http://pelias_placeholder:3999/parser/search?text={location}"
+        # Use the pelias_placeholder URL from service_urls
+        pelias_url = config.PELIAS_PLACEHOLDER_URL
+        url = f"{pelias_url}/parser/search?text={location}"
         if lang:
             url += f"&lang={lang}"
 

@@ -9,12 +9,12 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import Column, String, Integer, update, cast
 from sqlalchemy.dialects.postgresql import JSONB
 from redis.asyncio import Redis
-from core.utils import load_config
+from core.service_mapping import ServiceConfig
 import json
 import logging
 
 app = FastAPI()
-config = load_config()['postgresql']
+config = ServiceConfig()
 
 # Load the NER model
 ner_tagger = SequenceTagger.load("flair/ner-english-ontonotes-large")
@@ -29,8 +29,8 @@ class Article(Base):
     entities_extracted = Column(Integer, default=0)
 
 DATABASE_URL = (
-    f"postgresql+asyncpg://{config['postgres_user']}:{config['postgres_password']}@"
-    f"{config['postgres_host']}/{config['postgres_db']}"
+    f"postgresql+asyncpg://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
+    f"@postgres_service:{config.ARTICLES_DB_PORT}/{config.ARTICLES_DB_NAME}"
 )
 engine = create_async_engine(DATABASE_URL)
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

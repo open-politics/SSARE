@@ -11,7 +11,6 @@ def call_vector(query):
         print(requests)
         return result
     else:
-        console.print(f"[bold red]Failed to fetch data from the vector search API for query: {query}[/bold red]")
         return []
 
 result = call_vector("politics")

@@ -1,5 +1,4 @@
-# SSARE 🌐📰🔍🧠🗺️🪡📊🤖🗄️🔧 
-Open Source Political Intelligence needs a news brain! 
+   <h1>SSARE 🌐📰🔍🧠🗺️🪡📊🤖🗄️🔧</h1>Open Source Political Intelligence needs a news brain! 
 
 On a mission to find the **#NeedleInTheHayStack**
 
@@ -52,8 +51,7 @@ SSARE serves as an efficient and scalable resource for semantic search and artic
 
 The engine is adaptable to any article/ document, requiring only a sourcing script that outputs the data in the format of a dataframe with the columns: 
 
-**|| url | headline | paragraphs | source ||** <-- This is all your script needs to produce
-
+**|| url | headline | paragraphs | source ||** < - This is all your script needs to produce
 Once integrated, SSARE processes these articles using embeddings models of your choice (upcoming, currently hardcoded), stores their vector representations in a Qdrant vector database, and maintains a full copy in a PostgreSQL database. 
 
 Furthermore all articles' text is undergoing Named Entity Recognition (NER) where entities such as geo-political entities, affiliations, persons or organisation names.

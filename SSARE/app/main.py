@@ -3,21 +3,19 @@ import os
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, APIRouter
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from core.utils import load_config
 from redis.asyncio import Redis
 from flows.orchestration import scraping_flow
 from prefect import get_client
 from fastapi.staticfiles import StaticFiles 
 from fastapi.responses import JSONResponse
 import logging
+from core.service_mapping import ServiceConfig
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-
 # Configuration & Mapping
-config = load_config()["postgresql"]
+
 templates = Jinja2Templates(directory="templates")
 
 # El App
@@ -30,24 +28,8 @@ router = APIRouter()
 app.include_router(router)
 status_message = "Ready to start scraping."
 
-redis_channel_mappings = {
-    "flags": {"db": 0, "key": "scrape_sources"},
-    "raw_articles": {"db": 1, "key": "raw_articles"},
-    "processed_articles": {"db": 2, "key": "processed_articles"},
-    "articles_without_embedding_queue": {"db": 5, "key": "articles_without_embedding_queue"},
-    "articles_with_embeddings": {"db": 6, "key": "articles_with_embeddings"},
-}
+config = ServiceConfig()
 
-runtime_url = "http://main_core_app:8089"
-
-service_urls = {
-    "main_core_app": runtime_url,
-    "postgres_service": "http://postgres_service:5434",
-    "nlp_service": "http://nlp_service:0420",
-    "qdrant_service": "http://qdrant_service:6969",
-    "qdrant_storage": "http://qdrant_storage:6333",
-    "scraper_service": "http://scraper_service:8081",
-}
 
 ### Healthcheck & Monitoring
 
@@ -59,14 +41,12 @@ async def healthcheck():
 #- Dashboard
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, search_query: str = "culture and arts"):
-    qdrant_service_url = service_urls["qdrant_service"] + '/search'
-    
+    qdrant_service_url = config.R2R_DB_PORT + '/search'
     async with httpx.AsyncClient() as client:
         response = await client.get(
             qdrant_service_url,
             params={
                 "query": search_query,
-                "top": 25,
             }
         )
 
@@ -101,7 +81,7 @@ async def trigger_scraping_flow():
 @app.get("/check_services")
 async def check_services():
     service_statuses = {}
-    for service, url in service_urls.items():
+    for service, url in config.SERVICE_URLS.items():
         try:
             response = await httpx.get(url + "/health", timeout=10.0)
             # if not try healthz
@@ -123,7 +103,7 @@ async def trigger_scraping():
 
 @app.post("/store_embeddings_in_qdrant")
 async def store_embeddings_in_qdrant():
-    response = await httpx.post(service_urls["qdrant_service"] + "/store_embeddings")
+    response = await httpx.post(config.SERVICE_URLS["qdrant_service"] + "/store_embeddings")
     if response.status_code == 200:
         return {"message": "Embeddings storage in Qdrant triggered successfully."}
     else:
@@ -140,7 +120,7 @@ async def get_redis_queue_length(redis_db: int, queue_key: str):
 @app.get("/check_channels")
 async def check_channels():
     channel_lengths = {}
-    for channel, db_info in redis_channel_mappings.items():
+    for channel, db_info in config.REDIS_CHANNEL_MAPPINGS.items():
         try:
             queue_length = await get_redis_queue_length(db_info['db'], db_info['key'])
             channel_lengths[channel] = queue_length
@@ -152,7 +132,7 @@ async def check_channels():
 async def service_health():
     health_status = {}
     async with httpx.AsyncClient() as client:
-        for service, url in service_urls.items():
+        for service, url in config.SERVICE_URLS.items():
             try:
                 response = await client.get(f"{url}/healthz", timeout=5.0)
                 if response.status_code == 200:

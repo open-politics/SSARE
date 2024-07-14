@@ -3,10 +3,10 @@ from sentence_transformers import SentenceTransformer
 from core.models import ArticleBase
 import json
 import logging
-from core.utils import load_config
 from redis import Redis
 import asyncio
 from prefect import task, flow
+from core.service_mapping import ServiceConfig
 from tenacity import retry, wait_fixed, stop_after_attempt, retry_if_exception_type
 import time
 from prefect_ray import RayTaskRunner
@@ -14,9 +14,10 @@ from prefect_ray import RayTaskRunner
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-config = load_config()['nlp']
+
 app = FastAPI()
-token = config['HUGGINGFACE_TOKEN']
+config = ServiceConfig()
+token = config.HUGGINGFACE_TOKEN
 model = SentenceTransformer("jinaai/jina-embeddings-v2-base-en", use_auth_token=token)
 
 @app.get("/healthz")

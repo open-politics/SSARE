@@ -1,4 +1,54 @@
+
 services:
+
+  prefect_database:
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      - POSTGRES_USER=${PREFECT_DB_USER}
+      - POSTGRES_PASSWORD=${PREFECT_DB_PASSWORD}
+      - POSTGRES_DB=${PREFECT_DB_NAME}
+    volumes:
+      - ./data/prefect_db/data:/var/lib/postgresql/data
+    ports:
+      - "${PREFECT_DB_PORT}:5432"
+    networks:
+      - app_network
+
+  prefect_server:
+    image: prefecthq/prefect:2.16-python3.11-conda
+    restart: always
+    volumes:
+      - prefect:/root/.prefect
+    entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
+    environment:
+      - PREFECT_UI_URL=http://0.0.0.0:${PREFECT_SERVER_PORT}
+      - PREFECT_API_URL=http://0.0.0.0:${PREFECT_SERVER_PORT}/api
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://${PREFECT_DB_USER}:${PREFECT_DB_PASSWORD}@prefect_database:5432/${PREFECT_DB_NAME}
+    ports:
+      - "${PREFECT_SERVER_PORT}:4200"
+    depends_on:
+      - prefect_database
+    networks:
+      - app_network
+
+  articles_database:
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      - POSTGRES_USER=${ARTICLES_DB_USER}
+      - POSTGRES_PASSWORD=${ARTICLES_DB_PASSWORD}
+      - POSTGRES_DB=${ARTICLES_DB_NAME}
+    volumes:
+      - ./data/articles_db/data:/var/lib/postgresql/data
+    ports:
+      - "${ARTICLES_DB_PORT}:5432"
+    networks:
+      - app_network
+    depends_on:
+      - prefect_server
+
   entity_service:
     build: 
       context: ./SSARE
@@ -11,13 +61,9 @@ services:
     depends_on:
       - redis
       - postgres_service
+      - prefect_server
     environment:
-      - PREFECT_API_URL=http://prefect_server:4200/api
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
 
   geo_service:
     build: 
@@ -35,27 +81,9 @@ services:
       - redis
       - postgres_service
       - pelias_placeholder
+      - prefect_server
     environment:
-      - PREFECT_API_URL=http://prefect_server:4200/api
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  kafka:
-    image: confluentinc/cp-kafka:latest
-    depends_on:
-      - zookeeper
-    ports:
-      - "${KAFKA_PORT}:9092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT}
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:${KAFKA_PORT}
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    networks:
-      - app_network
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
 
   main_core_app:
     build: 
@@ -63,10 +91,11 @@ services:
       dockerfile: ./app/Dockerfile
     ports:
       - "${MAIN_CORE_APP_PORT}:8089"
-    # volumes:
-    #   - ./SSARE/app:/app
     networks:
       - app_network
+    environment:
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+      - R2R_API_URL=http://r2r:${R2R_PORT}
     depends_on:
       - scraper_service
       - postgres_service
@@ -85,9 +114,9 @@ services:
       - NEO4J_apoc_import_file_enabled=true
       - NEO4J_apoc_import_file_use__neo4j__config=true
       - NEO4J_PLUGINS=["apoc", "graph-data-science"]
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=prefect
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - ./data/neo4j_db/data:/data
       - ./data/neo4j_db/logs:/logs
@@ -96,6 +125,8 @@ services:
     networks:
       - app_network
       - default
+    depends_on:
+      - prefect_server
 
   nlp_service:
     build: 
@@ -109,55 +140,50 @@ services:
     depends_on:
       - redis
       - postgres_service
+      - prefect_server
     environment:
-      - PREFECT_API_URL=http://prefect_server:4200/api
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
 
   pelias_placeholder:
     image: pelias/placeholder
     container_name: pelias_placeholder
-    command: "./cmd/server.sh"
+    command: >
+      bash -c "
+        if [ ! -f /data/placeholder/store.sqlite3 ]; then
+          echo 'Placeholder data not found. Downloading...'
+          mkdir -p /data/placeholder
+          curl -L https://github.com/pelias/placeholder/releases/download/v1.0.0/placeholder.sqlite3 -o /data/placeholder/store.sqlite3
+        else
+          echo 'Placeholder data found.'
+        fi
+        && ./cmd/server.sh
+      "
     environment:
-      - PORT=3999
+      - PORT=${PELIAS_PLACEHOLDER_PORT}
     ports:
-      - "${PELIAS_PLACEHOLDER_PORT}:3999"
+      - "${PELIAS_PLACEHOLDER_PORT}:${PELIAS_PLACEHOLDER_PORT}"
     volumes:
-      - ./data/placeholder:/data/placeholder  # Adjust this path as necessary
+      - ./data/placeholder:/data/placeholder
     networks:
       - app_network
+    depends_on:
+      - prefect_server
 
-  # For temporary r2r testing
-  postgres_database:
+  r2r_database:
     image: pgvector/pgvector:pg16
     restart: always
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=prefect
+      - POSTGRES_USER=${R2R_DB_USER}
+      - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
+      - POSTGRES_DB=${R2R_DB_NAME}
     volumes:
-      - ./data/prefect_db/data:/var/lib/postgresql/data
+      - ./data/r2r_db/data:/var/lib/postgresql/data
+    ports:
+      - "${R2R_DB_PORT}:5432"
     networks:
       - app_network
-    ports:
-      - "${POSTGRES_DATABASE_PORT}:5432"
-
-  postgres_db:
-    image: postgres:12-alpine
-    restart: always
-    environment:
-      POSTGRES_DB: ssare_db
-      POSTGRES_USER: hello
-      POSTGRES_PASSWORD: world
-    volumes:
-      - ./data/postgres:/var/lib/postgresql/data
-    ports:
-      - "${POSTGRES_DB_PORT}:5432"
-    networks:
-      - app_network
+    depends_on:
+      - prefect_server
 
   postgres_service:
     build: 
@@ -168,7 +194,8 @@ services:
     networks:
       - app_network
     depends_on:
-      - postgres_db
+      - articles_database
+      - prefect_server
 
   prefect_agent:
     image: prefecthq/prefect:2.16-python3.11-conda
@@ -180,69 +207,35 @@ services:
       - app_network
     depends_on:
       - prefect_server
-      - scraper_service
 
   prefect_cli:
     image: prefecthq/prefect:2.16-python3.11-conda
     environment:
-      - PREFECT_API_URL=http://prefect_server:4200/api
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
     networks:
       - app_network
     depends_on:
       - prefect_server
       - prefect_agent
 
-  prefect_server:
-    image: prefecthq/prefect:2.16-python3.11-conda
-    restart: always
-    volumes:
-      - prefect:/root/.prefect
-    entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
-    environment:
-      - PREFECT_UI_URL=http://localhost:4200
-      - PREFECT_API_URL=http://localhost:4200
-      - PREFECT_SERVER_API_HOST=0.0.0.0
-      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres:postgres@postgres_database:5432/prefect
-      - PREFECT_UI_API_URL=http://localhost:4200/api
-    ports:
-      - "${PREFECT_SERVER_PORT}:4200"
-    depends_on:
-      - postgres_database
-    networks:
-      - app_network
-
-  qdrant_service:
+  r2r:
     build: 
       context: ./SSARE
-      dockerfile: ./qdrant_service/Dockerfile
+      dockerfile: ./r2r_server/Dockerfile
     ports:
-      - "${QDRANT_SERVICE_PORT}:6969"
-    networks:
-      - app_network
-
-  qdrant_storage:
-    image: qdrant/qdrant:latest
-    ports:
-      - "${QDRANT_STORAGE_PORT}:6333"
-    volumes:
-      - ./qdrant_service/qdrant_storage:/qdrant/data
-    networks:
-      - app_network
-
-  r2r_server:
-    image: emrgntcmplxty/r2r:main
-    ports:
-      - "${R2R_SERVER_PORT}:4343"
+      - "${R2R_PORT}:8000"
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_HOST=postgres_database
+      - POSTGRES_USER=${R2R_DB_USER}
+      - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
+      - POSTGRES_HOST=r2r_database
       - POSTGRES_PORT=5432
-      - POSTGRES_DBNAME=prefect
-      - POSTGRES_VECS_COLLECTION=r2r_vecs
+      - POSTGRES_DBNAME=${R2R_DB_NAME}
+      - POSTGRES_VECS_COLLECTION=r2r_vecs_2
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CONFIG_OPTION=${CONFIG_OPTION:-default}
     depends_on:
-      - postgres_database
+      - r2r_database
+      - prefect_server
     networks:
       - app_network
 
@@ -257,17 +250,19 @@ services:
       - app_network
     depends_on:
       - redis
-      - postgres_service
+      - r2r_database
+      - prefect_server
     environment:
-      - PREFECT_API_URL=http://prefect_server:4200/api
-      - POSTGRES_HOST=postgres_database
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DBNAME=prefect
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+      - POSTGRES_HOST=r2r_database
+      - POSTGRES_USER=${R2R_DB_USER}
+      - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
+      - POSTGRES_DBNAME=${R2R_DB_NAME}
       - POSTGRES_PORT=5432
       - POSTGRES_VECS_COLLECTION=ssare_vec
-      - OPENAI_API_KEY
-      - R2R_SERVER_URL=http://r2r_server:4343
+      - INIT_DB=true
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - R2R_SERVER_URL=http://r2r:${R2R_PORT}
     env_file:
       - .env
 
@@ -280,6 +275,8 @@ services:
       - "${REDIS_PORT}:6379"
     networks:
       - app_network
+    depends_on:
+      - prefect_server
 
   scraper_service:
     build: 
@@ -287,20 +284,13 @@ services:
       dockerfile: ./scraper_service/Dockerfile
     ports:
       - "${SCRAPER_SERVICE_PORT}:8081"
+    environment:
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
     networks:
       - app_network
     depends_on:
       - redis
-
-  zookeeper:
-    image: confluentinc/cp-zookeeper:latest
-    environment:
-      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT}
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "${ZOOKEEPER_PORT}:2181"
-    networks:
-      - app_network
+      - prefect_server
 
 networks:
   app_network:

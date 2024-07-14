@@ -1,10 +1,11 @@
-from typing import List
+from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel, select
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Query, Body
-from core.utils import load_config 
+from core.service_mapping import ServiceConfig
 from core.models import ArticleBase, ArticlePydantic
 import tempfile
+import io
 import os
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -12,6 +13,7 @@ import httpx
 import json
 import logging
 from fastapi.responses import StreamingResponse
+from typing import List, Optional, Union
 
 app = FastAPI()
 
@@ -20,11 +22,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Load configuration
-config = load_config()['postgresql']
+config = ServiceConfig()
 
-# Database setup
-DATABASE_URL = f"postgresql+asyncpg://{config['postgres_user']}:{config['postgres_password']}@{config['postgres_host']}/{config['postgres_db']}"
+# Database setup for main PostgreSQL
+DATABASE_URL = (
+    f"postgresql+asyncpg://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
+    f"@postgres_service:{config.ARTICLES_DB_PORT}/{config.ARTICLES_DB_NAME}"
+)
 engine = create_async_engine(DATABASE_URL)
+
+# Database setup for pgvector (R2R vector storage)
+PGVECTOR_URL = (
+    f"postgresql+asyncpg://{config.R2R_DB_USER}:{config.R2R_DB_PASSWORD}"
+    f"@r2r_db:{config.R2R_DB_PORT}/{config.R2R_DB_NAME}"
+)
+pgvector_engine = create_async_engine(PGVECTOR_URL)
+
 if os.getenv("INITDB") == "True":
     logger.info("Initializing database")
     SQLModel.metadata.create_all(engine)
@@ -65,56 +78,51 @@ class R2RIngestDocumentsRequest(BaseModel):
 @app.post("/ingest_documents")
 async def ingest_documents(background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     logger.info("Starting document ingestion")
-    # Fetch articles from PostgreSQL
-    articles = await get_articles(limit=100, db=db)  # Adjust the limit as needed
+    articles = await get_articles(limit=100, db=db)
 
-    # Create a temporary directory to store files
-    with tempfile.TemporaryDirectory() as temp_dir:
-        files = []
-        metadatas = []
+    async def send_to_r2r():
+        async with httpx.AsyncClient() as client:
+            try:
+                files = []
+                metadatas = []
 
-        for i, article in enumerate(articles):
-            # Create a temporary file for each article
-            file_path = os.path.join(temp_dir, f"article_{i}.txt")
-            with open(file_path, "w") as f:
-                f.write("\n".join(article.paragraphs))
-            files.append(("files", (f"article_{i}.txt", open(file_path, "rb"), "text/plain")))
+                for i, article in enumerate(articles):
+                    content = io.StringIO(article.paragraphs)
+                    files.append(("files", (f"article_{i}.txt", content, "text/plain")))
 
-            # Prepare metadata for each article
-            metadata = {
-                "title": article.headline,
-                "url": article.url,
-                "published_by": str(article.source),
-                "entities": article.entities
-            }
-            metadatas.append(metadata)
+                    metadata = {
+                        "title": article.headline,
+                        "url": article.url,
+                        "published_by": str(article.source),
+                        "entities": json.loads(article.entities) if article.entities else [],
+                        "geocodes": article.geocodes if article.geocodes else []
+                    }
+                    metadatas.append(metadata)
 
-        # Function to send request to R2R service
-        async def send_to_r2r():
-            async with httpx.AsyncClient() as client:
-                try:
-                    response = await client.post(
-                        "http://r2r:8000/v1/ingest_files",
-                        files=files,
-                        data={"metadatas": json.dumps(metadatas)},
-                        timeout=30.0  # Adjust timeout as needed
-                    )
-                    response.raise_for_status()
-                    logger.info(f"Successfully ingested {len(articles)} documents to R2R")
-                except httpx.HTTPStatusError as e:
-                    logger.error(f"HTTP error occurred during ingestion: {e}")
-                except httpx.RequestError as e:
-                    logger.error(f"An error occurred while requesting ingestion: {e}")
+                response = await client.post(
+                    "http://r2r:8000/v1/ingest_files",
+                    files=files,
+                    data={"metadatas": json.dumps(metadatas)},
+                    timeout=30.0
+                )
+                response.raise_for_status()
+                logger.info(f"Successfully ingested {len(articles)} documents to R2R")
+            except httpx.HTTPStatusError as e:
+                logger.error(f"HTTP error occurred during ingestion: {e}")
+            except httpx.RequestError as e:
+                logger.error(f"An error occurred while requesting ingestion: {e}")
+            finally:
+                for _, (_, content, _) in files:
+                    content.close()
 
-        # Add the task to send files to R2R in the background
-        background_tasks.add_task(send_to_r2r)
+    background_tasks.add_task(send_to_r2r)
 
     return {"message": f"Ingestion of {len(articles)} documents has been started"}
 
 class SearchResponse(BaseModel):
     results: dict
 
-@app.get("/search", response_model=SearchResponse)
+@app.post("/search", response_model=SearchResponse)
 async def search(
     query: str = Query(..., description="The search query"),
     do_hybrid_search: bool = Query(False, description="Whether to perform hybrid search")
@@ -128,7 +136,7 @@ async def search(
                     "query": query,
                     "do_hybrid_search": do_hybrid_search
                 },
-                timeout=30.0  # Adjust timeout as needed
+                timeout=30.0
             )
             response.raise_for_status()
             return SearchResponse(results=response.json())
@@ -173,7 +181,7 @@ async def rag(
                         "do_hybrid_search": do_hybrid_search,
                         "stream": False
                     },
-                    timeout=30.0  # Adjust timeout as needed
+                    timeout=30.0
                 )
                 response.raise_for_status()
                 return SearchResponse(results=response.json())
@@ -183,3 +191,68 @@ async def rag(
             except httpx.RequestError as e:
                 logger.error(f"Error communicating with R2R service during RAG: {e}")
                 raise HTTPException(status_code=500, detail=f"Error communicating with R2R service: {str(e)}")
+
+class DocumentsOverviewRequest(BaseModel):
+    document_ids: Optional[List[str]] = None
+    user_ids: Optional[List[str]] = None
+
+@app.get("/documents_overview")
+async def get_documents_overview(request: DocumentsOverviewRequest = Depends()):
+    logger.info(f"Fetching documents overview for document_ids: {request.document_ids}, user_ids: {request.user_ids}")
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(
+                "http://r2r:8000/v1/documents_overview",
+                params=request.dict(exclude_none=True),
+                timeout=30.0
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error occurred while fetching documents overview: {e}")
+            raise HTTPException(status_code=e.response.status_code, detail=str(e))
+        except httpx.RequestError as e:
+            logger.error(f"Error communicating with R2R service while fetching documents overview: {e}")
+            raise HTTPException(status_code=500, detail=f"Error communicating with R2R service: {str(e)}")
+
+class DeleteRequest(BaseModel):
+    document_ids: Optional[List[str]] = None
+    user_ids: Optional[List[str]] = None
+    delete_all: bool = False
+
+@app.delete("/delete")
+async def delete_documents(delete_request: DeleteRequest):
+    async with httpx.AsyncClient() as client:
+        try:
+            if delete_request.delete_all:
+                logger.info("Fetching all document IDs for deletion")
+                overview_response = await client.get(
+                    "http://r2r:8000/v1/documents_overview",
+                    timeout=30.0
+                )
+                overview_response.raise_for_status()
+                all_docs = overview_response.json()
+                document_ids = [doc['id'] for doc in all_docs['results']]
+                logger.info(f"Deleting all {len(document_ids)} documents")
+            else:
+                document_ids = delete_request.document_ids
+                logger.info(f"Deleting documents with document_ids: {document_ids}, user_ids: {delete_request.user_ids}")
+
+            delete_payload = {
+                "document_ids": document_ids,
+                "user_ids": delete_request.user_ids
+            }
+            delete_response = await client.delete(
+                "http://r2r:8000/v1/delete",
+                json={k: v for k, v in delete_payload.items() if v is not None},
+                timeout=30.0
+            )
+            delete_response.raise_for_status()
+            return delete_response.json()
+
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error occurred during document deletion process: {e}")
+            raise HTTPException(status_code=e.response.status_code, detail=str(e))
+        except httpx.RequestError as e:
+            logger.error(f"Error communicating with R2R service during document deletion process: {e}")
+            raise HTTPException(status_code=500, detail=f"Error communicating with R2R service: {str(e)}")
