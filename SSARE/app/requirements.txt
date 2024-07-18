@@ -7,3 +7,5 @@ jinja2
 prefect
 prefect-ray
 asyncio
+pgvector
+sqlmodel

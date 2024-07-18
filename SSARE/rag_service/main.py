@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel, select
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Query, Body
 from core.service_mapping import ServiceConfig
-from core.models import ArticleBase, ArticlePydantic
+from core.models import Article
 import tempfile
 import io
 import os
@@ -52,17 +52,17 @@ async def healthcheck():
     logger.info("Health check requested")
     return {"message": "RAG Service Running"}, 200
 
-@app.get("/articles/", response_model=List[ArticlePydantic])
+@app.get("/articles/", response_model=List[Article])
 async def read_articles(skip: int = 0, limit: int = 10, db: AsyncSession = Depends(get_db)):
     logger.info(f"Fetching articles with skip={skip} and limit={limit}")
-    statement = select(ArticleBase).offset(skip).limit(limit)
+    statement = select(Article).offset(skip).limit(limit)
     result = await db.execute(statement)
     db_articles = result.scalars().all()
     return db_articles
 
 async def get_articles(skip: int = 0, limit: int = 10, db: AsyncSession = Depends(get_db)):
     logger.info(f"Getting articles with skip={skip} and limit={limit}")
-    statement = select(ArticleBase).offset(skip).limit(limit)
+    statement = select(Article).offset(skip).limit(limit)
     result = await db.execute(statement)
     db_articles = result.scalars().all()
     return db_articles

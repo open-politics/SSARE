@@ -7,4 +7,5 @@ redis
 asyncpg
 psycopg2-binary
 requests
-
+pgvector
+sqlmodel

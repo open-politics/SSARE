@@ -11,3 +11,4 @@ prefect
 prefect-ray
 tenacity
 sqlmodel
+pgvector

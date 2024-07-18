@@ -15,6 +15,7 @@ class ServiceConfig:
     PREFECT_SERVER_PORT = os.getenv('PREFECT_SERVER_PORT', '4200')
     PELIAS_PLACEHOLDER_PORT = os.getenv('PELIAS_PLACEHOLDER_PORT', '3999')
     R2R_PORT = os.getenv('R2R_PORT', '8000')
+    R2R_SERVICE_PORT = os.getenv('R2R_SERVICE_PORT', '4312')
     NEO4J_HTTP_PORT = os.getenv('NEO4J_HTTP_PORT', '7474')
     NEO4J_BOLT_PORT = os.getenv('NEO4J_BOLT_PORT', '7687')
 
@@ -34,26 +35,24 @@ class ServiceConfig:
     ARTICLES_DB_NAME = os.getenv('ARTICLES_DB_NAME', 'articles_db')
     ARTICLES_DB_PORT = os.getenv('ARTICLES_DB_PORT', '5434')
 
-    # Base URL for services
-    BASE_URL = os.getenv('BASE_URL', 'http://localhost')
-
     # Service URLs
     service_urls = {
-        "main_core_app": f"{BASE_URL}:{MAIN_CORE_APP_PORT}",
-        "postgres_service": f"{BASE_URL}:{POSTGRES_SERVICE_PORT}",
-        "nlp_service": f"{BASE_URL}:{NLP_SERVICE_PORT}",
-        "qdrant_service": f"{BASE_URL}:{QDRANT_SERVICE_PORT}",
-        "qdrant_storage": f"{BASE_URL}:{QDRANT_STORAGE_PORT}",
-        "scraper_service": f"{BASE_URL}:{SCRAPER_SERVICE_PORT}",
-        "rag_service": f"{BASE_URL}:{RAG_SERVICE_PORT}",
-        "entity_service": f"{BASE_URL}:{ENTITY_SERVICE_PORT}",
-        "geo_service": f"{BASE_URL}:{GEO_SERVICE_PORT}",
-        "redis": f"{BASE_URL}:{REDIS_PORT}",
-        "prefect_server": f"{BASE_URL}:{PREFECT_SERVER_PORT}",
-        "pelias_placeholder": f"{BASE_URL}:{PELIAS_PLACEHOLDER_PORT}",
-        "r2r": f"{BASE_URL}:{R2R_PORT}",
-        "neo4j_http": f"{BASE_URL}:{NEO4J_HTTP_PORT}",
-        "neo4j_bolt": f"{BASE_URL}:{NEO4J_BOLT_PORT}",
+        "main_core_app": f"{main_core_app}:{MAIN_CORE_APP_PORT}",
+        "postgres_service": f"{postgres_service}:{POSTGRES_SERVICE_PORT}",
+        "nlp_service": f"{nlp_service}:{NLP_SERVICE_PORT}",
+        "qdrant_service": f"{qdrant_service}:{QDRANT_SERVICE_PORT}",
+        "qdrant_storage": f"{qdrant_storage}:{QDRANT_STORAGE_PORT}",
+        "scraper_service": f"{scraper_service}:{SCRAPER_SERVICE_PORT}",
+        "rag_service": f"{rag_service}:{RAG_SERVICE_PORT}",
+        "entity_service": f"{entity_service}:{ENTITY_SERVICE_PORT}",
+        "geo_service": f"{geo_service}:{GEO_SERVICE_PORT}",
+        "redis": f"{redis}:{REDIS_PORT}",
+        "prefect_server": f"{prefect_server}:{PREFECT_SERVER_PORT}",
+        "pelias_placeholder": f"{pelias_placeholder}:{PELIAS_PLACEHOLDER_PORT}",
+        "r2r": f"{r2r}:{R2R_PORT}",
+        "r2r_service": f"{r2r_service}:{R2R_SERVICE_PORT}",
+        "neo4j_http": f"{neo4j_http}:{NEO4J_HTTP_PORT}",
+        "neo4j_bolt": f"{neo4j_bolt}:{NEO4J_BOLT_PORT}",
     }
 
     # Other configurations

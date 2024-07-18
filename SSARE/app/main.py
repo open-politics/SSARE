@@ -15,14 +15,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration & Mapping
-
 templates = Jinja2Templates(directory="templates")
 
 # El App
 app = FastAPI()
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")  # new line
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 router = APIRouter()
 app.include_router(router)
@@ -30,23 +29,22 @@ status_message = "Ready to start scraping."
 
 config = ServiceConfig()
 
-
 ### Healthcheck & Monitoring
 
 @app.get("/healthz")
 async def healthcheck():
-    return {"message": "OK"}, 200
+    return {"message": "OK"}
 
 ## Monitoring
 #- Dashboard
 @app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request, search_query: str = "culture and arts"):
-    qdrant_service_url = config.R2R_DB_PORT + '/search'
+async def read_root(request: Request, query: str = "culture and arts"):
+    r2r_service_url = f"{config.service_urls['r2r']}/search"
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            qdrant_service_url,
+            r2r_service_url,
             params={
-                "query": search_query,
+                "query": query,
             }
         )
 
@@ -66,9 +64,7 @@ async def read_root(request: Request, search_query: str = "culture and arts"):
     if "HX-Request" in request.headers:
         return templates.TemplateResponse("partials/articles_list.html", {"request": request, "articles": articles})
     else:
-        return templates.TemplateResponse("index.html", {"request": request, "search_query": search_query})
-
-import asyncio
+        return templates.TemplateResponse("index.html", {"request": request, "search_query": query})
 
 @app.post("/trigger_scraping_sequence")
 async def trigger_scraping_flow():
@@ -83,15 +79,11 @@ async def check_services():
     service_statuses = {}
     for service, url in config.SERVICE_URLS.items():
         try:
-            response = await httpx.get(url + "/health", timeout=10.0)
-            # if not try healthz
-            
+            response = await httpx.get(f"{url}/healthz", timeout=10.0)
             service_statuses[service] = response.status_code
         except httpx.RequestError as e:
             service_statuses[service] = str(e)
     return service_statuses
-
-import subprocess
 
 @app.post("/trigger_scraping")
 async def trigger_scraping():
@@ -103,7 +95,7 @@ async def trigger_scraping():
 
 @app.post("/store_embeddings_in_qdrant")
 async def store_embeddings_in_qdrant():
-    response = await httpx.post(config.SERVICE_URLS["qdrant_service"] + "/store_embeddings")
+    response = await httpx.post(f"{config.SERVICE_URLS['qdrant_service']}/store_embeddings")
     if response.status_code == 200:
         return {"message": "Embeddings storage in Qdrant triggered successfully."}
     else:
@@ -111,9 +103,9 @@ async def store_embeddings_in_qdrant():
 
 async def get_redis_queue_length(redis_db: int, queue_key: str):
     try:
-        redis_conn = Redis(host='redis', port=6379, db=redis_db)
+        redis_conn = Redis(host=os.getenv('REDIS_HOST', 'redis'), port=int(os.getenv('REDIS_PORT', 6379)), db=redis_db)
         queue_length = await redis_conn.llen(queue_key)
-        return queue_length  # Add this line to return the queue length
+        return queue_length
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Redis error: {str(e)}")
     
@@ -125,7 +117,7 @@ async def check_channels():
             queue_length = await get_redis_queue_length(db_info['db'], db_info['key'])
             channel_lengths[channel] = queue_length
         except HTTPException as e:
-            channel_lengths[channel] = f"Error: {str(e)}"  # Set a default value in case of an error
+            channel_lengths[channel] = f"Error: {str(e)}"
     return channel_lengths
 
 @app.get("/service_health", response_class=JSONResponse)
@@ -142,7 +134,3 @@ async def service_health():
             except httpx.RequestError:
                 health_status[service] = "red"
     return health_status
-
-@app.get("/healthcheck")
-def print_health():
-    return {"message": "OK"}, 200

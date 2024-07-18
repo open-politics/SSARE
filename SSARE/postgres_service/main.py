@@ -4,59 +4,31 @@ import logging
 from typing import List, Optional, Dict, Any, AsyncGenerator
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Query, Body
 from sqlmodel import SQLModel, Field, create_engine, Session, select, update
+from sqlmodel import Column, JSON
+from sqlalchemy import text
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from pydantic import BaseModel, ValidationError
 from contextlib import asynccontextmanager
 from redis.asyncio import Redis
 from fastapi.responses import StreamingResponse
 from core.service_mapping import config
+from core.models import Article
+from sqlmodel import Session
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# SQLModel Base and Models
-class Article(SQLModel, table=True):
-    __tablename__ = "articles"
-    url: str = Field(primary_key=True)
-    headline: str
-    paragraphs: str
-    source: Optional[str]
-    embeddings: Optional[List[float]]
-    entities: Optional[Dict[str, Any]]
-    geocodes: Optional[List[Dict[str, Any]]]
-    embeddings_created: int = 0
-    stored_in_qdrant: int = 0
-    entities_extracted: int = 0
-    geocoding_created: int = 0
-
-class FullArticleModel(BaseModel):
-    url: str
-    headline: str
-    paragraphs: str
-    source: Optional[str]
-    embeddings: Optional[List[float]]
-    embeddings_created: int
-    stored_in_qdrant: int
-    entities: Optional[List[Dict[str, Any]]]
-    entities_extracted: int
-    geocodes: Optional[List[Dict[str, Any]]]
-    geocoding_created: int
-
-class ArticleModel(BaseModel):
-    url: str
-    headline: str
-    paragraphs: str
-    source: Optional[str]
-    embeddings: Optional[List[float]]
-    embeddings_created: int = 0
-    stored_in_qdrant: int = 0
 
 DATABASE_URL = (
     f"postgresql+asyncpg://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
-    f"@postgres:{config.ARTICLES_DB_PORT}/{config.ARTICLES_DB_NAME}"
+    f"@articles_database:5432/{config.ARTICLES_DB_NAME}"
 )
-engine = create_async_engine(DATABASE_URL, echo=False)
+# log the url
+logger.info(f"DATABASE_URL: {DATABASE_URL}")
+
+engine = create_async_engine(DATABASE_URL, echo=True)
 session_local = AsyncSession(engine, expire_on_commit=False)
 
 # Redis connection
@@ -70,6 +42,10 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
+        # Enable pgvector extension
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        
+        # Create tables
         await conn.run_sync(SQLModel.metadata.create_all)
     yield
 
@@ -87,7 +63,7 @@ async def produce_flags():
         await redis_conn_flags.lpush("scrape_sources", flag)
     return {"message": f"Flags produced: {', '.join(flags)}"}
 
-@app.get("/articles", response_model=List[FullArticleModel])
+@app.get("/articles", response_model=List[Article])
 async def get_articles(
     url: Optional[str] = None,
     embeddings_created: Optional[int] = None,
@@ -124,7 +100,7 @@ async def get_articles(
         result = await session.execute(query)
         articles = result.scalars().all()
         articles_data = [
-            FullArticleModel(
+            Article(
                 url=article.url,
                 headline=article.headline,
                 paragraphs=article.paragraphs,

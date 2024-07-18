@@ -11,3 +11,5 @@ prefect-ray
 playwright
 newspaper4k
 lxml[html_clean]
+pgvector
+sqlmodel

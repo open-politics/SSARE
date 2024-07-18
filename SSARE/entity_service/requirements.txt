@@ -8,3 +8,4 @@ sqlalchemy
 redis
 psycopg2-binary
 asyncpg
+pgvector

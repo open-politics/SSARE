@@ -1,31 +1,30 @@
-from pydantic import BaseModel, Field
 from typing import List, Optional
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, ARRAY, Float, Integer
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlmodel import Field, SQLModel
+from sqlalchemy import Column, Float
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from pgvector.sqlalchemy import Vector
 
-Base = declarative_base()
+class Entity(SQLModel):
+    tag: str
+    text: str
 
-class ArticlePydantic(BaseModel):
-    url: str = Field(...)
+class Geocode(SQLModel):
+    location: str
+    coordinates: List[float]
+
+class Article(SQLModel, table=True):
+    url: str = Field(primary_key=True)
     headline: Optional[str] = None
-    paragraphs: Optional[str] = None
+    paragraphs: str
     source: Optional[str] = None
-    embeddings: Optional[List[float]] = None
+    embeddings: Optional[List[float]] = Field(sa_column=Column(Vector(384)))
+    entities: Optional[List[Entity]] = Field(sa_column=Column(JSONB))
+    geocodes: Optional[List[Geocode]] = Field(sa_column=Column(JSONB))
+    tags: List[str] = Field(default_factory=list, sa_column=Column(ARRAY(Float)))
+    embeddings_created: int = Field(default=0)
+    stored_in_qdrant: int = Field(default=0)
+    entities_extracted: int = Field(default=0)
+    geocoding_created: int = Field(default=0)
 
     class Config:
-        orm_mode = True
-
-class ArticleBase(Base):
-    __tablename__ = "articles"
-    url = Column(String, primary_key=True)  # Url & Unique Identifier
-    headline = Column(String, nullable=True)  # Headline 
-    paragraphs = Column(String, nullable=True)  # Text
-    source = Column(String, nullable=True)  # 'cnn'
-    embeddings = Column(ARRAY(Float), nullable=True)  # [3223, 2342, ..]
-    entities = Column(JSONB, nullable=True)  # JSONB for storing entities
-    geocodes = Column(ARRAY(JSONB), nullable=True)  # JSON objects for geocodes
-    embeddings_created = Column(Integer, default=0)  # Flag
-    stored_in_qdrant = Column(Integer, default=0)  # Flag 
-    entities_extracted = Column(Integer, default=0)  # Flag
-    geocoding_created = Column(Integer, default=0)  # Flag
+        arbitrary_types_allowed = True

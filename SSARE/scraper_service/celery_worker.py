@@ -1,7 +1,6 @@
 from celery import Celery
 import json
 import os
-from core.models import ArticleBase, ArticlePydantic
 import pandas as pd
 import subprocess
 import logging

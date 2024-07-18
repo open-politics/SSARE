@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from sentence_transformers import SentenceTransformer
-from core.models import ArticleBase
+from core.models import Article
 import json
 import logging
 from redis import Redis
@@ -36,19 +36,18 @@ def retrieve_articles_from_redis(redis_conn_raw, batch_size=200):
 @task
 def process_article(raw_article_json):
     raw_article = json.loads(raw_article_json)
-    article = ArticleBase(**raw_article)
-    embeddings = model.encode(article.headline + " ".join(article.paragraphs[:500])).tolist()
-    article_with_embeddings = {
-        "headline": article.headline,
-        "paragraphs": article.paragraphs,
-        "embeddings": embeddings,
-        "embeddings_created": 1,
-        "url": article.url,
-        "source": article.source,
-        "stored_in_qdrant": 0
-    }
+    article = Article(**raw_article)
+    embeddings = model.encode(article.headline + " " + article.paragraphs[:500]).tolist()
+    
+    # Update the article with new embeddings
+    article.embeddings = embeddings
+    article.embeddings_created = 1
+    
+    # Convert the updated article back to a dictionary
+    article_dict = article.dict(exclude_unset=True)
+    
     logger.info(f"Generated embeddings for article: {article.url}, Embeddings Length: {len(embeddings)}")
-    return article_with_embeddings
+    return article_dict
 
 @task
 def write_articles_to_redis(redis_conn_processed, articles_with_embeddings):

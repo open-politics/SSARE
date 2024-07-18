@@ -6,11 +6,9 @@ import importlib
 import json
 from fastapi import Body
 from celery_worker import scrape_data_task
-from core.utils import load_config
 from redis.asyncio import Redis
 from contextlib import asynccontextmanager
 import logging
-from core.models import ArticleBase
 from prefect import task, flow
 
 """"
