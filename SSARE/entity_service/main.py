@@ -1,17 +1,19 @@
-from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel
-from typing import List, Tuple
-from flair.data import Sentence
-from flair.models import SequenceTagger
 import asyncio
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy import Column, String, Integer, update, cast
-from sqlalchemy.dialects.postgresql import JSONB
-from redis.asyncio import Redis
-from core.service_mapping import ServiceConfig
 import json
 import logging
+from typing import List, Tuple
+
+from fastapi import FastAPI, HTTPException, Depends
+from flair.data import Sentence
+from flair.models import SequenceTagger
+from redis.asyncio import Redis
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import declarative_base, sessionmaker
+
+from core.models import Article
+from core.service_mapping import ServiceConfig
+from prefect import flow, task
 
 app = FastAPI()
 config = ServiceConfig()
@@ -22,15 +24,10 @@ ner_tagger = SequenceTagger.load("flair/ner-english-ontonotes-large")
 # SQLAlchemy setup
 Base = declarative_base()
 
-class Article(Base):
-    __tablename__ = "articles"
-    url = Column(String, primary_key=True)
-    entities = Column(JSONB)
-    entities_extracted = Column(Integer, default=0)
 
 DATABASE_URL = (
     f"postgresql+asyncpg://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
-    f"@postgres_service:{config.ARTICLES_DB_PORT}/{config.ARTICLES_DB_NAME}"
+    f"@articles_database:5432/{config.ARTICLES_DB_NAME}"
 )
 engine = create_async_engine(DATABASE_URL)
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -43,6 +40,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @app.post("/extract_entities")
+async def extract_entities(session: AsyncSession = Depends(get_session)):
+    asyncio.create_task(extract_entities(session))
+    return {"message": "Entity extraction task has been triggered."}
+
+@flow(log_prints=True)
 async def extract_entities(session: AsyncSession = Depends(get_session)):
     try:
         redis_conn = await Redis(host='redis', port=6379, db=2)
@@ -77,7 +79,7 @@ async def extract_entities(session: AsyncSession = Depends(get_session)):
         logger.error(f"Error extracting entities: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
+@task()
 async def predict_ner_tags_async(text: str) -> List[Tuple[str, str]]:
     """
     Asynchronously predict NER tags for given text using Flair.

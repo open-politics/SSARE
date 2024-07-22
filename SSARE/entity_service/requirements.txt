@@ -9,3 +9,5 @@ redis
 psycopg2-binary
 asyncpg
 pgvector
+prefect
+sqlmodel
