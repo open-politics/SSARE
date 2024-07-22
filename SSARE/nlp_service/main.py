@@ -71,7 +71,7 @@ def generate_embeddings_flow(batch_size: int):
     finally:
         redis_conn_raw.close()
         redis_conn_processed.close()
-        time.sleep(1)  # Ensure all connections are closed properly
+        time.sleep(1)
 
     logger.info("Embeddings generation process completed")
 

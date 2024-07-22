@@ -62,6 +62,7 @@ async def update_pgvector_flags(raise_on_failure=True):
     async with httpx.AsyncClient() as client: 
         response = await client.post(f"{service_urls['postgres_service']}/update_pgvector_flags")
     if response.status_code != 200:
+        logger = get_run_logger()
         logger.error(f"Failed to update pgvector flags: {response.text}")
         if raise_on_failure:
             raise ValueError("Failed to update pgvector flags.")

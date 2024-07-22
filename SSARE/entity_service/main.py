@@ -93,10 +93,9 @@ def sync_predict_ner_tags(text: str) -> List[Tuple[str, str]]:
     ner_tagger.predict(sentence)
     return [(entity.text, entity.tag) for entity in sentence.get_spans('ner')]
 
-# Example endpoint to test the setup (not part of the main requirement)
-@app.get("/test")
-def test_endpoint():
-    return {"message": "Test endpoint working!"}
+@app.get("/healthz")
+def healthz():
+    return {"message": "ok"}, 200
 
 @app.get("/fetch_entities")
 async def fetch_entities(text: str):

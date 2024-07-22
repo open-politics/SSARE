@@ -153,6 +153,7 @@ async def store_raw_articles(session: AsyncSession = Depends(get_session)):
                 except json.JSONDecodeError as e:
                     logger.error(f"JSON decoding error: {e}")
 
+        await redis_conn.close()
         return {"message": "Raw articles processed successfully."}
     except Exception as e:
         logger.error(f"Error processing articles: {e}")
@@ -195,11 +196,11 @@ async def store_processed_articles(session: AsyncSession = Depends(get_session))
                     logger.error(f"JSON decoding error: {e}")
 
         await session.commit()
+        await redis_conn.close()
         return {"message": "Articles with embeddings stored successfully in PostgreSQL."}
     except Exception as e:
         logger.error(f"Error storing articles with embeddings: {e}")
         raise HTTPException(status_code=400, detail=str(e))
-
 
 @app.post("/update_pgvector_flags")
 async def update_pgvector_flags(session: AsyncSession = Depends(get_session)):
@@ -251,6 +252,7 @@ async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
         else:
             logger.info("No articles found that need embeddings.")
 
+        await redis_conn_unprocessed_articles.close()
         return {"message": f"Embedding jobs created for {len(articles_list)} articles."}
     except Exception as e:
         logger.error(f"Failed to create embedding jobs: {str(e)}", exc_info=True)
@@ -270,6 +272,7 @@ async def push_articles_to_qdrant_upsert_queue(session):
         if articles_list:
             await redis_conn.lpush('articles_with_embeddings', *articles_list)
             logger.info(f"Pushed {len(articles_list)} articles to Redis queue 'articles_with_embeddings'")
+        await redis_conn.close()
     except Exception as e:
         logger.error("Error pushing articles to Redis queue: ", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -346,6 +349,7 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
             }, ensure_ascii=False)
             await redis_conn.lpush('articles_without_geocoding_queue', article_data)
 
+        await redis_conn.close()
         logger.info(f"Pushed {len(articles_needing_geocoding)} articles to geocoding queue.")
         return {"message": "Geocoding jobs created successfully."}
     except Exception as e:
