@@ -15,6 +15,10 @@ from fastapi.responses import StreamingResponse
 from core.service_mapping import config
 from core.models import Article
 from sqlmodel import Session
+from typing import AsyncGenerator
+from sqlalchemy import insert, or_, func
+import math
+
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -28,15 +32,15 @@ DATABASE_URL = (
 # log the url
 logger.info(f"DATABASE_URL: {DATABASE_URL}")
 
-engine = create_async_engine(DATABASE_URL, echo=True)
-session_local = AsyncSession(engine, expire_on_commit=False)
+engine = create_async_engine(DATABASE_URL, echo=False)
+# session_local = AsyncSession(engine, expire_on_commit=False)
 
 # Redis connection
 redis_conn_flags = Redis(host='redis', port=config.REDIS_PORT, db=0)  # For flags
 
 # Dependency
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    async with session_local() as session:
+    async with AsyncSession(engine) as session:
         yield session
 
 @asynccontextmanager
@@ -67,7 +71,7 @@ async def produce_flags():
 async def get_articles(
     url: Optional[str] = None,
     embeddings_created: Optional[int] = None,
-    stored_in_qdrant: Optional[int] = None,
+    pgvectors_available: Optional[int] = None,
     entities_extracted: Optional[int] = None,
     geocoding_created: Optional[int] = None,
     has_gpe: bool = False,
@@ -75,15 +79,16 @@ async def get_articles(
     skip: int = 0, 
     limit: int = 10, 
     session: AsyncSession = Depends(get_session)
-):
+        ):
+
     async with session.begin():
         query = select(Article)
         if url:
             query = query.where(Article.url == url)
         if embeddings_created is not None:
             query = query.where(Article.embeddings_created == embeddings_created)
-        if stored_in_qdrant is not None:
-            query = query.where(Article.stored_in_qdrant == stored_in_qdrant)
+        if pgvectors_available is not None:
+            query = query.where(Article.pgvectors_available == pgvectors_available)
         if entities_extracted is not None:
             query = query.where(Article.entities_extracted == entities_extracted)
         if geocoding_created is not None:
@@ -107,7 +112,7 @@ async def get_articles(
                 source=article.source,
                 embeddings=article.embeddings,
                 embeddings_created=article.embeddings_created,
-                stored_in_qdrant=article.stored_in_qdrant,
+                pgvectors_available=article.pgvectors_available,
                 entities=article.entities,
                 entities_extracted=article.entities_extracted,
                 geocodes=article.geocodes,
@@ -130,6 +135,11 @@ async def store_raw_articles(session: AsyncSession = Depends(get_session)):
                     article_data = json.loads(raw_article)
                     logger.info(f"Processing article: {article_data['url']}")
 
+                    # Handle potential nan values
+                    for key, value in article_data.items():
+                        if isinstance(value, float) and math.isnan(value):
+                            article_data[key] = ''
+
                     existing_article = await session.execute(select(Article).where(Article.url == article_data['url']))
                     if existing_article.scalar_one_or_none() is not None:
                         logger.info(f"Updating article: {article_data['url']}")
@@ -146,24 +156,6 @@ async def store_raw_articles(session: AsyncSession = Depends(get_session)):
         return {"message": "Raw articles processed successfully."}
     except Exception as e:
         logger.error(f"Error processing articles: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/update_qdrant_flags")
-async def update_qdrant_flags(data: Dict[str, List[str]], session: AsyncSession = Depends(get_session)):
-    urls = data.get('urls', [])
-    if not urls:
-        logger.info("No URLs provided for updating Qdrant flags.")
-        return {"message": "No URLs to update."}
-
-    try:
-        async with session.begin():
-            query = update(Article).where(Article.url.in_(urls)).values(stored_in_qdrant=1).where(Article.embeddings.isnot(None))
-            result = await session.execute(query)
-            await session.commit()
-            logger.info(f"Qdrant flags updated for URLs: {urls}, Rows affected: {result.rowcount}")
-        return {"message": "Qdrant flags updated successfully."}
-    except Exception as e:
-        logger.error(f"Error updating Qdrant flags: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/store_articles_with_embeddings")
@@ -186,10 +178,14 @@ async def store_processed_articles(session: AsyncSession = Depends(get_session))
                         logger.info(f"Updating article with embeddings: {article_data['url']}")
                         for key, value in article_data.items():
                             if key == 'embeddings':
-                                setattr(existing_article, 'embeddings_created', 1 if value else 0)
-                            setattr(existing_article, key, value)
+                                setattr(existing_article, 'embeddings', value)
+                                setattr(existing_article, 'embeddings_created', 1)
+                                setattr(existing_article, 'pgvectors_available', 1)
+                            else:
+                                setattr(existing_article, key, value)
                     else:
                         article_data['embeddings_created'] = 1 if 'embeddings' in article_data else 0
+                        article_data['pgvectors_available'] = 1 if 'embeddings' in article_data else 0
                         article = Article(**article_data)
                         session.add(article)
 
@@ -198,35 +194,66 @@ async def store_processed_articles(session: AsyncSession = Depends(get_session))
                 except json.JSONDecodeError as e:
                     logger.error(f"JSON decoding error: {e}")
 
+        await session.commit()
         return {"message": "Articles with embeddings stored successfully in PostgreSQL."}
     except Exception as e:
         logger.error(f"Error storing articles with embeddings: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/update_pgvector_flags")
+async def update_pgvector_flags(session: AsyncSession = Depends(get_session)):
+    try:
+        async with session.begin():
+            query = select(Article).where(Article.embeddings_created == 1, Article.pgvectors_available == 0)
+            result = await session.execute(query)
+            articles_to_update = result.scalars().all()
+            
+            if not articles_to_update:
+                logger.info("No articles found that need pgvector flags updated.")
+                return {"message": "No articles to update."}
+            
+            urls_to_update = [article.url for article in articles_to_update]
+            
+            update_query = update(Article).where(Article.url.in_(urls_to_update)).values(pgvectors_available=1)
+            update_result = await session.execute(update_query)
+            
+            await session.commit()
+            
+            logger.info(f"Updated pgvector flags for {update_result.rowcount} articles.")
+            return {"message": f"pgvector flags updated for {update_result.rowcount} articles."}
+    except Exception as e:
+        logger.error(f"Error updating pgvector flags: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/create_embedding_jobs")
 async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
     logger.info("Trying to create embedding jobs.")
     try:
         async with session.begin():
-            query = select(Article).where(or_(Article.embeddings_created == 0, Article.embeddings.isnot(None)))
+            query = select(Article).where(Article.embeddings_created == 0, Article.embeddings.is_(None))
             result = await session.execute(query)
             articles_without_embeddings = result.scalars().all()
+            logger.info(f"Found {len(articles_without_embeddings)} articles without embeddings.")
+
+            articles_list = [
+                json.dumps({
+                    'url': article.url,
+                    'headline': article.headline,
+                    'paragraphs': article.paragraphs
+                }) for article in articles_without_embeddings
+            ]
 
         redis_conn_unprocessed_articles = await Redis(host='redis', port=config.REDIS_PORT, db=5)
-        articles_list = [
-            json.dumps({
-                'url': article.url,
-                'headline': article.headline,
-                'paragraphs': article.paragraphs
-            }) for article in articles_without_embeddings
-        ]
-
         if articles_list:
             await redis_conn_unprocessed_articles.rpush('articles_without_embedding_queue', *articles_list)
+            logger.info(f"Pushed {len(articles_list)} articles to Redis queue.")
+        else:
+            logger.info("No articles found that need embeddings.")
 
         return {"message": f"Embedding jobs created for {len(articles_list)} articles."}
     except Exception as e:
-        logger.error("Failed to create embedding jobs: ", exc_info=True)
+        logger.error(f"Failed to create embedding jobs: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 async def push_articles_to_qdrant_upsert_queue(session):
@@ -275,10 +302,9 @@ async def deduplicate_articles(session: AsyncSession = Depends(get_session)):
 async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_session)):
     logger.info("Starting to create entity extraction jobs.")
     try:
-        async with session.begin():
-            query = select(Article).where(Article.entities_extracted == 0)
-            result = await session.execute(query)
-            articles_needing_entities = result.scalars().all()
+        query = select(Article).where(Article.entities_extracted == 0)
+        result = await session.execute(query)
+        articles_needing_entities = result.scalars().all()
 
         redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=2)
 
@@ -289,6 +315,8 @@ async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_sess
                 'paragraphs': article.paragraphs
             }
             await redis_conn.lpush('articles_without_entities_queue', json.dumps(article_dict, ensure_ascii=False))
+
+        await redis_conn.close()  # Close the Redis connection
 
         logger.info(f"Entity extraction jobs for {len(articles_needing_entities)} articles created.")
         return {"message": "Entity extraction jobs created successfully."}

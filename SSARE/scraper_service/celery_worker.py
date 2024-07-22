@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from prefect import task, flow
 from prefect_ray.task_runners import RayTaskRunner
 from prefect.task_runners import ConcurrentTaskRunner, SequentialTaskRunner
+from core.models import Article
 
 """ 
 This Script is creating Celery tasks for scraping data from news sources.
@@ -70,7 +71,7 @@ def scrape_single_source(flag: str):
                     if isinstance(value, float):
                         logger.info(f"Float value found: {key}: {value}")
 
-                validated_article = ArticlePydantic(**article_data)
+                validated_article = Article(**article_data)
                 article_summary = {k: v[:10] if isinstance(v, str) else v for k, v in validated_article.dict().items()}
                 logger.info(f"Storing article summary: {article_summary}")
                 redis_conn_articles.lpush("raw_articles_queue", json.dumps(validated_article.dict()))
@@ -83,7 +84,7 @@ def scrape_single_source(flag: str):
         raise e
 
 
-@flow(task_runner=SequentialTaskRunner())
+@flow(task_runner=RayTaskRunner())
 def scrape_data_task(flags):
     for flag in flags:
         scrape_single_source.submit(flag)

@@ -139,13 +139,19 @@ async def search(
                 timeout=30.0
             )
             response.raise_for_status()
-            return SearchResponse(results=response.json())
+            result = response.json()
+            logger.info(f"Search successful. Result: {result}")
+            return SearchResponse(results=result)
         except httpx.HTTPStatusError as e:
             logger.error(f"HTTP error occurred during search: {e}")
-            raise HTTPException(status_code=e.response.status_code, detail=str(e))
+            logger.error(f"Response content: {e.response.text}")
+            raise HTTPException(status_code=e.response.status_code, detail=f"Error from R2R service: {e.response.text}")
         except httpx.RequestError as e:
             logger.error(f"Error communicating with R2R service during search: {e}")
             raise HTTPException(status_code=500, detail=f"Error communicating with R2R service: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unexpected error during search: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @app.post("/rag")
 async def rag(

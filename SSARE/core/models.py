@@ -17,12 +17,12 @@ class Article(SQLModel, table=True):
     headline: Optional[str] = None
     paragraphs: str
     source: Optional[str] = None
-    embeddings: Optional[List[float]] = Field(sa_column=Column(Vector(384)))
+    embeddings: Optional[List[float]] = Field(sa_column=Column(Vector(768)))
     entities: Optional[List[Entity]] = Field(sa_column=Column(JSONB))
     geocodes: Optional[List[Geocode]] = Field(sa_column=Column(JSONB))
     tags: List[str] = Field(default_factory=list, sa_column=Column(ARRAY(Float)))
     embeddings_created: int = Field(default=0)
-    stored_in_qdrant: int = Field(default=0)
+    pgvectors_available: int = Field(default=0)  
     entities_extracted: int = Field(default=0)
     geocoding_created: int = Field(default=0)
 

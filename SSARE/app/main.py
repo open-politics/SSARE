@@ -10,6 +10,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 import logging
 from core.service_mapping import ServiceConfig
+import asyncio
+import subprocess
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,10 +41,10 @@ async def healthcheck():
 #- Dashboard
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, query: str = "culture and arts"):
-    r2r_service_url = f"{config.service_urls['r2r']}/search"
+    rag_service_url = f"{config.service_urls['rag_service']}/search"
     async with httpx.AsyncClient() as client:
-        response = await client.get(
-            r2r_service_url,
+        response = await client.post(
+            rag_service_url,
             params={
                 "query": query,
             }
@@ -68,6 +70,7 @@ async def read_root(request: Request, query: str = "culture and arts"):
 
 @app.post("/trigger_scraping_sequence")
 async def trigger_scraping_flow():
+    logger.info("Triggering scraping flow")
     try:
         asyncio.create_task(scraping_flow())
         return {"message": "Scraping flow triggered"}
@@ -88,6 +91,7 @@ async def check_services():
 @app.post("/trigger_scraping")
 async def trigger_scraping():
     try:
+        logger.info("Triggering scraping flow")
         subprocess.run(["python", "flows/orchestration.py"], check=True)
         return {"message": "Scraping flow triggered"}
     except subprocess.CalledProcessError as e:

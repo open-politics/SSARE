@@ -1,38 +1,6 @@
 
 services:
 
-  prefect_database:
-    image: pgvector/pgvector:pg16
-    restart: always
-    environment:
-      - POSTGRES_USER=${PREFECT_DB_USER}
-      - POSTGRES_PASSWORD=${PREFECT_DB_PASSWORD}
-      - POSTGRES_DB=${PREFECT_DB_NAME}
-    volumes:
-      - ./data/prefect_db/data:/var/lib/postgresql/data
-    ports:
-      - "${PREFECT_DB_PORT}:5432"
-    networks:
-      - app_network
-
-  prefect_server:
-    image: prefecthq/prefect:2.16-python3.11-conda
-    restart: always
-    volumes:
-      - prefect:/root/.prefect
-    entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
-    environment:
-      - PREFECT_UI_URL=http://0.0.0.0:${PREFECT_SERVER_PORT}
-      - PREFECT_API_URL=http://0.0.0.0:${PREFECT_SERVER_PORT}/api
-      - PREFECT_SERVER_API_HOST=0.0.0.0
-      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://${PREFECT_DB_USER}:${PREFECT_DB_PASSWORD}@prefect_database:5432/${PREFECT_DB_NAME}
-    ports:
-      - "${PREFECT_SERVER_PORT}:4200"
-    depends_on:
-      - prefect_database
-    networks:
-      - app_network
-
   articles_database:
     image: pgvector/pgvector:pg16
     restart: always
@@ -148,16 +116,19 @@ services:
     image: pelias/placeholder
     container_name: pelias_placeholder
     command: >
-      bash -c "
-        if [ ! -f /data/placeholder/store.sqlite3 ]; then
-          echo 'Placeholder data not found. Downloading...'
+      sh -c '
+        if [ ! -s /data/placeholder/store.sqlite3 ]; then
+          echo "Placeholder data not found or empty. Downloading..."
+          rm -f /data/placeholder/store.sqlite3
           mkdir -p /data/placeholder
-          curl -L https://github.com/pelias/placeholder/releases/download/v1.0.0/placeholder.sqlite3 -o /data/placeholder/store.sqlite3
+          wget -O /data/placeholder/store.sqlite3.gz https://data.geocode.earth/placeholder/store.sqlite3.gz
+          gunzip /data/placeholder/store.sqlite3.gz
         else
-          echo 'Placeholder data found.'
+          echo "Placeholder data found."
         fi
-        && ./cmd/server.sh
-      "
+        ls -l /data/placeholder
+        ./cmd/server.sh
+      '
     environment:
       - PORT=${PELIAS_PLACEHOLDER_PORT}
     ports:
@@ -167,23 +138,8 @@ services:
     networks:
       - app_network
     depends_on:
-      - prefect_server
+        - prefect_server
 
-  r2r_database:
-    image: pgvector/pgvector:pg16
-    restart: always
-    environment:
-      - POSTGRES_USER=${R2R_DB_USER}
-      - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
-      - POSTGRES_DB=${R2R_DB_NAME}
-    volumes:
-      - ./data/r2r_db/data:/var/lib/postgresql/data
-    ports:
-      - "${R2R_DB_PORT}:5432"
-    networks:
-      - app_network
-    depends_on:
-      - prefect_server
 
   postgres_service:
     build: 
@@ -218,6 +174,39 @@ services:
       - prefect_server
       - prefect_agent
 
+  prefect_database:
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      - POSTGRES_USER=${PREFECT_DB_USER}
+      - POSTGRES_PASSWORD=${PREFECT_DB_PASSWORD}
+      - POSTGRES_DB=${PREFECT_DB_NAME}
+    volumes:
+      - ./SSARE/app:/app
+      - ./data/prefect_db/data:/var/lib/postgresql/data
+    ports:
+      - "${PREFECT_DB_PORT}:5432"
+    networks:
+      - app_network
+
+  prefect_server:
+    image: prefecthq/prefect:2.16-python3.11-conda
+    restart: always
+    volumes:
+      - prefect:/root/.prefect
+    entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
+    environment:
+      - PREFECT_UI_URL=http://0.0.0.0:${PREFECT_SERVER_PORT}
+      - PREFECT_API_URL=http://0.0.0.0:${PREFECT_SERVER_PORT}/api
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://${PREFECT_DB_USER}:${PREFECT_DB_PASSWORD}@prefect_database:5432/${PREFECT_DB_NAME}
+    ports:
+      - "${PREFECT_SERVER_PORT}:4200"
+    depends_on:
+      - prefect_database
+    networks:
+      - app_network
+
   r2r:
     build: 
       context: ./SSARE
@@ -230,7 +219,7 @@ services:
       - POSTGRES_HOST=r2r_database
       - POSTGRES_PORT=5432
       - POSTGRES_DBNAME=${R2R_DB_NAME}
-      - POSTGRES_VECS_COLLECTION=r2r_vecs_2
+      - POSTGRES_VECS_COLLECTION=r2r_vecs_3
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - CONFIG_OPTION=${CONFIG_OPTION:-default}
     depends_on:
@@ -238,6 +227,22 @@ services:
       - prefect_server
     networks:
       - app_network
+
+  r2r_database:
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      - POSTGRES_USER=${R2R_DB_USER}
+      - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
+      - POSTGRES_DB=${R2R_DB_NAME}
+    volumes:
+      - ./data/r2r_db/data:/var/lib/postgresql/data
+    ports:
+      - "${R2R_DB_PORT}:5432"
+    networks:
+      - app_network
+    depends_on:
+      - prefect_server
 
   rag_service:
     build: 

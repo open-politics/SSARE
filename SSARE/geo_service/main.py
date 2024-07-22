@@ -164,3 +164,8 @@ def call_pelias_api(location, lang=None, placetype=None):
 @app.get("/test")
 def test_endpoint():
     return {"message": "Test endpoint working!"}
+
+# Kubernetes endpoint
+@app.get("/healthz")
+def test_endpoint():
+    return {"message": "ok"}, 200

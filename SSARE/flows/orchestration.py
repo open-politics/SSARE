@@ -1,19 +1,15 @@
 from prefect import task, flow, get_run_logger
 import httpx
 from prefect.deployments import Deployment
-from prefect_ray.task_runners import RayTaskRunner
+from prefect.task_runners import SequentialTaskRunner
 import asyncio
 
-
-## TODO: Update to new ports (and maybe eve dynamically)
 runtime_url = "http://main_core_app:8089"
 
 service_urls = {
     "main_core_app": runtime_url,
     "postgres_service": "http://postgres_service:5434",
     "nlp_service": "http://nlp_service:0420",
-    "qdrant_service": "http://qdrant_service:6969",
-    "qdrant_storage": "http://qdrant_storage:6333",
     "geo_service": "http://geo_service:3690",
     "scraper_service": "http://scraper_service:8081",
     "entity_service": "http://entity_service:1290", 
@@ -62,16 +58,14 @@ async def store_articles_with_embeddings(raise_on_failure=True):
     return response.status_code == 200
 
 @task 
-async def push_articles_to_qdrant_queue(raise_on_failure=True): 
+async def update_pgvector_flags(raise_on_failure=True): 
     async with httpx.AsyncClient() as client: 
-        response = await client.post(f"{service_urls['postgres_service']}/trigger_qdrant_queue_push") 
-    return response.status_code == 200
-
-@task 
-async def store_embeddings_in_qdrant(raise_on_failure=True): 
-    async with httpx.AsyncClient() as client: 
-        response = await client.post(f"{service_urls['qdrant_service']}/store_embeddings") 
-    return response.status_code == 200
+        response = await client.post(f"{service_urls['postgres_service']}/update_pgvector_flags")
+    if response.status_code != 200:
+        logger.error(f"Failed to update pgvector flags: {response.text}")
+        if raise_on_failure:
+            raise ValueError("Failed to update pgvector flags.")
+    return response.json()["message"]
 
 @task
 async def create_entity_extraction_jobs(raise_on_failure=True):
@@ -97,7 +91,7 @@ async def geocode_articles(raise_on_failure=True):
         response = await client.post(f"{service_urls['geo_service']}/geocode_articles", timeout=400)
     return response.status_code == 200
 
-@flow(task_runner=RayTaskRunner()) 
+@flow(task_runner=SequentialTaskRunner()) 
 async def scraping_flow(): 
     flags_result = await produce_flags()
     if not flags_result: 
@@ -119,37 +113,30 @@ async def scraping_flow():
     if not embedding_jobs_result:
         raise ValueError("Failed to create embedding jobs.")
     
-    store_embeddings_result = await store_articles_with_embeddings()
-    if not store_embeddings_result:
-        raise ValueError("Failed to store articles with embeddings.")
-        
     generate_embeddings_result = await generate_embeddings()
     if not generate_embeddings_result:
         raise ValueError("Failed to generate embeddings.")
     
-    push_to_queue_result = await push_articles_to_qdrant_queue()
-    if not push_to_queue_result:
-        raise ValueError("Failed to push articles to Qdrant queue.")
+    store_embeddings_result = await store_articles_with_embeddings()
+    if not store_embeddings_result:
+        raise ValueError("Failed to store articles with embeddings.")
     
-    await asyncio.sleep(5)  # Adjust the delay as needed
-
-    store_result = await store_embeddings_in_qdrant()
-    if not store_result:
-        raise ValueError("Failed to store embeddings in Qdrant.")
+    update_flags_result = await update_pgvector_flags()
+    if not update_flags_result:
+        raise ValueError("Failed to update pgvector flags.")
     
     extraction_jobs = await create_entity_extraction_jobs()
     if not extraction_jobs:
-        raise ValueError("Failed to generate create_entity_extraction_jobs jobs")
+        raise ValueError("Failed to create entity extraction jobs")
 
     entity_extraction_result = await extract_entities()
     if not entity_extraction_result:
         raise ValueError("Failed to extract entities.")
     
     create_geocoding_result = await create_geocoding_jobs()
-    if not entity_extraction_result:
-        raise ValueError("Failed to extract entities.")
+    if not create_geocoding_result:
+        raise ValueError("Failed to create geocoding jobs.")
 
-    # Geocode articles after entities have been extracted
     geocode_result = await geocode_articles()
     if not geocode_result:
         raise ValueError("Failed to geocode articles.")
