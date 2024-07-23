@@ -14,6 +14,7 @@ from redis.asyncio import Redis
 from fastapi.responses import StreamingResponse
 from core.service_mapping import config
 from core.models import Article
+from core.db import engine, get_session
 from sqlmodel import Session
 from typing import AsyncGenerator
 from sqlalchemy import insert, or_, func
@@ -24,24 +25,8 @@ import math
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-DATABASE_URL = (
-    f"postgresql+asyncpg://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
-    f"@articles_database:5432/{config.ARTICLES_DB_NAME}"
-)
-# log the url
-logger.info(f"DATABASE_URL: {DATABASE_URL}")
-
-engine = create_async_engine(DATABASE_URL, echo=False)
-# session_local = AsyncSession(engine, expire_on_commit=False)
-
 # Redis connection
 redis_conn_flags = Redis(host='redis', port=config.REDIS_PORT, db=0)  # For flags
-
-# Dependency
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    async with AsyncSession(engine) as session:
-        yield session
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -339,19 +324,19 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
             result = await session.execute(query)
             articles_needing_geocoding = result.scalars().all()
 
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=3)
-        for article in articles_needing_geocoding:
-            article_data = json.dumps({
-                'url': article.url,
-                'headline': article.headline,
-                'paragraphs': article.paragraphs,
-                'entities': article.entities
-            }, ensure_ascii=False)
-            await redis_conn.lpush('articles_without_geocoding_queue', article_data)
+            redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=3)
+            for article in articles_needing_geocoding:
+                article_data = json.dumps({
+                    'url': article.url,
+                    'headline': article.headline,
+                    'paragraphs': article.paragraphs,
+                    'entities': article.entities
+                }, ensure_ascii=False)
+                await redis_conn.lpush('articles_without_geocoding_queue', article_data)
 
-        await redis_conn.close()
-        logger.info(f"Pushed {len(articles_needing_geocoding)} articles to geocoding queue.")
-        return {"message": "Geocoding jobs created successfully."}
+            await redis_conn.close()
+            logger.info(f"Pushed {len(articles_needing_geocoding)} articles to geocoding queue.")
+            return {"message": "Geocoding jobs created successfully."}
     except Exception as e:
         logger.error(f"Error creating geocoding jobs: {e}")
         raise HTTPException(status_code=500, detail=str(e))

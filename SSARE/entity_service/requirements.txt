@@ -1,13 +1,9 @@
 fastapi
-Pydantic
 uvicorn
 flair
-asyncio
-scipy==1.7.3
-sqlalchemy
 redis
-psycopg2-binary
 asyncpg
-pgvector
-prefect
 sqlmodel
+prefect
+prefect-ray
+pgvector

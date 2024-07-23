@@ -1,19 +1,17 @@
-import asyncio
 import json
 import logging
 from typing import List, Tuple
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Depends
 from flair.data import Sentence
 from flair.models import SequenceTagger
-from redis.asyncio import Redis
-from sqlalchemy import update
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import declarative_base, sessionmaker
-
+from redis import Redis
+from sqlmodel import select, SQLModel, Session
 from core.models import Article
+from core.db import engine, get_session
 from core.service_mapping import ServiceConfig
-from prefect import flow, task
+from prefect import task, flow
 
 app = FastAPI()
 config = ServiceConfig()
@@ -21,88 +19,85 @@ config = ServiceConfig()
 # Load the NER model
 ner_tagger = SequenceTagger.load("flair/ner-english-ontonotes-large")
 
-# SQLAlchemy setup
-Base = declarative_base()
-
-
-DATABASE_URL = (
-    f"postgresql+asyncpg://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
-    f"@articles_database:5432/{config.ARTICLES_DB_NAME}"
-)
-engine = create_async_engine(DATABASE_URL)
-async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-async def get_session() -> AsyncSession:
-    async with async_session() as session:
-        yield session
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-@app.post("/extract_entities")
-async def extract_entities(session: AsyncSession = Depends(get_session)):
-    asyncio.create_task(extract_entities(session))
-    return {"message": "Entity extraction task has been triggered."}
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
+    yield
 
-@flow(log_prints=True)
-async def extract_entities(session: AsyncSession = Depends(get_session)):
-    try:
-        redis_conn = await Redis(host='redis', port=6379, db=2)
-        article_data = await redis_conn.rpop('articles_without_entities_queue')
+app = FastAPI(lifespan=lifespan)
 
-        if article_data:
-            article = json.loads(article_data)
-            url = article['url']
-            headline = article['headline']
-            paragraphs = article['paragraphs']
-            text = headline + paragraphs
-            entities = await predict_ner_tags_async(text)
+@task
+def retrieve_article_from_redis(redis_conn) -> dict:
+    article_data = redis_conn.rpop('articles_without_entities_queue')
+    if article_data:
+        return json.loads(article_data)
+    return None
 
-            # Log the type and content of entities
-            logger.info(f"Type of entities: {type(entities)}")
-            logger.info(f"Content of entities: {entities}")
-
-            # Ensure entities_json is an array of JSON objects
-            entities_data = [{"text": entity[0], "tag": entity[1]} for entity in entities]
-            entities_json = json.dumps(entities_data)
-            logger.info(entities_json)
-
-            async with session.begin():
-                query = update(Article).where(Article.url == article['url']).values(entities=entities_json, entities_extracted=1)
-                await session.execute(query)
-
-            return {"message": "Entities extracted and article updated successfully."}
-        else:
-            return {"message": "No articles in the queue."}
-
-    except Exception as e:
-        logger.error(f"Error extracting entities: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@task()
-async def predict_ner_tags_async(text: str) -> List[Tuple[str, str]]:
-    """
-    Asynchronously predict NER tags for given text using Flair.
-    """
-    return await asyncio.to_thread(sync_predict_ner_tags, text)
-
-def sync_predict_ner_tags(text: str) -> List[Tuple[str, str]]:
-    """
-    Synchronously predict NER tags using the Flair model.
-    This function will be run in a separate thread to not block the asyncio event loop.
-    """
+@task
+def predict_ner_tags(text: str) -> List[Tuple[str, str]]:
     sentence = Sentence(text)
     ner_tagger.predict(sentence)
     return [(entity.text, entity.tag) for entity in sentence.get_spans('ner')]
 
+@task
+def process_article(article: dict) -> Tuple[dict, List[Tuple[str, str]]]:
+    text = article['headline'] + " " + article['paragraphs']
+    entities = predict_ner_tags(text)
+    return (article, entities)
+
+@task
+def update_article_with_entities(article_data: dict, entities: List[Tuple[str, str]], session: Session):
+    try:
+        article = session.exec(select(Article).where(Article.url == article_data['url'])).first()
+        if article:
+            entities_data = [{"text": entity[0], "tag": entity[1]} for entity in entities]
+            article.entities = json.dumps(entities_data)
+            article.entities_extracted = 1
+            session.add(article)
+            session.commit()
+            logger.info(f"Entities extracted and updated for article: {article_data['url']}")
+        else:
+            logger.warning(f"Article not found: {article_data['url']}")
+    except Exception as e:
+        logger.error(f"Error updating article {article_data['url']}: {str(e)}")
+        session.rollback()
+
+@flow
+def extract_entities_endpoint():
+    logger.info("Starting entity extraction process")
+    redis_conn = Redis(host='redis', port=6379, db=2, decode_responses=True)
+    
+    try:
+        article = retrieve_article_from_redis(redis_conn)
+        if article:
+            article_data, entities = process_article(article)
+            with Session(engine) as session:
+                update_article_with_entities(article_data, entities, session)
+            logger.info(f"Entities extracted and updated for article: {article_data['url']}")
+        else:
+            logger.info("No articles found in the queue.")
+    finally:
+        redis_conn.close()
+
+    return {"message": "Entity extraction completed"}
+
+@app.post("/extract_entities")
+def generate_entities():
+    logger.info("Generating entities")
+    return extract_entities_endpoint()
+
 @app.get("/healthz")
 def healthz():
-    return {"message": "ok"}, 200
+    return {"message": "ok"}
 
 @app.get("/fetch_entities")
-async def fetch_entities(text: str):
+def fetch_entities(text: str):
     try:
-        entities = await predict_ner_tags_async(text)
+        entities = predict_ner_tags(text)
         entities_data = [{"text": entity[0], "tag": entity[1]} for entity in entities]
         return {"entities": entities_data}
     except Exception as e:
