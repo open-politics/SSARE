@@ -100,8 +100,8 @@ Before we can make use of our own scraping intelligence brain. Let's install it.
 ```bash
 http://localhost:8089/
 ```
-```bash
 or when inside the same docker network:
+```bash
 http://main_core_app:8089/
 ````
 Here you can trigger the scraping process, overview the redis channels, search the articles and observe the prefect dashboard where the tasks are executed.
