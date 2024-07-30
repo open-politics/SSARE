@@ -9,9 +9,9 @@
         {% if queue_name != 'scraping_in_progress' %}
             <div>
                 <h4 class="text-sm font-semibold mb-1">{{ queue_name | replace('_', ' ') | title }}</h4>
-                <p class="text-lg font-bold text-fluorescent-green">{{ count }}</p>
+                <p class="text-lg font-bold text-fluorescent-green" data-queue="{{ queue_name }}">{{ count }}</p>
                 <div class="w-full bg-gray-700 rounded-full h-1.5 mt-1">
-                    <div class="bg-blue-500 h-1.5 rounded-full" style="width: calc({{ (count / 1000) * 100 }}% + 0px);"></div>
+                    <div class="bg-blue-500 h-1.5 rounded-full" style="width: calc({{ (count / 1000) * 100 }}% + 0px);" data-progress="{{ queue_name }}"></div>
                 </div>
             </div>
         {% endif %}

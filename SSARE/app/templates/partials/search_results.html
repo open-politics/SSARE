@@ -1,18 +1,68 @@
 {% for article in articles %}
-<div class="bg-gray-800 rounded-lg p-4">
+<div class="bg-gray-800 rounded-lg p-4 mb-4 hover:bg-gray-700 transition-colors duration-200 cursor-pointer" onclick="showOverlay('{{ article.id }}')">
     <h3 class="text-lg font-semibold mb-2">{{ article.headline }}</h3>
     <p class="text-sm text-gray-400 mb-2">Source: {{ article.source }}</p>
     <p class="text-sm mb-2">{{ article.paragraphs[:200] }}...</p>
-    <div class="flex space-x-2 text-xs">
-        {% if article.embedding %}
-        <span class="bg-green-500 text-white px-2 py-1 rounded">Has Embedding</span>
-        {% endif %}
+    <div class="flex flex-wrap gap-2 text-xs">
+        <span class="bg-gray-600 text-white px-2 py-1 rounded hover:bg-gray-500" title="Insertion Date">
+            {{ article.insertion_date.strftime('%Y-%m-%d %H:%M') if article.insertion_date else 'N/A' }}
+        </span>
+        <span class="{% if article.embedding %}bg-green-500 hover:bg-green-400{% else %}bg-red-500 hover:bg-red-400{% endif %} text-white px-2 py-1 rounded" title="Embedding Status">
+            {{ 'Has Embedding' if article.embedding else 'No Embedding' }}
+        </span>
+        <span class="{% if article.entities %}bg-blue-500 hover:bg-blue-400{% else %}bg-red-500 hover:bg-red-400{% endif %} text-white px-2 py-1 rounded" title="Entities Status">
+            {{ 'Has Entities' if article.entities else 'No Entities' }}
+        </span>
+        <span class="{% if article.tags %}bg-yellow-500 hover:bg-yellow-400{% else %}bg-red-500 hover:bg-red-400{% endif %} text-white px-2 py-1 rounded" title="Tags Status">
+            {{ 'Has Tags' if article.tags else 'No Tags' }}
+        </span>
+    </div>
+</div>
+
+<!-- Overlay for article details -->
+<div id="overlay-{{ article.id }}" class="absolute inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-gray-800 p-6 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <h2 class="text-2xl font-bold mb-4">{{ article.headline }}</h2>
+        <p class="text-sm text-gray-400 mb-2">Source: {{ article.source }}</p>
+        <p class="text-sm text-gray-400 mb-4">Insertion Date: {{ article.insertion_date.strftime('%Y-%m-%d %H:%M') if article.insertion_date else 'N/A' }}</p>
+        <div class="max-h-60 overflow-y-auto mb-4">
+            <p>{{ article.paragraphs }}</p>
+        </div>
+        
         {% if article.entities %}
-        <span class="bg-blue-500 text-white px-2 py-1 rounded">Has Entities</span>
+        <h3 class="text-lg font-semibold mb-2">Entities:</h3>
+        <div class="max-h-40 overflow-y-auto mb-4">
+            <ul class="list-disc list-inside">
+                {% for entity in article.entities %}
+                <li>{{ entity.name }} ({{ entity.entity_type }})</li>
+                {% endfor %}
+            </ul>
+        </div>
         {% endif %}
-        {% if article.locations %}
-        <span class="bg-purple-500 text-white px-2 py-1 rounded">Has Geocoding</span>
+        
+        {% if article.tags %}
+        <h3 class="text-lg font-semibold mb-2">Tags:</h3>
+        <div class="flex flex-wrap gap-2 mb-4">
+            {% for tag in article.tags %}
+            <span class="bg-yellow-500 text-white px-2 py-1 rounded text-sm">{{ tag.name }}</span>
+            {% endfor %}
+        </div>
         {% endif %}
+        
+        <a href="{{ article.url }}" target="_blank" class="text-blue-400 hover:underline">Read full article</a>
+        <button onclick="hideOverlay('{{ article.id }}')" class="mt-4 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded">
+            Close
+        </button>
     </div>
 </div>
 {% endfor %}
+
+<script>
+function showOverlay(articleId) {
+    document.getElementById(`overlay-${articleId}`).classList.remove('hidden');
+}
+
+function hideOverlay(articleId) {
+    document.getElementById(`overlay-${articleId}`).classList.add('hidden');
+}
+</script>

@@ -121,34 +121,37 @@ async def get_redis_queue_length(redis_db: int, queue_key: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Redis error: {str(e)}")
     
-@app.get("/check_channels")
-async def check_channels(request: Request):
-    channel_info = {}
-    redis_conn = Redis(host='redis', port=6379, decode_responses=True)
+@app.get("/check_channels/{flow_name}")
+async def check_channels(request: Request, flow_name: str):
+    redis_conn = Redis(host=config.service_urls['redis'].split('://')[1].split(':')[0], 
+                       port=int(config.REDIS_PORT), 
+                       decode_responses=True)
     
-    # Fetch information for all Redis queues defined in ServiceConfig
-    for queue_name, queue_info in ServiceConfig.redis_queues.items():
-        db = queue_info['db']
-        key = queue_info['key']
-        redis_conn.select(db)
-        
-        if key == 'scraping_in_progress':
-            value = await redis_conn.get(key)
-            channel_info[queue_name] = 'Active' if value == '1' else 'Inactive'
-        else:
-            channel_info[queue_name] = await redis_conn.llen(key)
+    flow_channels = {
+        "status": {"scraping_in_progress"},
+        "scraping": ["scrape_sources", "raw_articles_queue"],
+        "embedding": ["articles_without_embedding_queue", "articles_with_embeddings"],
+        "entity_extraction": ["articles_without_entities_queue", "articles_with_entities_queue"],
+        "geocoding": ["articles_without_geocoding_queue", "articles_with_geocoding_queue"]
+    }
+    
+    if flow_name not in flow_channels:
+        raise HTTPException(status_code=404, detail=f"Invalid flow name: {flow_name}")
+    
+    channels = {}
+    for channel_name in flow_channels[flow_name]:
+        queue_info = config.redis_queues.get(channel_name)
+        if queue_info:
+            await redis_conn.select(queue_info['db'])
+            if channel_name == 'scraping_in_progress':
+                value = await redis_conn.get(queue_info['key'])
+                channels[channel_name] = 'Active' if value == '1' else 'Inactive'
+            else:
+                channels[channel_name] = await redis_conn.llen(queue_info['key'])
     
     await redis_conn.aclose()
     
-    logger.info(f"Channel info: {channel_info}")
-
-    # Check if it's an HTMX request
-    if request.headers.get("HX-Request") == "true":
-        # Return HTML response for HTMX
-        return templates.TemplateResponse("partials/channel_info.html", {"request": request, "channel_info": channel_info})
-    else:
-        # Return JSON response for API requests
-        return JSONResponse(content=channel_info)
+    return templates.TemplateResponse("partials/multiple_channel_info.html", {"request": request, "channels": channels})
 
 @app.get("/service_health", response_class=HTMLResponse)
 async def service_health(request: Request):
@@ -183,9 +186,9 @@ async def service_health(request: Request):
 @app.post("/trigger_step/{step_name}")
 async def trigger_step(step_name: str):
     step_functions = {
-        "produce_flags": produce_flags,  # Add this function
-        "create_scrape_jobs": create_scrape_jobs,  # Add this function
-        "store_raw_articles": store_raw_articles,  # Ad
+        "produce_flags": produce_flags,
+        "create_scrape_jobs": create_scrape_jobs,
+        "store_raw_articles": store_raw_articles,
         "deduplicate_articles": deduplicate_articles,
         "create_embedding_jobs": create_embedding_jobs,
         "generate_embeddings": generate_embeddings,

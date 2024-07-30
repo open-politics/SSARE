@@ -88,6 +88,38 @@ async def geocode_articles(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
         response = await client.post(f"{service_urls['geo_service']}/geocode_articles", timeout=400)
     return response.status_code == 200
+    
+@task 
+async def store_articles_with_geocoding(raise_on_failure=True):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(f"{service_urls['postgres_service']}/store_articles_with_geocoding")
+    return response.status_code == 200
+
+@flow
+async def scraping_sources_flow():
+    await produce_flags()
+    await create_scrape_jobs()
+    await store_raw_articles()
+
+@flow
+async def embedding_flow():
+    await deduplicate_articles()
+    await create_embedding_jobs()
+    await generate_embeddings()
+    await store_articles_with_embeddings()
+
+@flow
+async def entity_extraction_flow():
+    await create_entity_extraction_jobs()
+    await extract_entities()
+    await store_articles_with_entities()
+
+@flow
+async def geocoding_flow():
+    await create_geocoding_jobs()
+    await geocode_articles()
+
+
 
 @flow(task_runner=SequentialTaskRunner()) 
 async def scraping_flow(): 
@@ -138,3 +170,7 @@ async def scraping_flow():
     geocode_result = await geocode_articles()
     if not geocode_result:
         raise ValueError("Failed to geocode articles.")
+
+    store_geocoding_result = await store_articles_with_geocoding()
+    if not store_geocoding_result:
+        raise ValueError("Failed to store articles with geocoding.")

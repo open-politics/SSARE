@@ -71,8 +71,6 @@ We aim to provide numerous search entrypoints from Elastic Search, Keyword Match
 
 That can be used in a lot of ways already, have fun!
 
-P.S. the APIs/ Developer Documentation will be extended soon.
-
 
 ## High Level Diagramm:
 

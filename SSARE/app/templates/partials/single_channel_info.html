@@ -1,0 +1,8 @@
+<div class="text-sm">
+    <div>{{ channel_name | replace('_', ' ') | title }}: 
+        <span class="font-bold text-fluorescent-green" data-channel="{{ channel_name }}">{{ channel_value }}</span>
+    </div>
+    <div class="w-full bg-gray-700 rounded-full h-1.5 mt-1">
+        <div class="bg-blue-500 h-1.5 rounded-full" style="width: {{ (channel_value / 1000) * 100 }}%;" data-progress="{{ channel_name }}"></div>
+    </div>
+</div>

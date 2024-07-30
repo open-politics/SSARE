@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://unpkg.com/htmx.org@1.5.0/dist/htmx.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
     <style>
         body {
             background-color: #0a192f;
@@ -27,22 +28,69 @@
             color: #ff4757;
         }
 
-        .iframe-container {
-            position: relative;
-            overflow: hidden;
-            width: 100%;
-            padding-top: 56.25%;
-            /* 16:9 Aspect Ratio */
+        .step-circle {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: #2d3748;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
         }
 
-        .iframe-container iframe {
-            position: absolute;
-            top: 0;
-            left: 0;
-            bottom: 0;
-            right: 0;
-            width: 100%;
+        .progress-bar {
+            height: 6px;
+            background-color: #2d3748;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
             height: 100%;
+            background-color: #4299e1;
+            transition: width 0.3s ease;
+        }
+
+        .flow-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .flow-step {
+            display: flex;
+            align-items: center;
+        }
+
+        .flow-step + .flow-step::before {
+            content: '';
+            display: block;
+            width: 50px;
+            height: 2px;
+            background-color: #4a5568;
+            margin: 0 10px;
+        }
+
+        .pipeline-group {
+            border: 1px solid #4a5568;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .pipeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .pipeline-io {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
         }
     </style>
 </head>
@@ -60,92 +108,169 @@
                 </div>
             </div>
 
-            <!-- Channel Information -->
+            <!-- Search Articles -->
             <div class="bg-card rounded-lg p-4 md:col-span-2">
-                <h2 class="text-xl font-semibold mb-4">Channel Information</h2>
-                <div id="channel-info" hx-get="/check_channels" hx-trigger="load, every 5s" hx-target="this">
-                    <!-- Channel information will be loaded here -->
-                </div>
+                <h2 class="text-xl font-semibold mb-4">Search Articles</h2>
+                <form hx-get="/articles" hx-target="#search-results" hx-trigger="submit">
+                    <div class="flex flex-col space-y-2">
+                        <input class="bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="text" name="search_text" placeholder="Search articles...">
+                        <div class="flex space-x-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" name="has_embedding" value="true" class="mr-2">
+                                Has Embedding
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="has_geocoding" value="true" class="mr-2">
+                                Has Geocoding
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="has_entities" value="true" class="mr-2">
+                                Has Entities
+                            </label>
+                        </div>
+                        <button class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-300" type="submit">
+                            Search
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <!-- Scraping Status -->
-            <div class="bg-card rounded-lg p-4">
-                <h2 class="text-xl font-semibold mb-4">Scraping Status</h2>
-                <div class="text-fluorescent-green mb-4" id="scraping-status" hx-get="/scraping_status" hx-trigger="load, every 5s">
-                    Ready to start scraping.
-                </div>
-                <button class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-300" hx-post="/trigger_scraping_sequence" hx-target="#scraping-status">
-                    Trigger Scraping
-                </button>
+        <!-- Articles -->
+        <div class="bg-card rounded-lg p-4 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Search Results</h2>
+            <div id="search-results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Search results will be loaded here -->
             </div>
-
-            <!-- Search Articles -->
-            <div class="bg-card rounded-lg p-4 md:col-span-2">
-              <h2 class="text-xl font-semibold mb-4">Search Articles</h2>
-              <form hx-get="/articles" hx-target="#search-results" hx-trigger="submit">
-                  <div class="flex flex-col space-y-2">
-                      <input class="bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="text" name="search_text" placeholder="Search articles...">
-                      <div class="flex space-x-2">
-                          <label class="flex items-center">
-                              <input type="checkbox" name="has_embedding" value="true" class="mr-2">
-                              Has Embedding
-                          </label>
-                          <label class="flex items-center">
-                              <input type="checkbox" name="has_geocoding" value="true" class="mr-2">
-                              Has Geocoding
-                          </label>
-                          <label class="flex items-center">
-                              <input type="checkbox" name="has_entities" value="true" class="mr-2">
-                              Has Entities
-                          </label>
-                      </div>
-                      <button class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-300" type="submit">
-                          Search
-                      </button>
-                  </div>
-              </form>
-          </div>
         </div>
 
         <!-- Orchestration Steps -->
         <div class="bg-card rounded-lg p-4 mb-6">
             <h2 class="text-xl font-semibold mb-4">Orchestration Steps</h2>
-            <p class="text-sm text-gray-400 mb-2">Main flow direction: top to bottom, left to right</p>
-            <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/produce_flags" hx-target="#step-status">1. Produce Flags</button>
-                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_scrape_jobs" hx-target="#step-status">2. Create Scrape Jobs</button>
-                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_raw_articles" hx-target="#step-status">3. Store Raw Articles</button>
-                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/deduplicate_articles" hx-target="#step-status">4. Deduplicate Articles</button>
-                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_embedding_jobs" hx-target="#step-status">5. Create Embedding Jobs</button>
-                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/generate_embeddings" hx-target="#step-status">6. Generate Embeddings</button>
-                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_articles_with_embeddings" hx-target="#step-status">7. Store Articles with Embeddings</button>
-                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_entity_extraction_jobs" hx-target="#step-status">8. Create Entity Extraction Jobs</button>
-                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/extract_entities" hx-target="#step-status">9. Extract Entities</button>
-                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_articles_with_entities" hx-target="#step-status">10. Store Articles with Entities</button>
-                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_geocoding_jobs" hx-target="#step-status">11. Create Geocoding Jobs</button>
-                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/geocode_articles" hx-target="#step-status">12. Geocode Articles</button>
+            <div class="mb-4">
+                <div id="scraping-channels" hx-get="/check_channels/status" hx-trigger="load, every 5s" hx-target="this">
+                    Loading...
+                </div>
+            </div>
+            <div class="mb-4">
+                <button class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-300" hx-post="/trigger_scraping_sequence" hx-target="#orchestration-status">
+                    Start Full Orchestration
+                </button>
+            </div>
+            <div id="orchestration-status" class="mb-4 text-fluorescent-green"></div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Scraping Pipeline -->
+                <div class="pipeline-group">
+                    <div class="pipeline-header">
+                        <h3 class="text-lg font-semibold">Scraping Pipeline</h3>
+                        <button class="bg-green-500 hover:bg-green-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_pipeline/scraping" hx-target="#step-status">Run All Steps</button>
+                    </div>
+                    <div class="pipeline-io">
+                        <span><i class="fas fa-arrow-right"></i> Input: Flags</span>
+                        <span>Output: Raw Articles <i class="fas fa-arrow-right"></i></span>
+                    </div>
+                    <div class="flow-container mb-4">
+                        <div class="flow-step">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/produce_flags" hx-target="#step-status">1. Produce Flags</button>
+                        </div>
+                        <div class="flow-step">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_scrape_jobs" hx-target="#step-status">2. Scrape</button>
+                        </div>
+                        <div class="flow-step">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_raw_articles" hx-target="#step-status">3. Store Raw Articles</button>
+                        </div>
+                    </div>
+                    <div id="scraping-channels" hx-get="/check_channels/scraping" hx-trigger="load, every 5s" hx-target="this">
+                        Loading...
+                    </div>
+                </div>
+
+                <!-- Embedding Pipeline -->
+                <div class="pipeline-group">
+                    <div class="pipeline-header">
+                        <h3 class="text-lg font-semibold">Embedding Pipeline</h3>
+                        <button class="bg-green-500 hover:bg-green-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_pipeline/embedding" hx-target="#step-status">Run All Steps</button>
+                    </div>
+                    <div class="pipeline-io">
+                        <span><i class="fas fa-arrow-right"></i> Input: Raw Articles</span>
+                        <span>Output: Embedded Articles <i class="fas fa-arrow-right"></i></span>
+                    </div>
+                    <div class="flow-container mb-4">
+                        <div class="flow-step">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_embedding_jobs" hx-target="#step-status">1. Create Jobs</button>
+                        </div>
+                        <div class="flow-step">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/generate_embeddings" hx-target="#step-status">2. Generate</button>
+                        </div>
+                        <div class="flow-step">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_articles_with_embeddings" hx-target="#step-status">3. Store</button>
+                        </div>
+                    </div>
+                    <div id="embedding-channels" hx-get="/check_channels/embedding" hx-trigger="load, every 5s" hx-target="this">
+                        Loading...
+                    </div>
+                </div>
+
+                <!-- Entity Extraction Pipeline -->
+                <div class="pipeline-group">
+                    <div class="pipeline-header">
+                        <h3 class="text-lg font-semibold">Entity Extraction Pipeline</h3>
+                        <button class="bg-green-500 hover:bg-green-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_pipeline/entity_extraction" hx-target="#step-status">Run All Steps</button>
+                    </div>
+                    <div class="pipeline-io">
+                        <span><i class="fas fa-arrow-right"></i> Input: Raw Articles</span>
+                        <span>Output: Articles with Entities <i class="fas fa-arrow-right"></i></span>
+                    </div>
+                    <div class="flow-container mb-4">
+                        <div class="flow-step">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_entity_extraction_jobs" hx-target="#step-status">1. Create Jobs</button>
+                        </div>
+                        <div class="flow-step">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/extract_entities" hx-target="#step-status">2. Extract</button>
+                        </div>
+                        <div class="flow-step">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_articles_with_entities" hx-target="#step-status">3. Store</button>
+                        </div>
+                    </div>
+                    <div id="entity-extraction-channels" hx-get="/check_channels/entity_extraction" hx-trigger="load, every 5s" hx-target="this">
+                        Loading...
+                    </div>
+                </div>
+
+                <!-- Geocoding Pipeline -->
+                <div class="pipeline-group">
+                    <div class="pipeline-header">
+                        <h3 class="text-lg font-semibold">Geocoding Pipeline</h3>
+                        <button class="bg-green-500 hover:bg-green-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_pipeline/geocoding" hx-target="#step-status">Run All Steps</button>
+                    </div>
+                    <div class="pipeline-io">
+                        <span><i class="fas fa-arrow-right"></i> Input: Articles with Entities</span>
+                        <span>Output: Geocoded Articles <i class="fas fa-arrow-right"></i></span>
+                    </div>
+                    <div class="flow-container mb-4">
+                        <div class="flow-step">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_geocoding_jobs" hx-target="#step-status">1. Create Jobs</button>
+                        </div>
+                        <div class="flow-step">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/geocode_articles" hx-target="#step-status">2. Geocode</button>
+                        </div>
+                        <div class="flow-step">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_articles_with_geocoding" hx-target="#step-status">3. Store</button>
+                        </div>
+                    </div>
+                    <div id="geocoding-channels" hx-get="/check_channels/geocoding" hx-trigger="load, every 5s" hx-target="this">
+                        Loading...
+                    </div>
+                </div>
             </div>
             <div id="step-status" class="mt-4 text-fluorescent-green"></div>
         </div>
 
-        <!-- Articles -->
         <div class="bg-card rounded-lg p-4 mb-6">
-          <h2 class="text-xl font-semibold mb-4">Search Results</h2>
-          <div id="search-results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <!-- Search results will be loaded here -->
-          </div>
-      </div>
-      
-        <!-- Prefect Flow Runs -->
-        <div class="bg-card rounded-lg p-4 mb-6">
-            <h2 class="text-xl font-semibold mb-4">Prefect Flow Runs</h2>
-            <div class="iframe-container">
-                <iframe src="http://localhost:4200" class="rounded-lg"></iframe>
-            </div>
+            <h2 class="text-xl font-semibold mb-4">Prefect Dashboard</h2>
+            <iframe src="http://localhost:4200/flow-runs" width="100%" height="600" frameborder="0"></iframe>
         </div>
-
     </div>
 </body>
 

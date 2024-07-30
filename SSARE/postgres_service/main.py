@@ -69,13 +69,19 @@ async def get_articles(
     session: AsyncSession = Depends(get_session)
 ):
     async with session.begin():
-        query = select(Article).options(selectinload(Article.entities), selectinload(Article.tags))
+        query = select(Article).options(
+            selectinload(Article.entities).selectinload(Entity.locations),
+            selectinload(Article.tags)
+        )
         
         logger.info(f"Initial query: {query}")
         
         # Add filters
         if url:
             query = query.where(Article.url == url)
+
+        if has_geocoding:
+            query = query.join(Article.entities).join(Entity.locations).distinct()
         if search_text:
             query = query.where(
                 or_(
@@ -90,8 +96,6 @@ async def get_articles(
         result = await session.execute(query)
         articles = result.unique().scalars().all()
         
-        logger.info(f"Number of articles found: {len(articles)}")
-        
         articles_data = []
         for article in articles:
             article_dict = {
@@ -102,12 +106,29 @@ async def get_articles(
                 "insertion_date": article.insertion_date,
                 "paragraphs": article.paragraphs,
                 "embedding": article.embedding[:5].tolist() if article.embedding is not None else None,
-                "entities": [{"id": str(e.id), "name": e.name, "entity_type": e.entity_type} for e in article.entities],
-                "tags": [{"id": str(t.id), "name": t.name} for t in article.tags]
+                "entities": [
+                    {
+                        "id": str(e.id),
+                        "name": e.name,
+                        "entity_type": e.entity_type,
+                        "locations": [
+                            {
+                                "name": loc.name,
+                                "type": loc.type,
+                                "coordinates": loc.coordinates
+                            } for loc in e.locations
+                        ] if e.locations else []
+                    } for e in article.entities
+                ] if article.entities else [],
+                "tags": [
+                    {
+                        "id": str(t.id),
+                        "name": t.name
+                    } for t in (article.tags or [])
+                ]
             }
             articles_data.append(article_dict)
         
-        logger.info(f"Returning {len(articles_data)} articles")
         return articles_data
 
 @app.post("/store_raw_articles")
@@ -316,25 +337,6 @@ async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
         logger.error(f"Failed to create embedding jobs: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
-async def push_articles_to_qdrant_upsert_queue(session: AsyncSession):
-    try:
-        async with session.begin():
-            query = select(Article).where(Article.stored_in_qdrant == 0).where(Article.embeddings.isnot(None))
-            result = await session.execute(query)
-            articles_to_push = result.scalars().all()
-            logger.info(f"Articles to push: {articles_to_push}")
-
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=6)
-        articles_list = [json.dumps({'url': article.url, 'embeddings': article.embeddings, 'headline':article.headline, 'paragraphs': article.paragraphs, 'source':article.source}) for article in articles_to_push]
-        logger.info(articles_list)
-        if articles_list:
-            await redis_conn.lpush('articles_with_embeddings', *articles_list)
-            logger.info(f"Pushed {len(articles_list)} articles to Redis queue 'articles_with_embeddings'")
-        await redis_conn.close()
-    except Exception as e:
-        logger.error("Error pushing articles to Redis queue: ", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/deduplicate_articles")
 async def deduplicate_articles(session: AsyncSession = Depends(get_session)):
     try:
@@ -384,28 +386,18 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
     logger.info("Starting to create geocoding jobs.")
     try:
         async with session.begin():
-            # Select articles with embeddings
-            query = select(Article).where(Article.embedding.isnot(None))
+            # Select articles with embeddings and entities
+            query = select(Article).options(selectinload(Article.entities)).where(Article.entities.any())
             result = await session.execute(query)
             articles = result.scalars().all()
-            logger.info(f"Found {len(articles)} articles with embeddings.")
+            logger.info(f"Found {len(articles)} articles with embeddings and entities.")
 
             articles_list = []
             for article in articles:
-                # Get GPE entities for this article that don't have associated locations
-                gpe_entities_without_locations = await session.execute(
-                    select(Entity)
-                    .join(ArticleEntity)
-                    .outerjoin(EntityLocation)
-                    .where(
-                        (ArticleEntity.article_url == article.url) &
-                        (Entity.entity_type == 'GPE') &
-                        (EntityLocation.entity_id == None)
-                    )
-                )
-                gpe_entities = gpe_entities_without_locations.scalars().all()
+                # Get GPE entities for this article
+                gpe_entities = [entity for entity in article.entities if entity.entity_type == 'GPE']
                 
-                if gpe_entities:  # Only create a geocoding job if the article has GPE entities without locations
+                if gpe_entities:
                     article_dict = {
                         'url': article.url,
                         'headline': article.headline,
@@ -413,6 +405,7 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
                         'entities': [{'name': entity.name, 'entity_type': entity.entity_type} for entity in gpe_entities]
                     }
                     articles_list.append(json.dumps(article_dict, ensure_ascii=False))
+                    logger.info(f"Article {article.url} has {len(gpe_entities)} GPE entities.")
 
         redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=3)
         if articles_list:
@@ -426,3 +419,55 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
     except Exception as e:
         logger.error(f"Error creating geocoding jobs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/store_geocoded_articles")
+async def store_geocoded_articles(session: AsyncSession = Depends(get_session)):
+    try:
+        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4)
+        geocoded_articles = await redis_conn.lrange('articles_with_geocoding_queue', 0, -1)
+        await redis_conn.delete('articles_with_geocoding_queue')
+
+        async with session.begin():
+            for geocoded_article in geocoded_articles:
+                try:
+                    geocoded_data = json.loads(geocoded_article)
+                    logger.info(f"Storing geocoded data for article: {geocoded_data['url']}")
+
+                    article = await session.execute(select(Article).where(Article.url == geocoded_data['url']))
+                    article = article.scalar_one_or_none()
+
+                    if article:
+                        for location_data in geocoded_data['geocoded_locations']:
+                            entity = await session.execute(select(Entity).where(Entity.name == location_data['name'], Entity.entity_type == "GPE"))
+                            entity = entity.scalar_one_or_none()
+                            
+                            if not entity:
+                                entity = Entity(name=location_data['name'], entity_type="GPE")
+                                session.add(entity)
+                            
+                            location = await session.execute(select(Location).where(Location.name == location_data['name']))
+                            location = location.scalar_one_or_none()
+                            
+                            if not location:
+                                location = Location(name=location_data['name'], type="GPE", coordinates=location_data['coordinates'])
+                                session.add(location)
+                            
+                            if entity not in article.entities:
+                                article.entities.append(entity)
+                            if location not in entity.locations:
+                                entity.locations.append(location)
+                        
+                        article.geocoding_created = 1
+                        session.add(article)
+                    else:
+                        logger.error(f"Article not found: {geocoded_data['url']}")
+
+                except Exception as e:
+                    logger.error(f"Error processing geocoded article {geocoded_data['url']}: {str(e)}")
+
+        await session.commit()
+        await redis_conn.close()
+        return {"message": "Geocoded articles stored successfully in PostgreSQL."}
+    except Exception as e:
+        logger.error(f"Error storing geocoded articles: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
