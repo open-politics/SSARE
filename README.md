@@ -58,7 +58,7 @@ Furthermore all articles' text is undergoing Named Entity Recognition (NER) wher
 
 The GPE (Geoplolitical Entity) tags are the geoencoded, e.g. for the recognised location "Berlin" it returns the latitude and longitude and passes a geojson file.
 
-**THE FINAL RESULT** is a live postgres database with articles saved and this data schema (as pydantic/sqlmodel model):
+**THE FINAL RESULT** is a live postgres database with articles saved using this data schema (as pydantic/sqlmodel model):
 ![Basis SQLModel/Pydantic Model](media/opp_base_model.png)
 
 
