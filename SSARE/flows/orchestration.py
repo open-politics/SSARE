@@ -57,16 +57,6 @@ async def store_articles_with_embeddings(raise_on_failure=True):
         response = await client.post(f"{service_urls['postgres_service']}/store_articles_with_embeddings")
     return response.status_code == 200
 
-@task 
-async def update_pgvector_flags(raise_on_failure=True): 
-    async with httpx.AsyncClient() as client: 
-        response = await client.post(f"{service_urls['postgres_service']}/update_pgvector_flags")
-    if response.status_code != 200:
-        logger = get_run_logger()
-        logger.error(f"Failed to update pgvector flags: {response.text}")
-        if raise_on_failure:
-            raise ValueError("Failed to update pgvector flags.")
-    return response.json()["message"]
 
 @task
 async def create_entity_extraction_jobs(raise_on_failure=True):
@@ -78,6 +68,13 @@ async def create_entity_extraction_jobs(raise_on_failure=True):
 async def extract_entities(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
         response = await client.post(f"{service_urls['entity_service']}/extract_entities", timeout=400)
+    return response.status_code == 200
+
+
+@task
+async def store_articles_with_entities(raise_on_failure=True):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(f"{service_urls['postgres_service']}/store_articles_with_entities")
     return response.status_code == 200
 
 @task
@@ -122,10 +119,6 @@ async def scraping_flow():
     if not store_embeddings_result:
         raise ValueError("Failed to store articles with embeddings.")
     
-    update_flags_result = await update_pgvector_flags()
-    if not update_flags_result:
-        raise ValueError("Failed to update pgvector flags.")
-    
     extraction_jobs = await create_entity_extraction_jobs()
     if not extraction_jobs:
         raise ValueError("Failed to create entity extraction jobs")
@@ -133,6 +126,10 @@ async def scraping_flow():
     entity_extraction_result = await extract_entities()
     if not entity_extraction_result:
         raise ValueError("Failed to extract entities.")
+    
+    store_entities_result = await store_articles_with_entities()
+    if not store_entities_result:
+        raise ValueError("Failed to store articles with entities.")
     
     create_geocoding_result = await create_geocoding_jobs()
     if not create_geocoding_result:

@@ -1,100 +1,75 @@
-from fastapi import FastAPI, HTTPException, Query
-import requests
-from pydantic import BaseModel
-from typing import List
-import importlib
-import json
-from fastapi import Body
-from celery_worker import scrape_data_task
+from fastapi import FastAPI, HTTPException
 from redis.asyncio import Redis
 from contextlib import asynccontextmanager
 import logging
 from prefect import task, flow
-
-""""
-This Service runs on port 8081 and is responsible for scraping articles.
-
-"""
+from core.models import Article, Articles
+from core.db import engine, get_session
+import json
+import asyncio
+from script_scraper import scrape_sources_flow
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
-
-
-class Flag(BaseModel):
-    flag: str
-    
+@task
 async def setup_redis_connection():
-    # Setup Redis connection
-    return await Redis(host='redis', port=6379, db=1, decode_responses=True)
-async def close_redis_connection(redis_conn):
+    return Redis(host='redis', port=6379, db=1, decode_responses=True)
 
-    # Close Redis connection
-    await redis_conn.close()
+@task
+async def close_redis_connection(redis_conn):
+    try:
+        await redis_conn.aclose()
+    except RuntimeError as e:
+        logger.warning(f"Error closing Redis connection: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Before app startup
-    app.state.redis = await setup_redis_connection()
+    redis_conn = Redis(host='redis', port=6379, db=1, decode_responses=True)
+    app.state.redis = redis_conn
     yield
-    # After app shutdown
-    await close_redis_connection(app.state.redis)
+    await redis_conn.aclose()
 
 app = FastAPI(lifespan=lifespan)
 
-
-def get_scraper_config():
-    """
-    This function loads the scraper configuration from the JSON file.
-    """
+@task
+async def get_scraper_config():
     with open("scrapers/scrapers_config.json") as f:
         return json.load(f)
 
+@task
+async def get_flags():
+    redis_conn_flags = Redis(host='redis', port=6379, db=0, decode_responses=True)
+    flags = await redis_conn_flags.lrange('scrape_sources', 0, -1)
+    await redis_conn_flags.aclose()
+    return flags
 
 @task
+async def wait_for_scraping_completion(redis_conn):
+    while await redis_conn.get('scraping_in_progress') == '1':
+        await asyncio.sleep(0.5)
+
+@flow
+async def scrape_data():
+    redis_conn = await setup_redis_connection()
+    try:
+        flags = await get_flags()
+        logger.info(f"Creating scrape jobs for {flags}")
+
+        await scrape_sources_flow(flags)
+
+        await wait_for_scraping_completion(redis_conn)
+    except Exception as e:
+        logger.error(f"Error in scrape_data flow: {str(e)}")
+    finally:
+        await close_redis_connection(redis_conn)
+    logger.info(f"Scrape data task completed.")
+    return {"status": "ok"}
+
 @app.post("/create_scrape_jobs")
 async def create_scrape_jobs():
-    """
-    ! Celery is being faded out for Prefect/Ray to orchestrate the scraping process
-    This function is triggered by an API call from the orchestration container.
-    It reads from Redis Queue 0 - channel "scrape_sources" and creates a scraping job for each flag.
-    It passes a flag as a string argument to the scrape_single_source function.
-    It validates the flags against the scraper configuration.
-    The scrape job itself is created by triggering the scrape_data_task function in celery_worker.py.
-    -> inside of celery_worker.py:
-        The scrape_data_task function reads from the redis queue and create scraping jobs for each flag
-        by triggering the scrape_single_source function.
-        When the scrape_single_source function is complete, 
-        it will push the data to Redis Queue 1 - channel "raw_articles_queue".
+    return await scrape_data()
 
-        TODO Batching?
-    """
-
-    redis_conn_flags = await Redis(host='redis', port=6379, db=0)  # For flags
-    flags = await redis_conn_flags.lrange('scrape_sources', 0, -1)
-    flags = [flag.decode('utf-8') for flag in flags]
-    logger.info(f"Creating scrape jobs for {flags}")
-
-    config_json = get_scraper_config()
-    if not all(flag in config_json["scrapers"].keys() for flag in flags):
-        raise HTTPException(status_code=400, detail="Invalid flags provided.")
-    logger.info("Scrape jobs created")
-
-    result = scrape_data_task(flags)
-    logger.info(f"Scrape data task: {result}")
-    return {"message": "Scraping triggered successfully."}
-        
-
-@app.get("/health")
-def health_check():
-    """Health check endpoint"""
-    return {"status": "ok"}, 200
-
-# For Helm
 @app.get("/healthz")
-def health_check():
-    """Health check endpoint"""
-    return {"status": "ok"}, 200
-
-
+def healthz_check():
+    return {"status": "ok"}

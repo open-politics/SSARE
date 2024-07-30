@@ -1,9 +1,0 @@
-qdrant-client
-sentence-transformers
-psycopg2
-fire
-numpy
-bs4
-pandas
-celery
-asyncpg

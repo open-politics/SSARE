@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from sentence_transformers import SentenceTransformer
-from core.models import Article
+from core.models import Article, Articles
 import json
 import logging
 from redis import Redis
@@ -26,28 +26,35 @@ async def healthcheck():
 
 
 @task
-def retrieve_articles_from_redis(redis_conn_raw, batch_size=200):
-    raw_articles_json = []
+def retrieve_articles_from_redis(redis_conn_raw, batch_size=50):
     batch = redis_conn_raw.lrange('articles_without_embedding_queue', 0, batch_size - 1)
-    raw_articles_json.extend(batch)
     redis_conn_raw.ltrim('articles_without_embedding_queue', batch_size, -1)
-    return raw_articles_json
+    return [Article(**json.loads(article)) for article in batch]
 
 @task
-def process_article(raw_article_json):
-    raw_article = json.loads(raw_article_json)
-    article = Article(**raw_article)
-    embeddings = model.encode(article.headline + " " + article.paragraphs[:500]).tolist()
+def process_article(article: Article):
+    # Dynamically check if headline and paragraphs are not None
+    text_to_encode = ""
+    if article.headline is not None:
+        text_to_encode += article.headline + " "
+    if article.paragraphs is not None:
+        text_to_encode += article.paragraphs[:500]
     
-    # Update the article with new embeddings
-    article.embeddings = embeddings
-    article.embeddings_created = 1
-    
-    # Convert the updated article back to a dictionary
-    article_dict = article.dict(exclude_unset=True)
-    
-    logger.info(f"Generated embeddings for article: {article.url}, Embeddings Length: {len(embeddings)}")
-    return article_dict
+    # Only generate embeddings if there's text to encode
+    if text_to_encode:
+        embeddings = model.encode(text_to_encode).tolist()
+        
+        # Update the article with new embeddings
+        article.embedding = embeddings
+        
+        # Convert the updated article back to a dictionary
+        article_dict = article.dict(exclude_unset=True)
+        
+        logger.info(f"Generated embeddings for article: {article.url}, Embeddings Length: {len(embeddings)}")
+        return article_dict
+    else:
+        logger.warning(f"No text available to generate embeddings for article: {article.url}")
+        return None
 
 @task
 def write_articles_to_redis(redis_conn_processed, articles_with_embeddings):
@@ -65,9 +72,9 @@ def generate_embeddings_flow(batch_size: int):
     redis_conn_processed = Redis(host='redis', port=6379, db=6, decode_responses=True)
 
     try:
-        raw_articles_json = retrieve_articles_from_redis(redis_conn_raw, batch_size)
-        articles_with_embeddings = [process_article(raw_article_json) for raw_article_json in raw_articles_json]
-        write_articles_to_redis(redis_conn_processed, articles_with_embeddings)
+        raw_articles = retrieve_articles_from_redis(redis_conn_raw, batch_size)
+        _articles_with_embeddings = [process_article(article) for article in raw_articles]
+        write_articles_to_redis(redis_conn_processed, _articles_with_embeddings)
     finally:
         redis_conn_raw.close()
         redis_conn_processed.close()
@@ -77,7 +84,7 @@ def generate_embeddings_flow(batch_size: int):
 
     
 @app.post("/generate_embeddings")
-def generate_embeddings(batch_size: int = 1000):
+def generate_embeddings(batch_size: int = 50):
     logger.debug("GENERATING EMBEDDINGS")
     generate_embeddings_flow(batch_size)
     return {"message": "Embeddings generated successfully"}

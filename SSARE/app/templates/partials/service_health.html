@@ -1,0 +1,6 @@
+{% for service, status in service_health.items() %}
+    <div class="flex items-center">
+        <span class="w-2 h-2 rounded-full mr-2 {% if status == 'green' %}bg-green-500{% elif status == 'red' %}bg-red-500{% else %}bg-gray-500{% endif %}"></span>
+        <span class="text-sm">{{ service }}</span>
+    </div>
+{% endfor %}

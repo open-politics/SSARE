@@ -57,6 +57,17 @@ services:
     build: 
       context: ./SSARE
       dockerfile: ./app/Dockerfile
+    develop:
+      watch:
+        - path: ./SSARE/app
+          target: /app
+          action: sync
+        - path: ./SSARE/flows
+          target: /app/flows
+          action: sync
+        - path: ./SSARE/core
+          target: /app/core
+          action: sync
     ports:
       - "${MAIN_CORE_APP_PORT}:8089"
     networks:
@@ -152,6 +163,11 @@ services:
     depends_on:
       - articles_database
       - prefect_server
+    develop:
+      watch:
+        - path: ./SSARE/postgres_service
+          target: /app
+          action: sync
 
   prefect_agent:
     image: prefecthq/prefect:2.16-python3.11-conda
@@ -296,6 +312,11 @@ services:
     depends_on:
       - redis
       - prefect_server
+    develop:
+      watch:
+        - path: ./SSARE/app
+          target: /app
+          action: sync
 
 networks:
   app_network:

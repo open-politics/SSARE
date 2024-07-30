@@ -1,15 +1,15 @@
 fastapi
 uvicorn
 requests
-celery[redis]
 bs4
 pandas
 aiohttp
 sqlalchemy
 prefect
 prefect-ray
-playwright
 newspaper4k
 lxml[html_clean]
 pgvector
 sqlmodel
+redis
+playwright

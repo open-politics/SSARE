@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 from .service_mapping import config
-from typing import AsyncGenerator
+from contextlib import asynccontextmanager
 
 DATABASE_URL = (
     f"postgresql+asyncpg://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
@@ -10,7 +10,8 @@ DATABASE_URL = (
 
 engine = create_async_engine(DATABASE_URL, echo=False)
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+@asynccontextmanager
+async def get_session() -> AsyncSession:
     async with AsyncSession(engine) as session:
         yield session
 

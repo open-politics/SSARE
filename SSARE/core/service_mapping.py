@@ -55,7 +55,19 @@ class ServiceConfig:
         "neo4j_bolt": f"bolt://neo4j:{NEO4J_BOLT_PORT}",
     }
 
-    # Other configurations
+    # Redis channel mappings
+    redis_queues = {
+        "articles_without_embedding_queue": {"db": 5, "key": "articles_without_embedding_queue"},
+        "articles_with_entities_queue": {"db": 2, "key": "articles_with_entities_queue"},
+        "scrape_sources": {"db": 0, "key": "scrape_sources"},
+        "raw_articles_queue": {"db": 1, "key": "raw_articles_queue"},
+        "articles_with_embeddings": {"db": 6, "key": "articles_with_embeddings"},
+        "articles_without_entities_queue": {"db": 2, "key": "articles_without_entities_queue"},
+        "articles_without_geocoding_queue": {"db": 3, "key": "articles_without_geocoding_queue"},
+        "scraping_in_progress": {"db": 0, "key": "scraping_in_progress"}
+    }
+
+    # Other configurations/ API Keys
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
     HUGGINGFACE_TOKEN = os.getenv('HUGGINGFACE_TOKEN')
     CONFIG_OPTION = os.getenv('CONFIG_OPTION', 'default')

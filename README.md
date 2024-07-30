@@ -104,12 +104,19 @@ Before we can make use of our own scraping intelligence brain. Let's install it.
    cd SSARE
    docker-compose up --build
    ```
-2. Trigger the scraping sequence by either:
-   - Calling the API endpoint: `localhost:8089/trigger_scraping_sequence`
-   - Using the UI at: `http://localhost:8089`
+2. Go to the dashboard under
+```bash
+http://localhost:8089/
+```
+```bash
+or when inside the same docker network:
+http://main_core_app:8089/
+````
+Here you can trigger the scraping process, overview the redis channels, search the articles and observe the prefect dashboard where the tasks are executed.
 
+![Simple UI](media/opp_dashboard_1.png)
+![Simple UI](media/opp_dashboard_2.png)
 
-![Simple UI](media/ui_preview_empty.png)
 
 ## EASY! Add any source
 Insert any sourcing or scraping script into the scraper_service/scrapers folder. 

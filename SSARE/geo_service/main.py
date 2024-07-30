@@ -9,7 +9,7 @@ from collections import Counter
 import requests
 
 from core.service_mapping import ServiceConfig
-from core.models import Article, Geocode
+from core.models import Article, Entity, Location, ArticleEntity
 from core.db import engine, get_session
 
 config = ServiceConfig()
@@ -46,19 +46,27 @@ async def geocode_articles(session: AsyncSession = Depends(get_session)):
             for location, weight in location_weights.items():
                 coordinates = call_pelias_api(location, lang='en')
                 if coordinates:
-                    geocoded_locations.append({
-                        "location": location,
-                        "coordinates": coordinates
-                    })
+                    geocoded_locations.append(Location(
+                        name=location,
+                        type="GPE",
+                        coordinates=coordinates
+                    ))
                     logger.info(f"Geocoded location {location} with coordinates {coordinates}.")
                 else:
                     logger.error(f"Error geocoding location {location}: No coordinates found.")
 
             async with session.begin():
-                stmt = update(Article).where(Article.url == article_data['url']).values(geocodes=geocoded_locations, geocoding_created=1)
-                await session.execute(stmt)
+                article = await session.get(Article, article_data['url'])
+                if article:
+                    for location in geocoded_locations:
+                        entity = Entity(name=location.name, entity_type="GPE")
+                        session.add(entity)
+                        session.add(ArticleEntity(article_id=article.id, entity_id=entity.id))
+                        entity.locations.append(location)
+                    article.geocoding_created = 1
+                    session.add(article)
 
-            return {"geocoded_locations": geocoded_locations}
+            return {"geocoded_locations": [loc.dict() for loc in geocoded_locations]}
         else:
             return {"message": "No valid entities available for geocoding."}
     else:
@@ -106,11 +114,6 @@ def call_pelias_api(location, lang=None, placetype=None):
     except requests.RequestException as e:
         logger.error(f"API call exception for location {location}: {str(e)}")
     return None
-
-# Test endpoint
-@app.get("/test")
-def test_endpoint():
-    return {"message": "Test endpoint working!"}
 
 # Kubernetes endpoint
 @app.get("/healthz")

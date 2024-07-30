@@ -1,60 +1,152 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Article Display</title>
+    <title>SSARE Vector Retrieval</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" type="text/css" href="/static/output.css">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://unpkg.com/htmx.org@1.5.0/dist/htmx.js"></script>
     <style>
-        .bg-dark-blue {
+        body {
             background-color: #0a192f;
+            color: #ffffff;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .bg-card {
+            background-color: #1e2a3a;
         }
 
         .text-fluorescent-green {
             color: #32ff7e;
         }
 
-        .text-fluorescent-green-light {
-            color: #7effaf;
+        .text-inactive {
+            color: #ff4757;
         }
 
-        .reflection {
+        .iframe-container {
             position: relative;
             overflow: hidden;
+            width: 100%;
+            padding-top: 56.25%;
+            /* 16:9 Aspect Ratio */
         }
 
-        
+        .iframe-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            width: 100%;
+            height: 100%;
+        }
     </style>
 </head>
-<body class="bg-dark-blue text-white font-poppins">
-    <div class="container mx-auto px-4">
-      <div class="flex flex-col items-center justify-center min-h-screen">
-          <h1 class="text-4xl font-bold text-center py-10">SSARE Vector Retrieval</h1>
-            <div class="text-fluorescent-green text-xl mb-8" id="status">Click the button to start scraping</div>
-            <div class="text-fluorescent-green mb-8" id="scraping-status" hx-get="/scraping_status" hx-trigger="every 5s" hx-swap="innerHTML">
-              Ready to start scraping.
+
+<body class="p-6">
+    <div class="container mx-auto">
+        <h1 class="text-4xl font-bold text-center mb-8">SSARE Vector Retrieval</h1>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <!-- Services' Health -->
+            <div class="bg-card rounded-lg p-4">
+                <h2 class="text-xl font-semibold mb-4">Services' Health</h2>
+                <div id="service-health" class="grid grid-cols-2 gap-2" hx-get="/service_health" hx-trigger="load, every 30s">
+                    <!-- Service health status will be loaded here -->
+                </div>
             </div>
-            <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-8 transition duration-300 ease-in-out transform hover:-translate-y-1" hx-post="/trigger_scraping_sequence" hx-target="#scraping-status" hx-swap="innerHTML">
-              Trigger Scraping
-            </button>
-          
-            <form class="w-full max-w-lg mb-8" hx-get="/" hx-target="#articles" hx-trigger="submit">
-              <div class="flex items-center border-b border-blue-500 py-2">
-                <input class="appearance-none bg-transparent border-none w-full text-fluorescent-green mr-3 py-1 px-2 leading-tight focus:outline-none" type="text" name="search_query" placeholder="Search articles..." value="{{ search_query }}">
-                <button class="flex-shrink-0 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out" type="submit">
-                  Search
-                </button>
-              </div>
-            </form>
-           
-            <div class="grid grid-cols-4 gap-4" id="articles">
-              <!-- The articles will be loaded here -->
-              {% include "partials/articles_list.html" %}
+
+            <!-- Channel Information -->
+            <div class="bg-card rounded-lg p-4 md:col-span-2">
+                <h2 class="text-xl font-semibold mb-4">Channel Information</h2>
+                <div id="channel-info" hx-get="/check_channels" hx-trigger="load, every 5s" hx-target="this">
+                    <!-- Channel information will be loaded here -->
+                </div>
             </div>
         </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <!-- Scraping Status -->
+            <div class="bg-card rounded-lg p-4">
+                <h2 class="text-xl font-semibold mb-4">Scraping Status</h2>
+                <div class="text-fluorescent-green mb-4" id="scraping-status" hx-get="/scraping_status" hx-trigger="load, every 5s">
+                    Ready to start scraping.
+                </div>
+                <button class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-300" hx-post="/trigger_scraping_sequence" hx-target="#scraping-status">
+                    Trigger Scraping
+                </button>
+            </div>
+
+            <!-- Search Articles -->
+            <div class="bg-card rounded-lg p-4 md:col-span-2">
+              <h2 class="text-xl font-semibold mb-4">Search Articles</h2>
+              <form hx-get="/articles" hx-target="#search-results" hx-trigger="submit">
+                  <div class="flex flex-col space-y-2">
+                      <input class="bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="text" name="search_text" placeholder="Search articles...">
+                      <div class="flex space-x-2">
+                          <label class="flex items-center">
+                              <input type="checkbox" name="has_embedding" value="true" class="mr-2">
+                              Has Embedding
+                          </label>
+                          <label class="flex items-center">
+                              <input type="checkbox" name="has_geocoding" value="true" class="mr-2">
+                              Has Geocoding
+                          </label>
+                          <label class="flex items-center">
+                              <input type="checkbox" name="has_entities" value="true" class="mr-2">
+                              Has Entities
+                          </label>
+                      </div>
+                      <button class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-300" type="submit">
+                          Search
+                      </button>
+                  </div>
+              </form>
+          </div>
+        </div>
+
+        <!-- Orchestration Steps -->
+        <div class="bg-card rounded-lg p-4 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Orchestration Steps</h2>
+            <p class="text-sm text-gray-400 mb-2">Main flow direction: top to bottom, left to right</p>
+            <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/produce_flags" hx-target="#step-status">1. Produce Flags</button>
+                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_scrape_jobs" hx-target="#step-status">2. Create Scrape Jobs</button>
+                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_raw_articles" hx-target="#step-status">3. Store Raw Articles</button>
+                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/deduplicate_articles" hx-target="#step-status">4. Deduplicate Articles</button>
+                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_embedding_jobs" hx-target="#step-status">5. Create Embedding Jobs</button>
+                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/generate_embeddings" hx-target="#step-status">6. Generate Embeddings</button>
+                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_articles_with_embeddings" hx-target="#step-status">7. Store Articles with Embeddings</button>
+                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_entity_extraction_jobs" hx-target="#step-status">8. Create Entity Extraction Jobs</button>
+                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/extract_entities" hx-target="#step-status">9. Extract Entities</button>
+                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_articles_with_entities" hx-target="#step-status">10. Store Articles with Entities</button>
+                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_geocoding_jobs" hx-target="#step-status">11. Create Geocoding Jobs</button>
+                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/geocode_articles" hx-target="#step-status">12. Geocode Articles</button>
+            </div>
+            <div id="step-status" class="mt-4 text-fluorescent-green"></div>
+        </div>
+
+        <!-- Articles -->
+        <div class="bg-card rounded-lg p-4 mb-6">
+          <h2 class="text-xl font-semibold mb-4">Search Results</h2>
+          <div id="search-results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <!-- Search results will be loaded here -->
+          </div>
+      </div>
+      
+        <!-- Prefect Flow Runs -->
+        <div class="bg-card rounded-lg p-4 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Prefect Flow Runs</h2>
+            <div class="iframe-container">
+                <iframe src="http://localhost:4200" class="rounded-lg"></iframe>
+            </div>
+        </div>
+
     </div>
 </body>
+
 </html>
