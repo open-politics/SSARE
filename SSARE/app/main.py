@@ -18,7 +18,7 @@ from flows.orchestration import (
     store_articles_with_embeddings, create_entity_extraction_jobs,
     extract_entities, store_articles_with_entities,
     create_geocoding_jobs, geocode_articles,
-    produce_flags, create_scrape_jobs, store_raw_articles
+    produce_flags, create_scrape_jobs, store_raw_articles, store_articles_with_geocoding
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -198,6 +198,7 @@ async def trigger_step(step_name: str):
         "store_articles_with_entities": store_articles_with_entities,
         "create_geocoding_jobs": create_geocoding_jobs,
         "geocode_articles": geocode_articles,
+        "store_articles_with_geocoding": store_articles_with_geocoding
     }
     
     if step_name not in step_functions:

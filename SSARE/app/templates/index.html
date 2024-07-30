@@ -148,7 +148,7 @@
         <div class="bg-card rounded-lg p-4 mb-6">
             <h2 class="text-xl font-semibold mb-4">Orchestration Steps</h2>
             <div class="mb-4">
-                <div id="scraping-channels" hx-get="/check_channels/status" hx-trigger="load, every 5s" hx-target="this">
+                <div id="scraping-channels" hx-get="/check_channels/status" hx-trigger="load, every 1s" hx-target="this">
                     Loading...
                 </div>
             </div>
@@ -181,7 +181,7 @@
                             <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_raw_articles" hx-target="#step-status">3. Store Raw Articles</button>
                         </div>
                     </div>
-                    <div id="scraping-channels" hx-get="/check_channels/scraping" hx-trigger="load, every 5s" hx-target="this">
+                    <div id="scraping-channels" hx-get="/check_channels/scraping" hx-trigger="load, every 1s" hx-target="this">
                         Loading...
                     </div>
                 </div>
@@ -207,7 +207,7 @@
                             <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_articles_with_embeddings" hx-target="#step-status">3. Store</button>
                         </div>
                     </div>
-                    <div id="embedding-channels" hx-get="/check_channels/embedding" hx-trigger="load, every 5s" hx-target="this">
+                    <div id="embedding-channels" hx-get="/check_channels/embedding" hx-trigger="load, every 1s" hx-target="this">
                         Loading...
                     </div>
                 </div>
@@ -233,7 +233,7 @@
                             <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_articles_with_entities" hx-target="#step-status">3. Store</button>
                         </div>
                     </div>
-                    <div id="entity-extraction-channels" hx-get="/check_channels/entity_extraction" hx-trigger="load, every 5s" hx-target="this">
+                    <div id="entity-extraction-channels" hx-get="/check_channels/entity_extraction" hx-trigger="load, every 1s" hx-target="this">
                         Loading...
                     </div>
                 </div>
@@ -259,7 +259,7 @@
                             <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_articles_with_geocoding" hx-target="#step-status">3. Store</button>
                         </div>
                     </div>
-                    <div id="geocoding-channels" hx-get="/check_channels/geocoding" hx-trigger="load, every 5s" hx-target="this">
+                    <div id="geocoding-channels" hx-get="/check_channels/geocoding" hx-trigger="load, every 1s" hx-target="this">
                         Loading...
                     </div>
                 </div>

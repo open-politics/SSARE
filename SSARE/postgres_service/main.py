@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from redis.asyncio import Redis
 from fastapi.responses import StreamingResponse
 from core.service_mapping import config
-from core.models import Article, Articles
+from core.models import Article, Articles, ArticleEntity, ArticleTag
 from core.adb import engine, get_session, create_db_and_tables
 from sqlmodel import Session
 from typing import AsyncGenerator
@@ -79,7 +79,6 @@ async def get_articles(
         # Add filters
         if url:
             query = query.where(Article.url == url)
-
         if has_geocoding:
             query = query.join(Article.entities).join(Entity.locations).distinct()
         if search_text:
@@ -89,6 +88,10 @@ async def get_articles(
                     Article.paragraphs.ilike(f'%{search_text}%')
                 )
             )
+        if has_embedding is not None:
+            query = query.where(Article.embedding.isnot(None) if has_embedding else Article.embedding.is_(None))
+        if has_entities is not None:
+            query = query.where(Article.entities.any() if has_entities else ~Article.entities.any())
         
         logger.info(f"Query after filters: {query}")
         
@@ -105,7 +108,7 @@ async def get_articles(
                 "source": article.source,
                 "insertion_date": article.insertion_date,
                 "paragraphs": article.paragraphs,
-                "embedding": article.embedding[:5].tolist() if article.embedding is not None else None,
+                "embedding": article.embedding.tolist() if article.embedding is not None else None,
                 "entities": [
                     {
                         "id": str(e.id),
@@ -115,7 +118,7 @@ async def get_articles(
                             {
                                 "name": loc.name,
                                 "type": loc.type,
-                                "coordinates": loc.coordinates
+                                "coordinates": loc.coordinates.tolist() if loc.coordinates is not None else None
                             } for loc in e.locations
                         ] if e.locations else []
                     } for e in article.entities
@@ -420,53 +423,113 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
         logger.error(f"Error creating geocoding jobs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.post("/store_geocoded_articles")
-async def store_geocoded_articles(session: AsyncSession = Depends(get_session)):
+@app.post("/store_articles_with_geocoding")
+async def store_articles_with_geocoding(session: AsyncSession = Depends(get_session)):
     try:
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4)
+        logger.info("Starting store_articles_with_geocoding function")
+        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4, decode_responses=True)
+        logger.info(f"Connected to Redis on port {config.REDIS_PORT}, db 4")
         geocoded_articles = await redis_conn.lrange('articles_with_geocoding_queue', 0, -1)
-        await redis_conn.delete('articles_with_geocoding_queue')
-
-        async with session.begin():
-            for geocoded_article in geocoded_articles:
-                try:
-                    geocoded_data = json.loads(geocoded_article)
-                    logger.info(f"Storing geocoded data for article: {geocoded_data['url']}")
-
-                    article = await session.execute(select(Article).where(Article.url == geocoded_data['url']))
+        logger.info(f"Retrieved {len(geocoded_articles)} geocoded articles from Redis queue")
+        
+        for index, geocoded_article in enumerate(geocoded_articles, 1):
+            try:
+                geocoded_data = json.loads(geocoded_article)
+                logger.info(f"Processing geocoded article {index}/{len(geocoded_articles)}: {geocoded_data['url']}")
+                
+                async with session.begin():
+                    article = await session.execute(
+                        select(Article).where(Article.url == geocoded_data['url'])
+                    )
                     article = article.scalar_one_or_none()
 
                     if article:
                         for location_data in geocoded_data['geocoded_locations']:
-                            entity = await session.execute(select(Entity).where(Entity.name == location_data['name'], Entity.entity_type == "GPE"))
+                            entity = await session.execute(
+                                select(Entity).where(Entity.name == location_data['name'], Entity.entity_type == "GPE")
+                            )
                             entity = entity.scalar_one_or_none()
                             
                             if not entity:
                                 entity = Entity(name=location_data['name'], entity_type="GPE")
                                 session.add(entity)
+                                await session.flush()  # Flush to get the entity ID
                             
-                            location = await session.execute(select(Location).where(Location.name == location_data['name']))
+                            location = await session.execute(
+                                select(Location).where(Location.name == location_data['name'])
+                            )
                             location = location.scalar_one_or_none()
                             
                             if not location:
                                 location = Location(name=location_data['name'], type="GPE", coordinates=location_data['coordinates'])
                                 session.add(location)
+                                await session.flush()  # Flush to get the location ID
                             
-                            if entity not in article.entities:
-                                article.entities.append(entity)
-                            if location not in entity.locations:
-                                entity.locations.append(location)
+                            # Check if ArticleEntity already exists
+                            existing_article_entity = await session.execute(
+                                select(ArticleEntity).where(
+                                    ArticleEntity.article_id == article.id,
+                                    ArticleEntity.entity_id == entity.id
+                                )
+                            )
+                            existing_article_entity = existing_article_entity.scalar_one_or_none()
+
+                            if existing_article_entity:
+                                # Update frequency if it already exists
+                                await session.execute(
+                                    update(ArticleEntity).
+                                    where(ArticleEntity.article_id == article.id, ArticleEntity.entity_id == entity.id).
+                                    values(frequency=ArticleEntity.frequency + 1)
+                                )
+                            else:
+                                # Create new ArticleEntity if it doesn't exist
+                                article_entity = ArticleEntity(article_id=article.id, entity_id=entity.id)
+                                session.add(article_entity)
+
+                            # Check if EntityLocation already exists
+                            existing_entity_location = await session.execute(
+                                select(EntityLocation).where(
+                                    EntityLocation.entity_id == entity.id,
+                                    EntityLocation.location_id == location.id
+                                )
+                            )
+                            existing_entity_location = existing_entity_location.scalar_one_or_none()
+
+                            if not existing_entity_location:
+                                entity_location = EntityLocation(entity_id=entity.id, location_id=location.id)
+                                session.add(entity_location)
                         
-                        article.geocoding_created = 1
-                        session.add(article)
+                        # Add the "geocoded" tag
+                        tag = await session.execute(select(Tag).where(Tag.name == "geocoded"))
+                        tag = tag.scalar_one_or_none()
+                        if not tag:
+                            tag = Tag(name="geocoded")
+                            session.add(tag)
+                            await session.flush()  # Flush to get the tag ID
+                        
+                        # Check if ArticleTag already exists
+                        existing_article_tag = await session.execute(
+                            select(ArticleTag).where(
+                                ArticleTag.article_id == article.id,
+                                ArticleTag.tag_id == tag.id
+                            )
+                        )
+                        existing_article_tag = existing_article_tag.scalar_one_or_none()
+
+                        if not existing_article_tag:
+                            article_tag = ArticleTag(article_id=article.id, tag_id=tag.id)
+                            session.add(article_tag)
                     else:
                         logger.error(f"Article not found: {geocoded_data['url']}")
+                
+            except Exception as e:
+                logger.error(f"Error processing geocoded article {geocoded_data['url']}: {str(e)}")
+                # Continue processing other articles
 
-                except Exception as e:
-                    logger.error(f"Error processing geocoded article {geocoded_data['url']}: {str(e)}")
-
-        await session.commit()
+        await redis_conn.delete('articles_with_geocoding_queue')
+        logger.info("Cleared Redis queue")
         await redis_conn.close()
+        logger.info("Closed Redis connection")
         return {"message": "Geocoded articles stored successfully in PostgreSQL."}
     except Exception as e:
         logger.error(f"Error storing geocoded articles: {e}")

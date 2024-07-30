@@ -24,7 +24,7 @@ async def produce_flags(raise_on_failure=True):
 @task
 async def create_scrape_jobs(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{service_urls['scraper_service']}/create_scrape_jobs", timeout=120)
+        response = await client.post(f"{service_urls['scraper_service']}/create_scrape_jobs", timeout=700)
     return response.status_code == 200
 
 @task
@@ -48,7 +48,7 @@ async def create_embedding_jobs(raise_on_failure=True):
 @task
 async def generate_embeddings(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{service_urls['nlp_service']}/generate_embeddings", timeout=400)
+        response = await client.post(f"{service_urls['nlp_service']}/generate_embeddings", timeout=700)
     return response.status_code == 200
 
 @task
@@ -61,13 +61,13 @@ async def store_articles_with_embeddings(raise_on_failure=True):
 @task
 async def create_entity_extraction_jobs(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{service_urls['postgres_service']}/create_entity_extraction_jobs", timeout=400)
+        response = await client.post(f"{service_urls['postgres_service']}/create_entity_extraction_jobs", timeout=700)
     return response.status_code == 200
 
 @task
 async def extract_entities(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{service_urls['entity_service']}/extract_entities", timeout=400)
+        response = await client.post(f"{service_urls['entity_service']}/extract_entities", timeout=700)
     return response.status_code == 200
 
 
@@ -80,15 +80,15 @@ async def store_articles_with_entities(raise_on_failure=True):
 @task
 async def create_geocoding_jobs(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{service_urls['postgres_service']}/create_geocoding_jobs", timeout=400)
+        response = await client.post(f"{service_urls['postgres_service']}/create_geocoding_jobs", timeout=700)
     return response.status_code == 200
 
 @task
-async def geocode_articles(raise_on_failure=True):
+async def geocode_articles(batch_size: int = 3, raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{service_urls['geo_service']}/geocode_articles", timeout=400)
+        response = await client.post(f"{service_urls['geo_service']}/geocode_articles", params={"batch_size": batch_size}, timeout=700)
     return response.status_code == 200
-    
+    s
 @task 
 async def store_articles_with_geocoding(raise_on_failure=True):
     async with httpx.AsyncClient() as client:

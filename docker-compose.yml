@@ -52,6 +52,11 @@ services:
       - prefect_server
     environment:
       - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+    develop:
+      watch:
+        - path: ./SSARE/geo_service
+          target: /app
+          action: sync
 
   main_core_app:
     build: 
@@ -314,7 +319,7 @@ services:
       - prefect_server
     develop:
       watch:
-        - path: ./SSARE/app
+        - path: ./SSARE/scraper_service
           target: /app
           action: sync
 

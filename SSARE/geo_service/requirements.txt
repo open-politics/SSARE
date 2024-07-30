@@ -9,3 +9,5 @@ psycopg2-binary
 requests
 pgvector
 sqlmodel
+prefect
+prefect-ray
