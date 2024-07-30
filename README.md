@@ -58,39 +58,31 @@ Furthermore all articles' text is undergoing Named Entity Recognition (NER) wher
 
 The GPE (Geoplolitical Entity) tags are the geoencoded, e.g. for the recognised location "Berlin" it returns the latitude and longitude and passes a geojson file.
 
-**THE FINAL RESULT** is a live postgres database with articles saved and this data schema (as pydantic model):
-````python
-class Article(Base):
-    __tablename__ = "articles"
-    url = Column(String, primary_key=True)  # Url & Unique Identifier
-    headline = Column(String)  # Headline
-    paragraphs = Column(String)  # Text
-    source = Column(String)  # 'cnn'
-    embeddings = Column(ARRAY(Float))  # [3223, 2342, ..]
-    entities = Column(JSONB)  # JSONB for storing entities
-    geocodes = Column(ARRAY(JSONB))  # JSON objects for geocodes
-    embeddings_created = Column(Integer, default=0)  # Flag
-    stored_in_qdrant = Column(Integer, default=0)  # Flag
-    entities_extracted = Column(Integer, default=0)  # Flag
-    geocoding_created = Column(Integer, default=0)  # Flag
-````
+**THE FINAL RESULT** is a live postgres database with articles saved and this data schema (as pydantic/sqlmodel model):
+![Basis SQLModel/Pydantic Model](media/opp_base_model.png)
+
 
 PLUS
 
-A qdrant vector storage that retrieves articles by semantic search:
-![High Level Architecture](media/scraping_ui.png)
-
-
+Multiple query interfaces to retrieve the data. From the main dashboard to (upcoming) numerous rag pipelines and knowledge graph features.
+We aim to provide numerous search entrypoints from Elastic Search, Keyword Matching to Semantic Search and Geospatial Queries.
+![Simple UI](media/opp_dashboard_0.png)
 
 
 That can be used in a lot of ways already, have fun!
+
+P.S. the APIs/ Developer Documentation will be extended soon.
 
 
 ## High Level Diagramm:
 
 ![High Level Architecture](media/ssare_high_level_diagramm_github.png)
-(A bit outdated, no NER & Geocoding here, will swap asap)
+This diagram is currently outdated. Key updates include:
+- Embeddings are now stored in PostgreSQL using the pgvector extension
+- Named Entity Recognition (NER) and Geocoding processes have been added
 
+Side Note:
+The coordinates of the geocodes are also inserted as a vector (2) column. We aim to use this to enable hybrid query mechanisms for semantic search incorporating geospatial information.
 
 ## Introduction
 Before we can make use of our own scraping intelligence brain. Let's install it.
