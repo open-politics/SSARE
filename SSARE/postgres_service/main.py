@@ -22,7 +22,15 @@ from core.models import Article, Entity, ArticleEntity, EntityLocation, Tag, Loc
 import math
 import uuid
 import pandas as pd
+from enum import Enum
 from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload
+from fastapi.encoders import jsonable_encoder
+import httpx
+
+from fastapi import Query
+
+from sqlalchemy.orm import selectinload
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -50,54 +58,79 @@ async def produce_flags():
         await redis_conn_flags.lpush("scrape_sources", flag)
     return {"message": f"Flags produced: {', '.join(flags)}"}
 
-from sqlalchemy.orm import joinedload
-from fastapi.encoders import jsonable_encoder
-
-from fastapi import Query
-
-from sqlalchemy.orm import selectinload
+class SearchType(str, Enum):
+    TEXT = "text"
+    SEMANTIC = "semantic"
 
 @app.get("/articles")
 async def get_articles(
     url: Optional[str] = None,
-    search_text: Optional[str] = None,
-    has_embedding: Optional[bool] = Query(None, description="Filter articles with embeddings"),
+    search_query: Optional[str] = None,
+    search_type: SearchType = SearchType.TEXT,
+    has_embeddings: Optional[bool] = Query(None, description="Filter articles with embeddings"),
     has_geocoding: Optional[bool] = Query(None, description="Filter articles with geocoding"),
     has_entities: Optional[bool] = Query(None, description="Filter articles with entities"),
     skip: int = 0, 
     limit: int = 10, 
     session: AsyncSession = Depends(get_session)
 ):
+    logger.info(f"Received search_type: {search_type}, search_query: {search_query}")
+
+    logger.info(f"Received search_type: {search_type}, search_query: {search_query}")
+
     async with session.begin():
         query = select(Article).options(
             selectinload(Article.entities).selectinload(Entity.locations),
             selectinload(Article.tags)
         )
         
-        logger.info(f"Initial query: {query}")
-        
-        # Add filters
+        # Apply filters
         if url:
             query = query.where(Article.url == url)
         if has_geocoding:
             query = query.join(Article.entities).join(Entity.locations).distinct()
-        if search_text:
-            query = query.where(
-                or_(
-                    Article.headline.ilike(f'%{search_text}%'), 
-                    Article.paragraphs.ilike(f'%{search_text}%')
-                )
-            )
-        if has_embedding is not None:
-            query = query.where(Article.embedding.isnot(None) if has_embedding else Article.embedding.is_(None))
+        if has_embeddings is not None:
+            query = query.where(Article.embeddings.isnot(None) if has_embeddings else Article.embeddings.is_(None))
         if has_entities is not None:
             query = query.where(Article.entities.any() if has_entities else ~Article.entities.any())
         
-        logger.info(f"Query after filters: {query}")
+        # Apply search based on search_type
+        if search_query:
+            if search_type == SearchType.TEXT:
+                query = query.where(
+                    or_(
+                        Article.headline.ilike(f'%{search_query}%'), 
+                        Article.paragraphs.ilike(f'%{search_query}%')
+                    )
+                )
+            elif search_type == SearchType.SEMANTIC and has_embeddings != False:
+                try:
+                    # Get query embedding from NLP service
+                    async with httpx.AsyncClient() as client:
+                        response = await client.get(f"{config.service_urls['nlp_service']}/generate_query_embeddings", params={"query": search_query})
+                        response.raise_for_status()
+                        query_embeddings = response.json()["embeddings"]
+
+                    embedding_array = query_embeddings
+                    distance = 1 - func.cosine_distance(Article.embeddings, embedding_array)
+                    query = query.add_columns(distance.label('similarity')).order_by(distance.desc())
+                except httpx.HTTPError as e:
+                    logger.error(f"Error calling NLP service: {e}")
+                    raise HTTPException(status_code=500, detail="Failed to generate query embedding")
+                except Exception as e:
+                    logger.error(f"Unexpected error in semantic search: {e}")
+                    raise HTTPException(status_code=500, detail="Unexpected error in semantic search")
+        
+        logger.info(f"Final query: {query}")
         
         # Execute the query
-        result = await session.execute(query)
-        articles = result.unique().scalars().all()
+        try:
+            result = await session.execute(query.offset(skip).limit(limit))
+            articles = result.scalars().unique().all()
+            logger.info(f"Number of articles retrieved: {len(articles)}")
+        except Exception as e:
+            logger.error(f"Error executing query: {e}")
+            raise HTTPException(status_code=500, detail="Error retrieving articles")
         
         articles_data = []
         for article in articles:
@@ -106,9 +139,9 @@ async def get_articles(
                 "url": article.url,
                 "headline": article.headline,
                 "source": article.source,
-                "insertion_date": article.insertion_date,
+                "insertion_date": article.insertion_date.isoformat() if article.insertion_date else None,
                 "paragraphs": article.paragraphs,
-                "embedding": article.embedding.tolist() if article.embedding is not None else None,
+                "embeddings": article.embeddings.tolist() if article.embeddings is not None else None,
                 "entities": [
                     {
                         "id": str(e.id),
@@ -132,8 +165,9 @@ async def get_articles(
             }
             articles_data.append(article_dict)
         
+        logger.info(f"Returning {len(articles_data)} articles")
         return articles_data
-
+        
 @app.post("/store_raw_articles")
 async def store_raw_articles(session: AsyncSession = Depends(get_session)):
     try:
@@ -170,33 +204,29 @@ async def store_raw_articles(session: AsyncSession = Depends(get_session)):
         await session.close()
 
 @app.post("/store_articles_with_embeddings")
-async def store_processed_articles(session: AsyncSession = Depends(get_session)):
+async def store_articles_with_embeddings(session: AsyncSession = Depends(get_session)):
     try:
         redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=6)
         articles_with_embeddings = await redis_conn.lrange('articles_with_embeddings', 0, -1)
         await redis_conn.delete('articles_with_embeddings')
 
         async with session.begin():
-            for article_with_embedding in articles_with_embeddings:
+            for article_with_embeddings in articles_with_embeddings:
                 try:
-                    article_data = json.loads(article_with_embedding)
-                    logger.info(f"Storing article with embeddings: {article_data['url']}")
+                    article_data = json.loads(article_with_embeddings)
+                    logger.info(f"Storing article with embedding: {article_data['url']}")
 
                     existing_article = await session.execute(select(Article).where(Article.url == article_data['url']))
                     existing_article = existing_article.scalar_one_or_none()
 
                     if existing_article:
-                        logger.info(f"Updating article with embeddings: {article_data['url']}")
+                        logger.info(f"Updating article with embedding: {article_data['url']}")
                         for key, value in article_data.items():
-                            if key == 'embeddings':
-                                setattr(existing_article, 'embeddings', value)
-                                setattr(existing_article, 'embeddings_created', 1)
-                                setattr(existing_article, 'pgvectors_available', 1)
+                            if key == 'embedding':
+                                setattr(existing_article, 'embedding', value)
                             else:
                                 setattr(existing_article, key, value)
                     else:
-                        article_data['embeddings_created'] = 1 if 'embeddings' in article_data else 0
-                        article_data['pgvectors_available'] = 1 if 'embeddings' in article_data else 0
                         article = Article(**article_data)
                         session.add(article)
 
@@ -284,37 +314,12 @@ async def store_articles_with_entities(session: AsyncSession = Depends(get_sessi
         logger.error(f"Error processing articles with entities: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.post("/update_pgvector_flags")
-async def update_pgvector_flags(session: AsyncSession = Depends(get_session)):
-    try:
-        async with session.begin():
-            query = select(Article).where(Article.embeddings_created == 1, Article.pgvectors_available == 0)
-            result = await session.execute(query)
-            articles_to_update = result.scalars().all()
-            
-            if not articles_to_update:
-                logger.info("No articles found that need pgvector flags updated.")
-                return {"message": "No articles to update."}
-            
-            urls_to_update = [article.url for article in articles_to_update]
-            
-            update_query = update(Article).where(Article.url.in_(urls_to_update)).values(pgvectors_available=1)
-            update_result = await session.execute(update_query)
-            
-            await session.commit()
-            
-            logger.info(f"Updated pgvector flags for {update_result.rowcount} articles.")
-            return {"message": f"pgvector flags updated for {update_result.rowcount} articles."}
-    except Exception as e:
-        logger.error(f"Error updating pgvector flags: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/create_embedding_jobs")
 async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
     logger.info("Trying to create embedding jobs.")
     try:
         async with session.begin():
-            query = select(Article).where(Article.embedding.is_(None))
+            query = select(Article).where(Article.embeddings.is_(None))
             result = await session.execute(query)
             articles_without_embeddings = result.scalars().all()
             logger.info(f"Found {len(articles_without_embeddings)} articles without embeddings.")
@@ -362,7 +367,7 @@ async def deduplicate_articles(session: AsyncSession = Depends(get_session)):
 async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_session)):
     logger.info("Starting to create entity extraction jobs.")
     try:
-        query = select(Article).where(Article.embedding.isnot(None))
+        query = select(Article).where(Article.embeddings.isnot(None))
         result = await session.execute(query)
         articles_needing_entities = result.scalars().all()
 
@@ -398,7 +403,7 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
             articles_list = []
             for article in articles:
                 # Get GPE entities for this article
-                gpe_entities = [entity for entity in article.entities if entity.entity_type == 'GPE']
+                gpe_entities = [entity for entity in article.entities if entity.entity_type == 'GPE' or 'LOC']
                 
                 if gpe_entities:
                     article_dict = {
@@ -408,7 +413,7 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
                         'entities': [{'name': entity.name, 'entity_type': entity.entity_type} for entity in gpe_entities]
                     }
                     articles_list.append(json.dumps(article_dict, ensure_ascii=False))
-                    logger.info(f"Article {article.url} has {len(gpe_entities)} GPE entities.")
+                    logger.info(f"Article {article.url} has {len(gpe_entities)} GPE or LOC entities.")
 
         redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=3)
         if articles_list:

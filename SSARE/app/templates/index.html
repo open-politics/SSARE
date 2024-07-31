@@ -92,6 +92,22 @@
             justify-content: space-between;
             margin-bottom: 8px;
         }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+
+        .grid-item {
+            min-width: 300px;
+        }
+
+        @media (min-width: 1024px) {
+            .grid-container {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
     </style>
 </head>
 
@@ -99,9 +115,9 @@
     <div class="container mx-auto">
         <h1 class="text-4xl font-bold text-center mb-8">SSARE Vector Retrieval</h1>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div class="grid-container mb-6">
             <!-- Services' Health -->
-            <div class="bg-card rounded-lg p-4">
+            <div class="bg-card rounded-lg p-4 grid-item">
                 <h2 class="text-xl font-semibold mb-4">Services' Health</h2>
                 <div id="service-health" class="grid grid-cols-2 gap-2" hx-get="/service_health" hx-trigger="load, every 30s">
                     <!-- Service health status will be loaded here -->
@@ -109,24 +125,62 @@
             </div>
 
             <!-- Search Articles -->
-            <div class="bg-card rounded-lg p-4 md:col-span-2">
+            <div class="bg-card rounded-lg p-4 grid-item col-span-2">
                 <h2 class="text-xl font-semibold mb-4">Search Articles</h2>
                 <form hx-get="/articles" hx-target="#search-results" hx-trigger="submit">
-                    <div class="flex flex-col space-y-2">
-                        <input class="bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="text" name="search_text" placeholder="Search articles...">
-                        <div class="flex space-x-2">
-                            <label class="flex items-center">
-                                <input type="checkbox" name="has_embedding" value="true" class="mr-2">
-                                Has Embedding
-                            </label>
-                            <label class="flex items-center">
-                                <input type="checkbox" name="has_geocoding" value="true" class="mr-2">
-                                Has Geocoding
-                            </label>
-                            <label class="flex items-center">
-                                <input type="checkbox" name="has_entities" value="true" class="mr-2">
-                                Has Entities
-                            </label>
+                    <div class="flex flex-col space-y-4">
+                        <input class="bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="text" name="search_query" placeholder="Search articles...">
+                        <div class="flex space-x-4">
+                            <div class="flex flex-col space-y-2">
+                                <label class="font-semibold">Search Type</label>
+                                    <div class="flex space-x-4">
+                                        <label class="flex items-center">
+                                            <input type="radio" name="search_type" value="text" checked class="mr-2">
+                                            Text Search
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="radio" name="search_type" value="semantic" class="mr-2">
+                                            Semantic Search
+                                        </label>
+                                    </div>
+                            </div>
+                            <div class="flex flex-col space-y-2">
+                                <label class="font-semibold">Filters</label>
+                                <div class="flex space-x-4">
+                                    <label class="flex items-center">
+                                        <input type="checkbox" name="has_embedding" value="true" class="mr-2">
+                                        Has Embedding
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" name="has_geocoding" value="true" class="mr-2">
+                                        Has Geocoding
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" name="has_entities" value="true" class="mr-2">
+                                        Has Entities
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex space-x-4">
+                            <div class="flex flex-col space-y-2 w-1/2">
+                                <label class="font-semibold">Entity</label>
+                                <input class="bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="text" name="entity" placeholder="Filter by entity...">
+                            </div>
+                            <div class="flex flex-col space-y-2 w-1/2">
+                                <label class="font-semibold">Location</label>
+                                <input class="bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="text" name="location" placeholder="Filter by location...">
+                            </div>
+                        </div>
+                        <div class="flex space-x-4">
+                            <div class="flex flex-col space-y-2 w-1/2">
+                                <label class="font-semibold">Skip</label>
+                                <input class="bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="number" name="skip" value="0" min="0">
+                            </div>
+                            <div class="flex flex-col space-y-2 w-1/2">
+                                <label class="font-semibold">Limit</label>
+                                <input class="bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="number" name="limit" value="10" min="1">
+                            </div>
                         </div>
                         <button class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-300" type="submit">
                             Search
@@ -159,9 +213,9 @@
             </div>
             <div id="orchestration-status" class="mb-4 text-fluorescent-green"></div>
             
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="grid-container">
                 <!-- Scraping Pipeline -->
-                <div class="pipeline-group">
+                <div class="pipeline-group grid-item">
                     <div class="pipeline-header">
                         <h3 class="text-lg font-semibold">Scraping Pipeline</h3>
                         <button class="bg-green-500 hover:bg-green-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_pipeline/scraping" hx-target="#step-status">Run All Steps</button>
@@ -187,7 +241,7 @@
                 </div>
 
                 <!-- Embedding Pipeline -->
-                <div class="pipeline-group">
+                <div class="pipeline-group grid-item">
                     <div class="pipeline-header">
                         <h3 class="text-lg font-semibold">Embedding Pipeline</h3>
                         <button class="bg-green-500 hover:bg-green-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_pipeline/embedding" hx-target="#step-status">Run All Steps</button>
@@ -201,7 +255,15 @@
                             <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_embedding_jobs" hx-target="#step-status">1. Create Jobs</button>
                         </div>
                         <div class="flow-step">
-                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/generate_embeddings" hx-target="#step-status">2. Generate</button>
+                            <div class="flex items-center space-x-2">
+                                <input type="number" id="embedding-batch-size" name="batch_size" value="50" min="1" max="100" class="w-16 px-2 py-1 text-xs border rounded bg-gray-700 text-white">
+                                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" 
+                                    hx-post="/trigger_step/generate_embeddings" 
+                                    hx-target="#step-status"
+                                    hx-include="#embedding-batch-size">
+                                    2. Generate
+                                </button>
+                            </div>
                         </div>
                         <div class="flow-step">
                             <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_articles_with_embeddings" hx-target="#step-status">3. Store</button>
@@ -213,7 +275,7 @@
                 </div>
 
                 <!-- Entity Extraction Pipeline -->
-                <div class="pipeline-group">
+                <div class="pipeline-group grid-item">
                     <div class="pipeline-header">
                         <h3 class="text-lg font-semibold">Entity Extraction Pipeline</h3>
                         <button class="bg-green-500 hover:bg-green-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_pipeline/entity_extraction" hx-target="#step-status">Run All Steps</button>
@@ -227,7 +289,15 @@
                             <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_entity_extraction_jobs" hx-target="#step-status">1. Create Jobs</button>
                         </div>
                         <div class="flow-step">
-                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/extract_entities" hx-target="#step-status">2. Extract</button>
+                            <div class="flex items-center space-x-2">
+                                <input type="number" id="entity-extraction-batch-size" name="batch_size" value="50" min="1" max="100" class="w-16 px-2 py-1 text-xs border rounded bg-gray-700 text-white">
+                                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" 
+                                    hx-post="/trigger_step/extract_entities" 
+                                    hx-target="#step-status"
+                                    hx-include="#entity-extraction-batch-size">
+                                    2. Extract
+                                </button>
+                            </div>
                         </div>
                         <div class="flow-step">
                             <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_articles_with_entities" hx-target="#step-status">3. Store</button>
@@ -239,7 +309,7 @@
                 </div>
 
                 <!-- Geocoding Pipeline -->
-                <div class="pipeline-group">
+                <div class="pipeline-group grid-item">
                     <div class="pipeline-header">
                         <h3 class="text-lg font-semibold">Geocoding Pipeline</h3>
                         <button class="bg-green-500 hover:bg-green-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_pipeline/geocoding" hx-target="#step-status">Run All Steps</button>
@@ -253,7 +323,15 @@
                             <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_geocoding_jobs" hx-target="#step-status">1. Create Jobs</button>
                         </div>
                         <div class="flow-step">
-                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/geocode_articles" hx-target="#step-status">2. Geocode</button>
+                            <div class="flex items-center space-x-2">
+                                <input type="number" id="geocoding-batch-size" name="batch_size" value="50" min="1" max="100" class="w-16 px-2 py-1 text-xs border rounded bg-gray-700 text-white">
+                                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" 
+                                    hx-post="/trigger_step/geocode_articles" 
+                                    hx-target="#step-status"
+                                    hx-include="#geocoding-batch-size">
+                                    2. Geocode
+                                </button>
+                            </div>
                         </div>
                         <div class="flow-step">
                             <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_articles_with_geocoding" hx-target="#step-status">3. Store</button>

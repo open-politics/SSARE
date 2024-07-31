@@ -68,7 +68,7 @@ def push_articles_with_entities(redis_conn, articles_with_entities: List[Tuple[A
         logger.error(f"Error pushing articles with entities to queue: {str(e)}")
 
 @flow
-def extract_entities_flow(batch_size: int):
+def extract_entities_flow(batch_size: int = 50):
     logger.info("Starting entity extraction process")
     redis_conn = Redis(host='redis', port=6379, db=2, decode_responses=True)
     

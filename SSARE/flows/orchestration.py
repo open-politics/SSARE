@@ -46,9 +46,9 @@ async def create_embedding_jobs(raise_on_failure=True):
     return response.status_code == 200
 
 @task
-async def generate_embeddings(raise_on_failure=True):
+async def generate_embeddings(batch_size: int = 50, raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{service_urls['nlp_service']}/generate_embeddings", timeout=700)
+        response = await client.post(f"{service_urls['nlp_service']}/generate_embeddings", params={"batch_size": batch_size}, timeout=700)
     return response.status_code == 200
 
 @task
@@ -65,9 +65,9 @@ async def create_entity_extraction_jobs(raise_on_failure=True):
     return response.status_code == 200
 
 @task
-async def extract_entities(raise_on_failure=True):
+async def extract_entities(batch_size: int = 50, raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{service_urls['entity_service']}/extract_entities", timeout=700)
+        response = await client.post(f"{service_urls['entity_service']}/extract_entities", params={"batch_size": batch_size}, timeout=700)
     return response.status_code == 200
 
 
@@ -84,7 +84,7 @@ async def create_geocoding_jobs(raise_on_failure=True):
     return response.status_code == 200
 
 @task
-async def geocode_articles(batch_size: int = 3, raise_on_failure=True):
+async def geocode_articles(batch_size: int = 50, raise_on_failure=True):
     async with httpx.AsyncClient() as client:
         response = await client.post(f"{service_urls['geo_service']}/geocode_articles", params={"batch_size": batch_size}, timeout=700)
     return response.status_code == 200

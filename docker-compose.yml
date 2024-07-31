@@ -32,6 +32,11 @@ services:
       - prefect_server
     environment:
       - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+    develop:
+      watch:
+        - path: ./SSARE/entity_service
+          target: /app
+          action: sync
 
   geo_service:
     build: 
@@ -127,6 +132,11 @@ services:
       - prefect_server
     environment:
       - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+    develop:
+      watch:
+        - path: ./SSARE/nlp_service
+          target: /app
+          action: sync
 
   pelias_placeholder:
     image: pelias/placeholder
@@ -155,7 +165,6 @@ services:
       - app_network
     depends_on:
         - prefect_server
-
 
   postgres_service:
     build: 
@@ -227,6 +236,7 @@ services:
       - prefect_database
     networks:
       - app_network
+ 
 
   r2r:
     build: 
@@ -248,6 +258,11 @@ services:
       - prefect_server
     networks:
       - app_network
+    develop:
+      watch:
+        - path: ./SSARE/r2r_server
+          target: /app
+          action: sync
 
   r2r_database:
     image: pgvector/pgvector:pg16
@@ -264,7 +279,7 @@ services:
       - app_network
     depends_on:
       - prefect_server
-
+      
   rag_service:
     build: 
       context: ./SSARE
@@ -291,6 +306,11 @@ services:
       - R2R_SERVER_URL=http://r2r:${R2R_PORT}
     env_file:
       - .env
+    develop:
+      watch:
+        - path: ./SSARE/rag_service
+          target: /app
+          action: sync
 
   redis:
     image: redis:latest

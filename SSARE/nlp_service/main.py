@@ -45,7 +45,7 @@ def process_article(article: Article):
         embeddings = model.encode(text_to_encode).tolist()
         
         # Update the article with new embeddings
-        article.embedding = embeddings
+        article.embeddings = embeddings
         
         # Convert the updated article back to a dictionary
         article_dict = article.dict(exclude_unset=True)
@@ -93,7 +93,8 @@ def generate_embeddings(batch_size: int = 50):
 def generate_query_embedding(query: str):
     try:
         embeddings = model.encode(query).tolist()
-        logger.info(f"Generated embeddings for query: {query}, Embedding Length: {len(embeddings)}")
-        return {"message": "Embeddings generated", "embeddings": embeddings}
+        logger.info(f"Generated embeddings for query: {query}, Embeddings Length: {len(embeddings)}")
+        return {"embeddings": embeddings}
     except Exception as e:
+        logger.error(f"Error generating embeddings: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))

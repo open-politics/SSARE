@@ -9,3 +9,5 @@ prefect-ray
 asyncio
 pgvector
 sqlmodel
+pydantic
+httpx

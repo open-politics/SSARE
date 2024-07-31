@@ -32,7 +32,7 @@ class Article(BaseModel, table=True):
     paragraphs: str = Field(sa_column=Column(Text))
     source: str = Field(index=True)
     insertion_date: Optional[datetime] = Field(default=None, index=True)
-    embedding: Optional[List[float]] = Field(default=None, sa_column=Column(Vector(768)))
+    embeddings: Optional[List[float]] = Field(default=None, sa_column=Column(Vector(768)))
 
     entities: Optional[List["Entity"]] = Relationship(back_populates="articles", link_model=ArticleEntity)
     tags: Optional[List["Tag"]] = Relationship(back_populates="articles", link_model=ArticleTag)

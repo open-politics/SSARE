@@ -9,6 +9,8 @@ from prefect import get_client
 from fastapi.staticfiles import StaticFiles 
 from fastapi.responses import JSONResponse
 from fastapi import Query
+from pydantic import BaseModel
+from enum import Enum
 import logging
 from core.service_mapping import ServiceConfig
 import asyncio
@@ -49,19 +51,22 @@ async def healthcheck():
 #- Dashboard
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, query: str = "culture and arts"):
-    rag_service_url = f"{config.service_urls['rag_service']}/search"
+    postgres_service_url = f"{config.service_urls['postgres_service']}/articles"
     async with httpx.AsyncClient() as client:
-        response = await client.post(
-            rag_service_url,
+        response = await client.get(
+            postgres_service_url,
             params={
-                "query": query,
+                "search_query": query,
+                "search_type": "semantic",
+                "skip": 0,
+                "limit": 10
             }
         )
 
-    if response.is_success:
-        articles = response.json()['data']
+    if response.status_code == 200:
+        articles = response.json()
         articles = [{
-            'score': article['score'],
+            'score': article.get('similarity', 0),
             'headline': article['headline'],
             'paragraphs': article['paragraphs'],
             'url': article['url']
@@ -210,10 +215,16 @@ async def trigger_step(step_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to execute step '{step_name}': {str(e)}")
     
+
+class SearchType(str, Enum):
+    TEXT = "text"
+    SEMANTIC = "semantic"
+    
 @app.get("/articles", response_class=HTMLResponse)
 async def search_articles(
     request: Request,
-    search_text: str = Query(None),
+    search_query: str = Query(None),
+    search_type: str = Query("text"),  # Change this line
     has_embedding: bool = Query(False),
     has_geocoding: bool = Query(False),
     has_entities: bool = Query(False),
@@ -225,7 +236,8 @@ async def search_articles(
         response = await client.get(
             postgres_service_url,
             params={
-                "search_text": search_text,
+                "search_query": search_query,
+                "search_type": search_type,  # No need to use .value here
                 "has_embedding": has_embedding,
                 "has_geocoding": has_geocoding,
                 "has_entities": has_entities,
