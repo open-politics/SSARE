@@ -112,8 +112,7 @@ async def get_articles(
                         query_embeddings = response.json()["embeddings"]
 
                     embedding_array = query_embeddings
-                    distance = 1 - func.cosine_distance(Article.embeddings, embedding_array)
-                    query = query.add_columns(distance.label('similarity')).order_by(distance.desc())
+                    query = query.order_by(Article.embeddings.l2_distance(embedding_array))
                 except httpx.HTTPError as e:
                     logger.error(f"Error calling NLP service: {e}")
                     raise HTTPException(status_code=500, detail="Failed to generate query embedding")

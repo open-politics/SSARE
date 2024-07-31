@@ -14,7 +14,9 @@
             {{ 'Has Entities' if article.entities else 'No Entities' }}
         </span>
         <span class="{% if article.tags %}bg-yellow-500 hover:bg-yellow-400{% else %}bg-red-500 hover:bg-red-400{% endif %} text-white px-2 py-1 rounded" title="Tags Status">
-            {{ 'Has Tags' if article.tags else 'No Tags' }}
+            {% for tag in article.tags %}
+            {{ tag.name }}
+            {% endfor %}
         </span>
     </div>
 </div>
