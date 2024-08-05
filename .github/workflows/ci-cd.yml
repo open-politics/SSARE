@@ -18,40 +18,21 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-      - name: Build and Push Docker Image for App
+      - name: Build and Push Docker Images
         run: |
           cd SSARE
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }} -f ./app/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }} && \
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:latest && \
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:latest
-
-      - name: Build and Push Docker Image for Scraper Service
-        run: |
-          cd SSARE
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/scraper_service:${{ github.sha }} -f ./scraper_service/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper_service:${{ github.sha }} && \
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/scraper_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/scraper_service:latest && \
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper_service:latest
-
-      - name: Build and Push Docker Image for Postgres Service
-        run: |
-          cd SSARE
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }} -f ./postgres_service/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }} && \
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:latest && \
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:latest
-      - name: Buidl and Push Docker Image for NLP Service
-        run: |
-          cd SSARE
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/nlp_service:${{ github.sha }} -f ./nlp_service/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/nlp_service:${{ github.sha }} && \
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/nlp_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/nlp_service:latest && \
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/nlp_service:latest
-      - name: Build and Push Docker Image for Qdrant Service
-        run: |
-          cd SSARE
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/qdrant_service:${{ github.sha }} -f ./qdrant_service/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/qdrant_service:${{ github.sha }} && \
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/qdrant_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/qdrant_service:latest && \
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/qdrant_service:latest
+          services=(
+            "entity_service"
+            "geo_service"
+            "main_core_app"
+            "nlp_service"
+            "postgres_service"
+            "rag_service"
+            "scraper_service"
+          )
+          for service in "${services[@]}"; do
+            docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/${service}:${{ github.sha }} -f ./${service}/Dockerfile .
+            docker push ${{ secrets.DOCKERHUB_USERNAME }}/${service}:${{ github.sha }}
+            docker tag ${{ secrets.DOCKERHUB_USERNAME }}/${service}:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/${service}:latest
+            docker push ${{ secrets.DOCKERHUB_USERNAME }}/${service}:latest
+          done
