@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 from rich.columns import Columns
+import os
 
 my_proxy_api_key = "sk-1234" # e.g. sk-1234
 my_proxy_base_url = "http://0.0.0.0:4000" # e.g. http://0.0.0.0:4000
@@ -18,7 +19,7 @@ my_proxy_base_url = "http://0.0.0.0:4000" # e.g. http://0.0.0.0:4000
 # This enables response_model keyword
 # from client.chat.completions.create
 # client = instructor.from_openai(OpenAI(api_key=my_proxy_api_key, base_url=my_proxy_base_url))
-client = instructor.from_openai(OpenAI(api_key='sk-xgAqq9Jf3i2f9WV8ovPvwhcPCDXe4E2ZmQgeKZU7yXT3BlbkFJheutO2Cwx5BDfZ4fS18AZyE4Nc1i-ZEQiH2JuYNtsA'))
+client = instructor.from_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
 
 
 class GeoRelevance(BaseModel):
