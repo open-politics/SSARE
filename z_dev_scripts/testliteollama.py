@@ -13,7 +13,7 @@ from rich.text import Text
 from rich.columns import Columns
 import os
 
-my_proxy_api_key = "sk-1234" # e.g. sk-1234
+my_proxy_api_key = "xxx" # e.g. sk-1234
 my_proxy_base_url = "http://0.0.0.0:4000" # e.g. http://0.0.0.0:4000
 
 # This enables response_model keyword
