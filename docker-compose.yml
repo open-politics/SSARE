@@ -75,13 +75,13 @@ services:
       - neo4j_import:/var/lib/neo4j/import
       - neo4j_plugins:/plugins
 
-  nlp_service:
+  embedding_service:
     build: 
       context: ./SSARE
-      dockerfile: ./nlp_service/Dockerfile
+      dockerfile: ./embedding_service/Dockerfile
     restart: always
     ports:
-      - "${NLP_SERVICE_PORT}:0420"
+      - "${EMBEDDING_SERVICE_PORT}:0420"
     depends_on:
       - redis
       - postgres_service
@@ -254,6 +254,13 @@ services:
       - ./core/configs/redis.conf:/usr/local/etc/redis/redis.conf
     ports:
       - "${REDIS_PORT}:6379"
+  
+  semantic_router:
+    build: 
+      context: ./SSARE
+      dockerfile: ./semantic_router/Dockerfile
+    ports:
+      - "${SEMANTIC_ROUTER_PORT}:5689"
 
   scraper_service:
     build: 

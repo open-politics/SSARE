@@ -1,0 +1,11 @@
+model_list:
+  - model_name: "llama3.1"             
+    litellm_params:
+      model: "ollama/llama3.1"
+      api_base: "http://ollama:11434"
+      api_key: sk-1234
+      model_info:
+        supports_function_calling: true
+
+general_settings:
+  master_key: sk-1234

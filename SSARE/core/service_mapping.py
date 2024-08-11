@@ -4,7 +4,7 @@ class ServiceConfig:
     # Service Ports
     MAIN_CORE_APP_PORT = os.getenv('MAIN_CORE_APP_PORT', '8089')
     POSTGRES_SERVICE_PORT = os.getenv('POSTGRES_SERVICE_PORT', '5434')
-    NLP_SERVICE_PORT = os.getenv('NLP_SERVICE_PORT', '0420')
+    EMBEDDING_SERVICE_PORT = os.getenv('EMBEDDING_SERVICE_PORT', '0420')
     QDRANT_SERVICE_PORT = os.getenv('QDRANT_SERVICE_PORT', '6969')
     QDRANT_STORAGE_PORT = os.getenv('QDRANT_STORAGE_PORT', '6333')
     SCRAPER_SERVICE_PORT = os.getenv('SCRAPER_SERVICE_PORT', '8081')
@@ -35,11 +35,14 @@ class ServiceConfig:
     ARTICLES_DB_NAME = os.getenv('ARTICLES_DB_NAME', 'articles_db')
     ARTICLES_DB_PORT = os.getenv('ARTICLES_DB_PORT', '5434')
 
+    OLLAMA_PORT = os.getenv('OLLAMA_PORT', '11434')
+    LITELLM_PORT = os.getenv('LITELLM_PORT', '11435')
+
     # Service URLs
     service_urls = {
         "main_core_app": f"http://main_core_app:{MAIN_CORE_APP_PORT}",
         "postgres_service": f"http://postgres_service:{POSTGRES_SERVICE_PORT}",
-        "nlp_service": f"http://nlp_service:{NLP_SERVICE_PORT}",
+        "embedding_service": f"http://embedding_service:{EMBEDDING_SERVICE_PORT}",
         "qdrant_service": f"http://qdrant_service:{QDRANT_SERVICE_PORT}",
         "qdrant_storage": f"http://qdrant_storage:{QDRANT_STORAGE_PORT}",
         "scraper_service": f"http://scraper_service:{SCRAPER_SERVICE_PORT}",
@@ -53,6 +56,8 @@ class ServiceConfig:
         "rag_service": f"http://rag_service:{RAG_SERVICE_PORT}",
         "neo4j_http": f"http://neo4j:{NEO4J_HTTP_PORT}",
         "neo4j_bolt": f"bolt://neo4j:{NEO4J_BOLT_PORT}",
+        "ollama": f"http://ollama:{OLLAMA_PORT}",
+        "liteLLM": f"http://liteLLM:{LITELLM_PORT}",
     }
 
     # Redis channel mappings

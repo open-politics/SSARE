@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-entity-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: entity-service
+  template:
+    metadata:
+      labels:
+        app: entity-service
+    spec:
+      containers:
+      - name: entity-service
+        image: "{{ .Values.entityService.image.repository }}:{{ .Values.entityService.image.tag }}"
+        ports:
+        - containerPort: {{ .Values.entityService.port }}
+        env:
+        - name: PREFECT_API_URL
+          value: {{ .Values.global.prefectApiUrl }}

@@ -1,0 +1,7 @@
+semantic-router
+fastapi
+uvicorn
+sqlmodel
+textgrad
+numpy
+pydantic

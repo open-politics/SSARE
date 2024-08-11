@@ -1,49 +1,197 @@
-storage:
-  storageClassName: "longhorn"
+global:
+  TEST_API_KEY: SUPERTEST@34325
 
-postgres_storage:
-  storage:
-    storageClass: "longhorn"
-  username: "ssare"
-  database: "ssare"
-
-postgres_service:
-  image:
-    repository: "jimvincetw/postgres_service"
-    tag: "latest"
-
-main_core_app:
-  image:
-    repository: "jimvincetw/main_core_app"
-    tag: "latest"
-
-scraper:
-  image:
-    repository: "jimvincetw/scraper_service"
-    tag: "latest"
-
-qdrant_storage:
-  image:
-    repository: "qdrant/qdrant"
-    tag: "latest"
-
-qdrant_service:
-  image:
-    repository: "jimvincetw/qdrant_service"
-    tag: "latest"
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-  ingress:
-    className: "nginx"
-    hosts:
-      - host: "qdrant-service.example.com"
-
-redis:
-  image:
-    repository: "redis"
-    tag: "latest"
-
-nlp:
-  image:
-    repository: "jimvincetw/nlp_service"
-    tag: "latest"
+services:
+  articles_database:
+    build: null
+    depends_on:
+    - prefect_server
+    image: pgvector/pgvector:pg16
+    ports:
+    - container: '5432'
+      host: ${ARTICLES_DB_PORT}
+    volumes:
+    - data-articles-db-data--var-lib-postgresql-data
+  entity_service:
+    build:
+      context: ./SSARE
+      dockerfile: ./entity_service/Dockerfile
+    depends_on:
+    - redis
+    - postgres_service
+    - prefect_server
+    image: entity_service:latest
+    ports:
+    - container: '1290'
+      host: ${ENTITY_SERVICE_PORT}
+    volumes: []
+  geo_service:
+    build:
+      context: ./SSARE
+      dockerfile: ./geo_service/Dockerfile
+    depends_on:
+    - redis
+    - postgres_service
+    - pelias_placeholder
+    - prefect_server
+    image: geo_service:latest
+    ports:
+    - container: '3690'
+      host: ${GEO_SERVICE_PORT}
+    volumes: []
+  main_core_app:
+    build:
+      context: ./SSARE
+      dockerfile: ./app/Dockerfile
+    depends_on:
+    - scraper_service
+    - postgres_service
+    - redis
+    - prefect_server
+    image: main_core_app:latest
+    ports:
+    - container: '8089'
+      host: ${MAIN_CORE_APP_PORT}
+    volumes: []
+  neo4j:
+    build: null
+    depends_on:
+    - prefect_server
+    image: neo4j:latest
+    ports:
+    - container: '7474'
+      host: ${NEO4J_HTTP_PORT}
+    - container: '7687'
+      host: ${NEO4J_BOLT_PORT}
+    volumes:
+    - data-neo4j-db-data--data
+    - data-neo4j-db-logs--logs
+    - data-neo4j-db-import--var-lib-neo4j-import
+    - data-neo4j-db-plugins--plugins
+  nlp_service:
+    build:
+      context: ./SSARE
+      dockerfile: ./nlp_service/Dockerfile
+    depends_on:
+    - redis
+    - postgres_service
+    - prefect_server
+    image: nlp_service:latest
+    ports:
+    - container: '0420'
+      host: ${NLP_SERVICE_PORT}
+    volumes: []
+  pelias_placeholder:
+    build: null
+    depends_on:
+    - prefect_server
+    image: pelias/placeholder
+    ports:
+    - container: ${PELIAS_PLACEHOLDER_PORT}
+      host: ${PELIAS_PLACEHOLDER_PORT}
+    volumes:
+    - data-placeholder--data-placeholder
+  postgres_service:
+    build:
+      context: ./SSARE
+      dockerfile: ./postgres_service/Dockerfile
+    depends_on:
+    - articles_database
+    - prefect_server
+    image: postgres_service:latest
+    ports:
+    - container: '5434'
+      host: ${POSTGRES_SERVICE_PORT}
+    volumes: []
+  prefect_agent:
+    build: null
+    depends_on:
+    - prefect_server
+    image: prefecthq/prefect:2.16-python3.11-conda
+    ports: []
+    volumes: []
+  prefect_cli:
+    build: null
+    depends_on:
+    - prefect_server
+    - prefect_agent
+    image: prefecthq/prefect:2.16-python3.11-conda
+    ports: []
+    volumes: []
+  prefect_database:
+    build: null
+    depends_on: []
+    image: pgvector/pgvector:pg16
+    ports:
+    - container: '5432'
+      host: ${PREFECT_DB_PORT}
+    volumes:
+    - ssare-app--app
+    - data-prefect-db-data--var-lib-postgresql-data
+  prefect_server:
+    build: null
+    depends_on:
+    - prefect_database
+    image: prefecthq/prefect:2.16-python3.11-conda
+    ports:
+    - container: '4200'
+      host: ${PREFECT_SERVER_PORT}
+    volumes:
+    - prefect--root--prefect
+  r2r:
+    build:
+      context: ./SSARE
+      dockerfile: ./r2r_server/Dockerfile
+    depends_on:
+    - r2r_database
+    - prefect_server
+    image: r2r:latest
+    ports:
+    - container: '8000'
+      host: ${R2R_PORT}
+    volumes: []
+  r2r_database:
+    build: null
+    depends_on:
+    - prefect_server
+    image: pgvector/pgvector:pg16
+    ports:
+    - container: '5432'
+      host: ${R2R_DB_PORT}
+    volumes:
+    - data-r2r-db-data--var-lib-postgresql-data
+  rag_service:
+    build:
+      context: ./SSARE
+      dockerfile: ./rag_service/Dockerfile
+    depends_on:
+    - redis
+    - r2r_database
+    - prefect_server
+    image: rag_service:latest
+    ports:
+    - container: '4312'
+      host: ${RAG_SERVICE_PORT}
+    volumes: []
+  redis:
+    build: null
+    depends_on:
+    - prefect_server
+    image: redis:latest
+    ports:
+    - container: '6379'
+      host: ${REDIS_PORT}
+    volumes:
+    - core-configs-redis-conf--usr-local-etc-redis-redis-conf
+  scraper_service:
+    build:
+      context: ./SSARE
+      dockerfile: ./scraper_service/Dockerfile
+    depends_on:
+    - redis
+    - prefect_server
+    image: scraper_service:latest
+    ports:
+    - container: '8081'
+      host: ${SCRAPER_SERVICE_PORT}
+    volumes: []

@@ -12,6 +12,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.columns import Columns
 import os
+from groq import Groq
 
 my_proxy_api_key = "xxx" # e.g. sk-1234
 my_proxy_base_url = "http://0.0.0.0:4000" # e.g. http://0.0.0.0:4000
@@ -19,7 +20,7 @@ my_proxy_base_url = "http://0.0.0.0:4000" # e.g. http://0.0.0.0:4000
 # This enables response_model keyword
 # from client.chat.completions.create
 # client = instructor.from_openai(OpenAI(api_key=my_proxy_api_key, base_url=my_proxy_base_url))
-client = instructor.from_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
+client = instructor.from_groq(Groq(api_key=os.getenv("GROQ_API_KEY")))
 
 
 class GeoRelevance(BaseModel):
@@ -164,7 +165,7 @@ As the world grapples with this new reality, it's clear that life on Earth will 
 def classify_article(article: str):
     """Perform classification on the input article."""
     return client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="llama-3.1-8b-instant",
         response_model=NewsArticleClassification,
         messages=[
             {

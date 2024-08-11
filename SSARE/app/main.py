@@ -169,7 +169,9 @@ async def service_health(request: Request):
         "r2r",
         "rag_service",
         "entity_service",
-        "geo_service"
+        "geo_service",
+        "ollama",
+        "liteLLM"
     ]
     async with httpx.AsyncClient() as client:
         for service in services_to_check:

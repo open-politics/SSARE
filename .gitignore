@@ -22,3 +22,4 @@ init_ollama_gpu.sh
 ollama/
 package-lock.json
 package.json
+skaffold.yaml
