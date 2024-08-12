@@ -19,7 +19,6 @@ mains.txt
 gen_helm.py
 init_machine.sh
 init_ollama_gpu.sh
-ollama/
 package-lock.json
 package.json
 skaffold.yaml
