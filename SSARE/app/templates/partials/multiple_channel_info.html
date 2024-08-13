@@ -2,10 +2,14 @@
     {% for channel_name, channel_value in channels.items() %}
         <div>
             <h4 class="text-sm font-semibold mb-1">{{ channel_name | replace('_', ' ') | title }}</h4>
-            <p class="text-lg font-bold {% if channel_name == 'scraping_in_progress' %}{% if channel_value == 'Active' %}text-fluorescent-green{% else %}text-inactive{% endif %}{% else %}text-fluorescent-green{% endif %}" data-channel="{{ channel_name }}">
-                {{ channel_value }}
-            </p>
-            {% if channel_name != 'scraping_in_progress' %}
+            {% if channel_name == 'Orchestration in progress' or channel_name == 'scrapers_running' %}
+                <p class="text-lg font-bold {% if channel_value == 'Active' %}text-fluorescent-green{% else %}text-inactive{% endif %}" data-channel="{{ channel_name }}">
+                    {{ channel_value }}
+                </p>
+            {% else %}
+                <p class="text-lg font-bold text-fluorescent-green" data-channel="{{ channel_name }}">
+                    {{ channel_value }}
+                </p>
                 <div class="w-full bg-gray-700 rounded-full h-1.5 mt-1">
                     <div class="bg-blue-500 h-1.5 rounded-full" style="width: calc({{ (channel_value / 1000) * 100 }}% + 0px);" data-progress="{{ channel_name }}"></div>
                 </div>
