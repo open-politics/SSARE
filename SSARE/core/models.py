@@ -39,6 +39,7 @@ class Article(BaseModel, table=True):
 
 class Articles(SQLModel):
     articles: List[Article]
+
     
 class Entity(BaseModel, table=True):
     name: str = Field(index=True)
@@ -58,3 +59,6 @@ class Tag(BaseModel, table=True):
     name: str = Field(unique=True, index=True)
 
     articles: List[Article] = Relationship(back_populates="tags", link_model=ArticleTag)
+
+class ArticleTags(SQLModel):
+    tags: List[Tag]

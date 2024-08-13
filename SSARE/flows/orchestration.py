@@ -9,7 +9,7 @@ runtime_url = "http://main_core_app:8089"
 service_urls = {
     "main_core_app": runtime_url,
     "postgres_service": "http://postgres_service:5434",
-    "nlp_service": "http://nlp_service:0420",
+    "embedding_service": "http://embedding_service:0420",
     "geo_service": "http://geo_service:3690",
     "scraper_service": "http://scraper_service:8081",
     "entity_service": "http://entity_service:1290", 
@@ -48,7 +48,7 @@ async def create_embedding_jobs(raise_on_failure=True):
 @task
 async def generate_embeddings(batch_size: int = 50, raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{service_urls['nlp_service']}/generate_embeddings", params={"batch_size": batch_size}, timeout=700)
+        response = await client.post(f"{service_urls['embedding_service']}/generate_embeddings", params={"batch_size": batch_size}, timeout=700)
     return response.status_code == 200
 
 @task

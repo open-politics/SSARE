@@ -38,7 +38,7 @@ def process_article(article: Article):
     if article.headline is not None:
         text_to_encode += article.headline + " "
     if article.paragraphs is not None:
-        text_to_encode += article.paragraphs[:500]
+        text_to_encode += article.paragraphs + " "
     
     # Only generate embeddings if there's text to encode
     if text_to_encode:
@@ -84,7 +84,7 @@ def generate_embeddings_flow(batch_size: int):
 
     
 @app.post("/generate_embeddings")
-def generate_embeddings(batch_size: int = 50):
+def generate_embeddings(batch_size: int = 100):
     logger.debug("GENERATING EMBEDDINGS")
     generate_embeddings_flow(batch_size)
     return {"message": "Embeddings generated successfully"}

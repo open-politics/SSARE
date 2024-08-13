@@ -38,6 +38,10 @@ class ServiceConfig:
     OLLAMA_PORT = os.getenv('OLLAMA_PORT', '11434')
     LITELLM_PORT = os.getenv('LITELLM_PORT', '11435')
 
+    SEMANTIC_MACHINE_PORT = os.getenv('SEMANTIC_MACHINE_PORT', '5688')
+    SEMANTIC_ROUTER_PORT = os.getenv('SEMANTIC_ROUTER_PORT', '5689')
+
+
     # Service URLs
     service_urls = {
         "main_core_app": f"http://main_core_app:{MAIN_CORE_APP_PORT}",
@@ -58,6 +62,8 @@ class ServiceConfig:
         "neo4j_bolt": f"bolt://neo4j:{NEO4J_BOLT_PORT}",
         "ollama": f"http://ollama:{OLLAMA_PORT}",
         "liteLLM": f"http://liteLLM:{LITELLM_PORT}",
+        "semantic_machine": f"http://semantic_machine:{SEMANTIC_MACHINE_PORT}",
+        "semantic_router": f"http://semantic_router:{SEMANTIC_ROUTER_PORT}",
     }
 
     # Redis channel mappings

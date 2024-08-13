@@ -1,0 +1,9 @@
+prefect
+openai
+redis
+fastapi
+sqlmodel
+pgvector
+pydantic
+instructor
+prefect-ray

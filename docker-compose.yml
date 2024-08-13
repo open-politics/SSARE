@@ -115,7 +115,7 @@ services:
     ports:
       - "11434:11434"
     volumes:
-      - ./ollama:/root/.ollama
+      - ./data/ollama:/root/.ollama
 
   pelias_placeholder:
     image: pelias/placeholder
@@ -254,6 +254,24 @@ services:
       - ./core/configs/redis.conf:/usr/local/etc/redis/redis.conf
     ports:
       - "${REDIS_PORT}:6379"
+
+  semantic_machine:
+    build: 
+      context: ./SSARE
+      dockerfile: ./semantic_machine/Dockerfile
+    ports:
+      - "${SEMANTIC_MACHINE_PORT}:5688"
+    environment:
+      - LOCAL_LLM=True
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+    develop:
+      watch:
+        - action: sync
+          path: ./semantic_machine
+          target: /app/main.py
+        - action: rebuild
+          path: semantic_machine/requirements.txt
   
   semantic_router:
     build: 

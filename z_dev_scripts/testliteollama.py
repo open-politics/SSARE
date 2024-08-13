@@ -1,89 +1,35 @@
 from openai import OpenAI
 import instructor
 from pydantic import BaseModel
-from typing import List, Optional
-from datetime import datetime
-from enum import Enum
-from typing import Dict
+from typing import List
 from rich import print
 from rich.panel import Panel
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 from rich.columns import Columns
-import os
-from groq import Groq
+import time
+import statistics
+my_proxy_api_key = "sk-1234"
+my_proxy_base_url = "http://0.0.0.0:4000"
 
-my_proxy_api_key = "xxx" # e.g. sk-1234
-my_proxy_base_url = "http://0.0.0.0:4000" # e.g. http://0.0.0.0:4000
-
-# This enables response_model keyword
-# from client.chat.completions.create
-# client = instructor.from_openai(OpenAI(api_key=my_proxy_api_key, base_url=my_proxy_base_url))
-client = instructor.from_groq(Groq(api_key=os.getenv("GROQ_API_KEY")))
-
-
-class GeoRelevance(BaseModel):
-    country: str
-    score: float
-
-class PolicyImplication(BaseModel):
-    policy_area: str
-    impact: str
-    significance: float
-
-class Stakeholder(BaseModel):
-    name: str
-    position: str
-    influence_level: float
-
-class PublicOpinion(BaseModel):
-    demographic: str
-    approval_rate: float
-
-class ExpertOpinion(BaseModel):
-    expert_name: str
-    affiliation: str
-    opinion: str
-    credibility_score: float
-
-class MediaCoverage(BaseModel):
-    outlet: str
-    sentiment_score: float
-    reach: int
-
-class SocialMediaImpact(BaseModel):
-    platform: str
-    engagement_count: int
-    sentiment_score: float
+client = instructor.from_openai(OpenAI(api_key=my_proxy_api_key, base_url=my_proxy_base_url))
 
 class NewsArticleClassification(BaseModel):
     title: str
-    content: str
-    publication_date: str  # Changed from datetime to str
-    author: str
-    source: str
     primary_category: str
     secondary_categories: List[str]
     keywords: List[str]
-    sentiment: str
-    factual_accuracy: float
-    bias_score: float
-    political_leaning: str
-    geopolitical_relevance: GeoRelevance
-    policy_implications: List[PolicyImplication]
-    stakeholder_analysis: List[Stakeholder]
-    public_opinion_data: List[PublicOpinion]
-    expert_opinions: List[ExpertOpinion]
-    historical_context: str
-    future_projections: str
-    media_coverage_analysis: List[MediaCoverage]
-    social_media_impact: List[SocialMediaImpact]
-    legislative_influence_score: float
-    international_relations_impact: float
-    economic_impact_projection: str
-    social_cohesion_effect: float
-    democratic_process_implications: str
+    sentiment: int
+    factual_accuracy: int
+    bias_score: int
+    political_leaning: int
+    geopolitical_relevance: int
+    legislative_influence_score: int
+    international_relations_impact: int
+    economic_impact_projection: int
+    social_cohesion_effect: int
+    democratic_process_implications: int
 
 mock_articles = [
     """
@@ -165,7 +111,7 @@ As the world grapples with this new reality, it's clear that life on Earth will 
 def classify_article(article: str):
     """Perform classification on the input article."""
     return client.chat.completions.create(
-        model="llama-3.1-8b-instant",
+        model="llama3.1",
         response_model=NewsArticleClassification,
         messages=[
             {
@@ -193,13 +139,13 @@ def display_article_classification(article_classification: NewsArticleClassifica
     # Basic information
     basic_info = Table(show_header=False, expand=True, box=None)
     basic_info.add_row("Primary Category", Text(article_classification.primary_category, style="green"))
-    basic_info.add_row("Political Leaning", Text(article_classification.political_leaning, style="yellow"))
-    basic_info.add_row("Sentiment", Text(article_classification.sentiment, style="magenta"))
+    basic_info.add_row("Political Leaning", Text(str(article_classification.political_leaning), style="yellow"))
+    basic_info.add_row("Sentiment", Text(str(article_classification.sentiment), style="magenta"))
     col1.append(Panel(basic_info, title="Basic Information", border_style="blue"))
 
     # Geopolitical relevance
     geo_panel = Panel(
-        f"Country: {article_classification.geopolitical_relevance.country}\nScore: {article_classification.geopolitical_relevance.score}",
+        f"Score: {article_classification.geopolitical_relevance}",
         title="Geopolitical Relevance",
         border_style="green"
     )
@@ -207,31 +153,31 @@ def display_article_classification(article_classification: NewsArticleClassifica
 
     # Impact scores
     impact_panel = Panel(
-        f"Legislative Influence: {article_classification.legislative_influence_score:.2f}\n"
-        f"International Relations: {article_classification.international_relations_impact:.2f}\n"
-        f"Social Cohesion: {article_classification.social_cohesion_effect:.2f}",
+        f"Legislative Influence: {article_classification.legislative_influence_score}\n"
+        f"International Relations: {article_classification.international_relations_impact}\n"
+        f"Social Cohesion: {article_classification.social_cohesion_effect}",
         title="Impact Scores",
         border_style="magenta"
     )
     col1.append(impact_panel)
 
-    # Policy implications
-    policy_table = Table(title="Policy Implications", show_header=True, header_style="bold magenta")
-    policy_table.add_column("Area", style="cyan", no_wrap=True)
-    policy_table.add_column("Impact", style="yellow")
-    policy_table.add_column("Significance", style="green")
-    for policy in article_classification.policy_implications[:3]:  # Limit to top 3
-        policy_table.add_row(policy.policy_area, policy.impact, f"{policy.significance:.2f}")
-    col2.append(policy_table)
+    # Secondary categories and keywords
+    categories_keywords = Table(show_header=True, header_style="bold magenta")
+    categories_keywords.add_column("Secondary Categories", style="cyan")
+    categories_keywords.add_column("Keywords", style="yellow")
+    categories_keywords.add_row(
+        "\n".join(article_classification.secondary_categories),
+        "\n".join(article_classification.keywords)
+    )
+    col2.append(Panel(categories_keywords, title="Categories and Keywords", border_style="blue"))
 
-    # Stakeholder analysis
-    stakeholder_table = Table(title="Key Stakeholders", show_header=True, header_style="bold blue")
-    stakeholder_table.add_column("Name", style="cyan")
-    stakeholder_table.add_column("Position", style="yellow")
-    stakeholder_table.add_column("Influence", style="green")
-    for stakeholder in article_classification.stakeholder_analysis[:3]:  # Limit to top 3
-        stakeholder_table.add_row(stakeholder.name, stakeholder.position, f"{stakeholder.influence_level:.2f}")
-    col2.append(stakeholder_table)
+    # Scores
+    scores_table = Table(show_header=True, header_style="bold blue")
+    scores_table.add_column("Metric", style="cyan")
+    scores_table.add_column("Score", style="yellow")
+    scores_table.add_row("Factual Accuracy", str(article_classification.factual_accuracy))
+    scores_table.add_row("Bias Score", str(article_classification.bias_score))
+    col2.append(Panel(scores_table, title="Scores", border_style="green"))
 
     # Display columns
     console.print(Columns([*col1, *col2]))
@@ -245,10 +191,51 @@ def display_article_classification(article_classification: NewsArticleClassifica
     )
     console.print(implications_panel)
 
+# Initialize lists to store metrics
+processing_times = []
+article_lengths = []
+processing_times_per_100_words = []
+
 # Classify and display results for each article
 for i, article in enumerate(mock_articles, 1):
     console = Console()
     console.rule(f"[bold red]Article {i}")
+    
+    start_time = time.time()
     article_classification = classify_article(article)
+    end_time = time.time()
+    
+    processing_time = end_time - start_time
+    article_length = len(article.split())  # Count words instead of characters
+    processing_time_per_100_words = (processing_time / article_length) * 100
+    
+    processing_times.append(processing_time)
+    article_lengths.append(article_length)
+    processing_times_per_100_words.append(processing_time_per_100_words)
+    
     display_article_classification(article_classification)
+    
+    console.print(f"[bold green]Processing Time:[/bold green] {processing_time:.2f} seconds")
+    console.print(f"[bold green]Article Length:[/bold green] {article_length} words")
+    console.print(f"[bold green]Processing Time per 100 words:[/bold green] {processing_time_per_100_words:.2f} seconds")
+    
     console.print("\n")
+
+# Calculate and display overall metrics
+avg_processing_time = statistics.mean(processing_times)
+avg_article_length = statistics.mean(article_lengths)
+avg_processing_time_per_100_words = statistics.mean(processing_times_per_100_words)
+
+console = Console()
+console.rule("[bold blue]Overall Metrics")
+console.print(f"[bold cyan]Average Processing Time:[/bold cyan] {avg_processing_time:.2f} seconds")
+console.print(f"[bold cyan]Average Article Length:[/bold cyan] {avg_article_length:.2f} words")
+console.print(f"[bold cyan]Average Processing Time per 100 words:[/bold cyan] {avg_processing_time_per_100_words:.2f} seconds")
+
+# Estimate processing time for entire database
+total_articles_in_database = 10000  # Replace with actual number of articles in your database
+estimated_total_processing_time = (avg_processing_time * total_articles_in_database) / 3600  # Convert to hours
+
+console.print(f"\n[bold yellow]Estimated Processing Time for Entire Database:[/bold yellow]")
+console.print(f"[bold yellow]Number of Articles:[/bold yellow] {total_articles_in_database}")
+console.print(f"[bold yellow]Estimated Total Processing Time:[/bold yellow] {estimated_total_processing_time:.2f} hours")

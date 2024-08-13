@@ -164,7 +164,7 @@ async def service_health(request: Request):
     services_to_check = [
         "main_core_app",
         "postgres_service",
-        "nlp_service",
+        "embedding_service",
         "scraper_service",
         "r2r",
         "rag_service",

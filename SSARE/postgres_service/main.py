@@ -18,6 +18,8 @@ from core.adb import engine, get_session, create_db_and_tables
 from sqlmodel import Session
 from typing import AsyncGenerator
 from sqlalchemy import insert, or_, func, delete
+#import _and
+from sqlalchemy import and_
 from core.models import Article, Entity, ArticleEntity, EntityLocation, Tag, Location
 import math
 import uuid
@@ -107,7 +109,7 @@ async def get_articles(
                 try:
                     # Get query embedding from NLP service
                     async with httpx.AsyncClient() as client:
-                        response = await client.get(f"{config.service_urls['nlp_service']}/generate_query_embeddings", params={"query": search_query})
+                        response = await client.get(f"{config.service_urls['embedding_service']}/generate_query_embeddings", params={"query": search_query})
                         response.raise_for_status()
                         query_embeddings = response.json()["embeddings"]
 
@@ -318,7 +320,7 @@ async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
     logger.info("Trying to create embedding jobs.")
     try:
         async with session.begin():
-            query = select(Article).where(Article.embeddings.is_(None))
+            query = select(Article).where(Article.embeddings == None)
             result = await session.execute(query)
             articles_without_embeddings = result.scalars().all()
             logger.info(f"Found {len(articles_without_embeddings)} articles without embeddings.")
@@ -366,7 +368,7 @@ async def deduplicate_articles(session: AsyncSession = Depends(get_session)):
 async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_session)):
     logger.info("Starting to create entity extraction jobs.")
     try:
-        query = select(Article).where(Article.embeddings.isnot(None))
+        query = select(Article).where(Article.entities == None)
         result = await session.execute(query)
         articles_needing_entities = result.scalars().all()
 
@@ -394,7 +396,15 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
     try:
         async with session.begin():
             # Select articles with embeddings and entities
-            query = select(Article).options(selectinload(Article.entities)).where(Article.entities.any())
+            query = select(Article).join(Article.entities).where(
+                and_(
+                    or_(
+                        Entity.entity_type == 'GPE',
+                        Entity.entity_type == 'LOC'
+                    ),
+                    ~Article.entities.any(Entity.locations.any())
+                )
+            ).distinct()
             result = await session.execute(query)
             articles = result.scalars().all()
             logger.info(f"Found {len(articles)} articles with embeddings and entities.")
@@ -537,4 +547,36 @@ async def store_articles_with_geocoding(session: AsyncSession = Depends(get_sess
         return {"message": "Geocoded articles stored successfully in PostgreSQL."}
     except Exception as e:
         logger.error(f"Error storing geocoded articles: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/create_semantic_machine_jobs")
+async def create_semantic_machine_jobs(session: AsyncSession = Depends(get_session)):
+    logger.info("Starting to create semantic machine jobs.")
+    try:
+        async with session.begin():
+            # Select articles with no tags
+            query = select(Article).where(Article.tags == None)
+            result = await session.execute(query)
+            articles = result.scalars().all()
+            logger.info(f"Found {len(articles)} articles with no tags.")
+            
+            articles_list = [
+                json.dumps({
+                    'url': article.url,
+                    'headline': article.headline,
+                    'paragraphs': article.paragraphs
+                    'source': article.source
+                }) for article in articles
+            ]
+            
+        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=3)
+        if articles_list:
+            await redis_conn.rpush('articles_without_tags_queue', *articles_list)
+            logger.info(f"Pushed {len(articles_list)} articles to Redis queue for semantic machine.")
+        else:
+            logger.info("No articles found that need semantic machine.")
+        await redis_conn.close()
+        return {"message": f"Semantic machine jobs created for {len(articles)} articles."}
+    except Exception as e:
+        logger.error(f"Error creating semantic machine jobs: {e}")
         raise HTTPException(status_code=400, detail=str(e))
