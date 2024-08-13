@@ -49,7 +49,17 @@ class NewsArticleClassification(BaseModel):
     clickbait_score: int
     fake_news_score: int
     satire_score: int
-    bias_score: int
+
+    @validator('sentiment', 'factual_accuracy', 'bias_score', 'political_leaning', 
+               'geopolitical_relevance', 'legislative_influence_score', 
+               'international_relations_impact', 'economic_impact_projection', 
+               'social_cohesion_effect', 'democratic_process_implications', 
+               'general_interest_score', 'spam_score', 'clickbait_score', 
+               'fake_news_score', 'satire_score', pre=True)
+    def convert_to_int(cls, v):
+        if isinstance(v, str):
+            return int(v)
+        return v
 
 # Functions for LLM tasks
 
@@ -105,13 +115,17 @@ def process_articles(batch_size: int = 50):
     
     processed_articles = []
     for article in articles:
-        classification = classify_article(article)
+        try:
+            classification = classify_article(article)
         
-        processed_articles.append({
-            "article": article,
-            "classification": classification
-        })
-        print(classification)
+            processed_articles.append({
+                "article": article,
+                "classification": classification
+            })
+            print(classification)
+        except Exception as e:
+            logger.error(f"Error processing article: {article}")
+            logger.error(f"Error: {e}")
     
     write_articles_to_redis(processed_articles)
     return processed_articles
