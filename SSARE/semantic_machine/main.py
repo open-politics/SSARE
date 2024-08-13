@@ -43,7 +43,7 @@ class ArticleMetric(BaseModel):
     name: str
     value: float
 
-class ArticleRelevance(BaseModel):
+class ArticleGeoPoliticsRelevance(BaseModel):
     relevance: float
 
 # Pydantic models for LLM output
@@ -52,7 +52,7 @@ class ArticleClassification(BaseModel):
     metrics: List[ArticleMetric]
     sentiment: List[ArticleSentiment]
     political_dimensions: List[PoliticalDimension]
-    relevance: ArticleRelevance
+    relevance: ArticleGeoPoliticsRelevance
 
     @validator('tags', 'metrics', 'sentiment', 'political_dimensions', 'relevance', pre=True)
     def parse_json_string(cls, v):
@@ -62,7 +62,7 @@ class ArticleClassification(BaseModel):
 
 # Functions for LLM tasks
 
-@task
+@task(retries=3)
 def classify_article(article: Article) -> ArticleClassification:
     """Classify the article using LLM."""
     return client.chat.completions.create(
@@ -103,7 +103,7 @@ def retrieve_articles_from_redis(batch_size: int = 50) -> List[Article]:
     
     return articles
 
-@flow(task_runner=RayTaskRunner())
+@flow
 def process_articles(batch_size: int = 50):
     """Process a batch of articles: retrieve and classify them."""
     articles = retrieve_articles_from_redis(batch_size=batch_size)
@@ -120,6 +120,7 @@ def process_articles(batch_size: int = 50):
             "article": article,
             "classification": classification
         })
+        print(classification)
     
     # write_articles_to_redis(processed_articles)
     return processed_articles
@@ -135,7 +136,7 @@ def write_articles_to_redis(processed_articles):
         logger.info("No articles to write to Redis")
 
 @app.post("/process_articles")
-def process_articles_endpoint(batch_size: int = 3):
+def process_articles_endpoint(batch_size: int = 2):
     logger.debug("Processing articles")
     processed_articles = process_articles(batch_size)
     
