@@ -18,6 +18,7 @@ from core.adb import engine, get_session, create_db_and_tables
 from sqlmodel import Session
 from typing import AsyncGenerator
 from sqlalchemy import insert, or_, func, delete
+from sqlalchemy.orm import selectinload
 #import _and
 from sqlalchemy import and_
 from core.models import Article, Entity, ArticleEntity, EntityLocation, Tag, Location
@@ -32,7 +33,6 @@ import httpx
 
 from fastapi import Query
 
-from sqlalchemy.orm import selectinload
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -195,6 +195,9 @@ async def store_raw_articles(session: AsyncSession = Depends(get_session)):
                     # Continue processing other articles
 
         await session.commit()
+
+        await redis_conn.ltrim('raw_articles_queue', len(raw_articles), -1)
+
         await redis_conn.close()
         return {"message": "Raw articles processed successfully."}
     except Exception as e:
@@ -209,7 +212,6 @@ async def store_articles_with_embeddings(session: AsyncSession = Depends(get_ses
     try:
         redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=6)
         articles_with_embeddings = await redis_conn.lrange('articles_with_embeddings', 0, -1)
-        await redis_conn.delete('articles_with_embeddings')
 
         async with session.begin():
             for article_with_embeddings in articles_with_embeddings:
@@ -237,6 +239,7 @@ async def store_articles_with_embeddings(session: AsyncSession = Depends(get_ses
                     logger.error(f"JSON decoding error: {e}")
 
         await session.commit()
+        await redis_conn.ltrim('articles_with_embeddings', len(articles_with_embeddings), -1)
         await redis_conn.close()
         return {"message": "Articles with embeddings stored successfully in PostgreSQL."}
     except Exception as e:
@@ -307,7 +310,7 @@ async def store_articles_with_entities(session: AsyncSession = Depends(get_sessi
                     logger.error(f"JSON decoding error for article: {e}")
 
         logger.info("Changes committed to database")
-        await redis_conn.ltrim('articles_with_entities_queue', 0, -1)
+        await redis_conn.ltrim('articles_with_entities_queue', len(articles), -1)
         logger.info("Redis queue trimmed")
         logger.info("Closing Redis connection")
         await redis_conn.close()
@@ -327,20 +330,31 @@ async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
             articles_without_embeddings = result.scalars().all()
             logger.info(f"Found {len(articles_without_embeddings)} articles without embeddings.")
 
-            articles_list = [
-                json.dumps({
-                    'url': article.url,
-                    'headline': article.headline,
-                    'paragraphs': article.paragraphs
-                }) for article in articles_without_embeddings
-            ]
+            redis_conn_unprocessed_articles = await Redis(host='redis', port=config.REDIS_PORT, db=5)
+            
+            # Get existing articles in the queue
+            existing_urls = set(await redis_conn_unprocessed_articles.lrange('articles_without_embedding_queue', 0, -1))
+            existing_urls = {json.loads(url.decode('utf-8'))['url'] for url in existing_urls}
 
-        redis_conn_unprocessed_articles = await Redis(host='redis', port=config.REDIS_PORT, db=5)
+            articles_list = []
+            not_pushed_count = 0
+            for article in articles_without_embeddings:
+                if article.url not in existing_urls:
+                    articles_list.append(json.dumps({
+                        'url': article.url,
+                        'headline': article.headline,
+                        'paragraphs': article.paragraphs
+                    }))
+                else:
+                    not_pushed_count += 1
+
+            logger.info(f"{not_pushed_count} articles already in queue, not pushed again.")
+
         if articles_list:
             await redis_conn_unprocessed_articles.rpush('articles_without_embedding_queue', *articles_list)
             logger.info(f"Pushed {len(articles_list)} articles to Redis queue.")
         else:
-            logger.info("No articles found that need embeddings.")
+            logger.info("No new articles found that need embeddings.")
 
         await redis_conn_unprocessed_articles.close()
         return {"message": f"Embedding jobs created for {len(articles_list)} articles."}
@@ -376,13 +390,18 @@ async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_sess
 
         redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=2)
 
-        for article in articles_needing_entities:
-            article_dict = {
-                'url': article.url,
-                'headline': article.headline,
-                'paragraphs': article.paragraphs
-            }
-            await redis_conn.lpush('articles_without_entities_queue', json.dumps(article_dict, ensure_ascii=False))
+        # Get existing articles in the queue
+        existing_urls = set(await redis_conn.lrange('articles_without_entities_queue', 0, -1))
+        existing_urls = {json.loads(url.decode('utf-8'))['url'] for url in existing_urls}   
+        
+        for article in articles:
+            if article.url not in existing_urls: 
+                article_dict = {
+                    'url': article.url,
+                    'headline': article.headline,
+                    'paragraphs': article.paragraphs
+                }
+                await redis_conn.lpush('articles_without_entities_queue', json.dumps(article_dict, ensure_ascii=False))
 
         await redis_conn.close()  # Close the Redis connection
 
@@ -395,48 +414,52 @@ async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_sess
 @app.post("/create_geocoding_jobs")
 async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
     logger.info("Starting to create geocoding jobs.")
-    redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=3)
     try:
         async with session.begin():
             # Select articles with embeddings and entities
-            query = select(Article).join(Article.entities).where(
-                and_(
-                    or_(
-                        Entity.entity_type == 'GPE',
-                        Entity.entity_type == 'LOC'
-                    ),
-                    ~Article.entities.any(Entity.locations.any())
-                )
-            ).distinct()
+            query = select(Article).options(selectinload(Article.entities)).where(
+                Article.entities.any(or_(Entity.entity_type == 'GPE', Entity.entity_type == 'LOC'))
+            )
             result = await session.execute(query)
             articles = result.scalars().all()
             logger.info(f"Found {len(articles)} articles with embeddings and entities.")
 
+            redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=3)
+
+            # Get existing articles in the queue
+            existing_urls = set(await redis_conn.lrange('articles_without_geocoding_queue', 0, -1))
+            existing_urls = {json.loads(url.decode('utf-8'))['url'] for url in existing_urls}
+
             articles_list = []
+            not_pushed_count = 0
             for article in articles:
-                # Get GPE entities for this article
-                gpe_entities = [entity for entity in article.entities if entity.entity_type == 'GPE' or 'LOC']
-                
-                if gpe_entities:
-                    article_dict = {
-                        'url': article.url,
-                        'headline': article.headline,
-                        'paragraphs': article.paragraphs,
-                        'entities': [{'name': entity.name, 'entity_type': entity.entity_type} for entity in gpe_entities]
-                    }
-                    articles_list.append(json.dumps(article_dict, ensure_ascii=False))
-                    logger.info(f"Article {article.url} has {len(gpe_entities)} GPE or LOC entities.")
-
-                if articles_list:
-                    await redis_conn.rpush('articles_without_geocoding_queue', *articles_list)
-                    logger.info(f"Pushed {len(articles_list)} articles to Redis queue for geocoding.")
+                if article.url not in existing_urls:
+                    gpe_entities = [entity for entity in article.entities if entity.entity_type in ('GPE', 'LOC')]
+                    
+                    if gpe_entities:
+                        article_dict = {
+                            'url': article.url,
+                            'headline': article.headline,
+                            'paragraphs': article.paragraphs,
+                            'entities': [{'name': entity.name, 'entity_type': entity.entity_type} for entity in gpe_entities]
+                        }
+                        articles_list.append(json.dumps(article_dict, ensure_ascii=False))
+                        logger.info(f"Article {article.url} has {len(gpe_entities)} GPE or LOC entities.")
                 else:
-                    logger.info("No articles found that need geocoding.")
+                    not_pushed_count += 1
 
-        await redis_conn.close()
-        return {"message": f"Geocoding jobs created for {len(articles_list)} articles."}
+            if articles_list:
+                await redis_conn.rpush('articles_without_geocoding_queue', *articles_list)
+                logger.info(f"Pushed {len(articles_list)} new articles to Redis queue for geocoding.")
+            else:
+                logger.info("No new articles found that need geocoding.")
+            
+            logger.info(f"{not_pushed_count} articles were not pushed to the queue as they were already present.")
+
+            await redis_conn.close()
+            return {"message": f"Geocoding jobs created for {len(articles_list)} new articles. {not_pushed_count} articles were already in the queue."}
     except Exception as e:
-        logger.error(f"Error creating geocoding jobs: {e}")
+        logger.error(f"Error creating geocoding jobs: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.post("/store_articles_with_geocoding")
@@ -542,7 +565,7 @@ async def store_articles_with_geocoding(session: AsyncSession = Depends(get_sess
                 logger.error(f"Error processing geocoded article {geocoded_data['url']}: {str(e)}")
                 # Continue processing other articles
 
-        await redis_conn.delete('articles_with_geocoding_queue')
+        await redis_conn.ltrim('articles_with_geocoding_queue', 0, -1)
         logger.info("Cleared Redis queue")
         await redis_conn.close()
         logger.info("Closed Redis connection")
