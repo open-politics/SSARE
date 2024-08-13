@@ -3,6 +3,7 @@ import httpx
 from prefect.deployments import Deployment
 from prefect.task_runners import SequentialTaskRunner
 import asyncio
+from redis.asyncio import Redis
 
 runtime_url = "http://main_core_app:8089"
 
@@ -14,6 +15,9 @@ service_urls = {
     "scraper_service": "http://scraper_service:8081",
     "entity_service": "http://entity_service:1290", 
 }
+
+async def setup_redis_connection():
+    return Redis(host='redis', port=6379, db=1, decode_responses=True)
 
 @task
 async def produce_flags(raise_on_failure=True):
@@ -148,6 +152,10 @@ async def classification_flow():
 
 @flow(task_runner=SequentialTaskRunner()) 
 async def scraping_flow(): 
+    redis_conn = await setup_redis_connection()
+
+    await redis_conn.set('scraping_in_progress', '1')
+
     flags_result = await produce_flags()
     if not flags_result: 
         raise ValueError("Failed to produce flags.")
@@ -211,3 +219,5 @@ async def scraping_flow():
     store_classification_result = await store_articles_with_classification()
     if not store_classification_result:
         raise ValueError("Failed to store articles with classification.")
+    
+    await redis_conn.set('scraping_in_progress', '0')

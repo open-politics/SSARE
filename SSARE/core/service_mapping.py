@@ -38,7 +38,7 @@ class ServiceConfig:
     OLLAMA_PORT = os.getenv('OLLAMA_PORT', '11434')
     LITELLM_PORT = os.getenv('LITELLM_PORT', '11435')
 
-    SEMANTIC_MACHINE_PORT = os.getenv('SEMANTIC_MACHINE_PORT', '5688')
+    CLASSIFICATION_SERVICE_PORT = os.getenv('CLASSIFICATION_SERVICE_PORT', '5688')
     SEMANTIC_ROUTER_PORT = os.getenv('SEMANTIC_ROUTER_PORT', '5689')
 
 
@@ -62,7 +62,7 @@ class ServiceConfig:
         "neo4j_bolt": f"bolt://neo4j:{NEO4J_BOLT_PORT}",
         "ollama": f"http://ollama:{OLLAMA_PORT}",
         "liteLLM": f"http://liteLLM:{LITELLM_PORT}",
-        "semantic_machine": f"http://semantic_machine:{SEMANTIC_MACHINE_PORT}",
+        "classification_service": f"http://classification_service:{CLASSIFICATION_SERVICE_PORT}",
         "semantic_router": f"http://semantic_router:{SEMANTIC_ROUTER_PORT}",
     }
 
@@ -78,7 +78,7 @@ class ServiceConfig:
         "articles_with_geocoding_queue": {"db": 4, "key": "articles_with_geocoding_queue"},
         "articles_without_classification_queue" : {"db": 4, "key": "articles_without_classification_queue"},
         "articles_with_classification_queue" : {"db": 4, "key": "articles_with_classification_queue"},
-        "scraping_in_progress": {"db": 0, "key": "scraping_in_progress"}
+        "scraping_in_progress": {"db": 1, "key": "scraping_in_progress"}
     }
 
     # Other configurations/ API Keys

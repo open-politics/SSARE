@@ -307,6 +307,8 @@ async def store_articles_with_entities(session: AsyncSession = Depends(get_sessi
                     logger.error(f"JSON decoding error for article: {e}")
 
         logger.info("Changes committed to database")
+        await redis_conn.ltrim('articles_with_entities_queue', 0, -1)
+        logger.info("Redis queue trimmed")
         logger.info("Closing Redis connection")
         await redis_conn.close()
         logger.info("Articles with entities stored successfully")
