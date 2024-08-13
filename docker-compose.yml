@@ -263,7 +263,7 @@ services:
     ports:
       - "${CLASSIFICATION_SERVICE_PORT}:5688"
     environment:
-      - LOCAL_LLM=True
+      - LOCAL_LLM=${LOCAL_LLM}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
     develop:

@@ -78,7 +78,8 @@ class ServiceConfig:
         "articles_with_geocoding_queue": {"db": 4, "key": "articles_with_geocoding_queue"},
         "articles_without_classification_queue" : {"db": 4, "key": "articles_without_classification_queue"},
         "articles_with_classification_queue" : {"db": 4, "key": "articles_with_classification_queue"},
-        "scraping_in_progress": {"db": 1, "key": "scraping_in_progress"}
+        "Orchestration in progress": {"db": 1, "key": "Orchestration in progress"},
+        "scrapers_running": {"db": 1, "key": "scrapers_running"}
     }
 
     # Other configurations/ API Keys

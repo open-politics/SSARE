@@ -137,7 +137,8 @@ async def check_channels(request: Request, flow_name: str):
                        decode_responses=True)
     
     flow_channels = {
-        "status": {"scraping_in_progress"},
+        "status": {"Orchestration in progress"},
+        "scrapers_running": {"scrapers_running"},
         "scraping": ["scrape_sources", "raw_articles_queue"],
         "embedding": ["articles_without_embedding_queue", "articles_with_embeddings"],
         "entity_extraction": ["articles_without_entities_queue", "articles_with_entities_queue"],
@@ -154,7 +155,10 @@ async def check_channels(request: Request, flow_name: str):
         queue_info = config.redis_queues.get(channel_name)
         if queue_info:
             await redis_conn.select(queue_info['db'])
-            if channel_name == 'scraping_in_progress':
+            if channel_name == 'Orchestration in progress':
+                value = await redis_conn.get(queue_info['key'])
+                channels[channel_name] = 'Active' if value == '1' else 'Inactive'
+            elif channel_name == 'scrapers_running':
                 value = await redis_conn.get(queue_info['key'])
                 channels[channel_name] = 'Active' if value == '1' else 'Inactive'
             else:

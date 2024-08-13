@@ -386,7 +386,7 @@ async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_sess
     try:
         query = select(Article).where(Article.entities == None)
         result = await session.execute(query)
-        articles_needing_entities = result.scalars().all()
+        _articles = result.scalars().all()
 
         redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=2)
 
@@ -394,18 +394,29 @@ async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_sess
         existing_urls = set(await redis_conn.lrange('articles_without_entities_queue', 0, -1))
         existing_urls = {json.loads(url.decode('utf-8'))['url'] for url in existing_urls}   
         
-        for article in articles:
-            if article.url not in existing_urls: 
-                article_dict = {
+        articles_list = []
+        not_pushed_count = 0
+        for article in _articles:
+            if article.url not in existing_urls:
+                articles_list.append(json.dumps({
                     'url': article.url,
                     'headline': article.headline,
                     'paragraphs': article.paragraphs
-                }
-                await redis_conn.lpush('articles_without_entities_queue', json.dumps(article_dict, ensure_ascii=False))
+                }))
+            else:
+                not_pushed_count += 1
+
+        logger.info(f"{not_pushed_count} articles already in queue, not pushed again.")
+
+        if articles_list:
+            await redis_conn.rpush('articles_without_entities_queue', *articles_list)
+            logger.info(f"Pushed {len(articles_list)} articles to Redis queue.")
+        else:
+            logger.info("No new articles found that need entities.")
 
         await redis_conn.close()  # Close the Redis connection
 
-        logger.info(f"Entity extraction jobs for {len(articles_needing_entities)} articles created.")
+        logger.info(f"Entity extraction jobs for {len(_articles)} articles created.")
         return {"message": "Entity extraction jobs created successfully."}
     except Exception as e:
         logger.error(f"Error creating entity extraction jobs: {e}")
@@ -582,26 +593,33 @@ async def create_classification_jobs(session: AsyncSession = Depends(get_session
             # Select articles with no tags
             query = select(Article).where(Article.classification == None)
             result = await session.execute(query)
-            articles = result.scalars().all()
-            logger.info(f"Found {len(articles)} articles with no classification.")
+            _articles = result.scalars().all()
+            logger.info(f"Found {len(_articles)} articles with no classification.")
+
+            redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4)
+            existing_urls = set(await redis_conn.lrange('articles_without_classification_queue', 0, -1))
+            existing_urls = {json.loads(url.decode('utf-8'))['url'] for url in existing_urls}
+
+            articles_list = []
+            not_pushed_count = 0
+            for article in _articles:
+                if article.url not in existing_urls:
+                    articles_list.append(json.dumps({
+                        'url': article.url,
+                        'headline': article.headline,
+                        'paragraphs': article.paragraphs,
+                        'source': article.source
+                    }))
+                else:
+                    not_pushed_count += 1
             
-            articles_list = [
-                json.dumps({
-                    'url': article.url,
-                    'headline': article.headline,
-                    'paragraphs': article.paragraphs,
-                    'source': article.source
-                }) for article in articles
-            ]
-            
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4)
         if articles_list:
             await redis_conn.rpush('articles_without_classification_queue', *articles_list)
             logger.info(f"Pushed {len(articles_list)} articles to Redis queue for classification.")
         else:
             logger.info("No articles found that need classification.")
         await redis_conn.close()
-        return {"message": f"Classification jobs created for {len(articles)} articles."}
+        return {"message": f"Classification jobs created for {len(_articles)} articles."}
     except Exception as e:
         logger.error(f"Error creating classification jobs: {e}")
         raise HTTPException(status_code=400, detail=str(e))
