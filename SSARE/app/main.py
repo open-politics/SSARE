@@ -137,7 +137,9 @@ async def check_channels(request: Request, flow_name: str):
         "scraping": ["scrape_sources", "raw_articles_queue"],
         "embedding": ["articles_without_embedding_queue", "articles_with_embeddings"],
         "entity_extraction": ["articles_without_entities_queue", "articles_with_entities_queue"],
-        "geocoding": ["articles_without_geocoding_queue", "articles_with_geocoding_queue"]
+        "geocoding": ["articles_without_geocoding_queue", "articles_with_geocoding_queue"],
+        "semantics": ["articles_without_tags_queue", "articles_with_tags_queue"],
+        "classification": ["articles_without_classification_queue", "articles_with_classification_queue"]
     }
     
     if flow_name not in flow_channels:

@@ -341,6 +341,40 @@
                         Loading...
                     </div>
                 </div>
+
+                <!-- LLM Classification Pipeline -->
+                <div class="pipeline-group grid-item">
+                    <div class="pipeline-header">
+                        <h3 class="text-lg font-semibold">Classification Pipeline</h3>
+                        <button class="bg-green-500 hover:bg-green-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_pipeline/classification" hx-target="#step-status">Run All Steps</button>
+                    </div>
+                    <div class="pipeline-io">
+                        <span><i class="fas fa-arrow-right"></i> Input: Processed Articles</span>
+                        <span>Output: Classified Articles <i class="fas fa-arrow-right"></i></span>
+                    </div>
+                    <div class="flow-container mb-4">
+                        <div class="flow-step">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_semantic_jobs" hx-target="#step-status">1. Create Jobs</button>
+                        </div>
+                        <div class="flow-step">
+                            <div class="flex items-center space-x-2">
+                                <input type="number" id="classification-batch-size" name="batch_size" value="50" min="1" max="100" class="w-16 px-2 py-1 text-xs border rounded bg-gray-700 text-white">
+                                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" 
+                                    hx-post="/trigger_step/classify_articles" 
+                                    hx-target="#step-status"
+                                    hx-include="#classification-batch-size">
+                                    2. Process
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flow-step">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_semantic_articles" hx-target="#step-status">3. Store</button>
+                        </div>
+                    </div>
+                    <div id="classification-channels" hx-get="/check_channels/classification" hx-trigger="load, every 1s" hx-target="this">
+                        Loading...
+                    </div>
+                </div>
             </div>
             <div id="step-status" class="mt-4 text-fluorescent-green"></div>
         </div>

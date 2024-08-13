@@ -32,7 +32,7 @@ client = instructor.from_groq(Groq(api_key=os.getenv("GROQ_API_KEY")))
 
 # Define the NewsArticleClassification model (as in your script)
 class NewsArticleClassification(BaseModel):
-    # ... (include all fields as in your original script)
+    
     pass
 
 # Initialize RouteLayer (we'll populate this later)

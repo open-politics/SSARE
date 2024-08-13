@@ -549,34 +549,60 @@ async def store_articles_with_geocoding(session: AsyncSession = Depends(get_sess
         logger.error(f"Error storing geocoded articles: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.post("/create_semantic_machine_jobs")
-async def create_semantic_machine_jobs(session: AsyncSession = Depends(get_session)):
-    logger.info("Starting to create semantic machine jobs.")
+@app.post("/create_classification_jobs")
+async def create_classification_jobs(session: AsyncSession = Depends(get_session)):
+    logger.info("Starting to create classification jobs.")
     try:
         async with session.begin():
             # Select articles with no tags
-            query = select(Article).where(Article.tags == None)
+            query = select(Article).where(Article.classification == None)
             result = await session.execute(query)
             articles = result.scalars().all()
-            logger.info(f"Found {len(articles)} articles with no tags.")
+            logger.info(f"Found {len(articles)} articles with no classification.")
             
             articles_list = [
                 json.dumps({
                     'url': article.url,
                     'headline': article.headline,
-                    'paragraphs': article.paragraphs
+                    'paragraphs': article.paragraphs,
                     'source': article.source
                 }) for article in articles
             ]
             
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=3)
+        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4)
         if articles_list:
-            await redis_conn.rpush('articles_without_tags_queue', *articles_list)
-            logger.info(f"Pushed {len(articles_list)} articles to Redis queue for semantic machine.")
+            await redis_conn.rpush('articles_without_classification_queue', *articles_list)
+            logger.info(f"Pushed {len(articles_list)} articles to Redis queue for classification.")
         else:
-            logger.info("No articles found that need semantic machine.")
+            logger.info("No articles found that need classification.")
         await redis_conn.close()
-        return {"message": f"Semantic machine jobs created for {len(articles)} articles."}
+        return {"message": f"Classification jobs created for {len(articles)} articles."}
     except Exception as e:
-        logger.error(f"Error creating semantic machine jobs: {e}")
+        logger.error(f"Error creating classification jobs: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/store_articles_with_classification")
+async def store_articles_with_classification(session: AsyncSession = Depends(get_session)):
+    logger.info("Starting store_articles_with_classification function")
+    redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4, decode_responses=True)
+    logger.info(f"Connected to Redis on port {config.REDIS_PORT}, db 4")
+    classified_articles = await redis_conn.lrange('articles_with_classification_queue', 0, -1)
+    await redis_conn.ltrim('articles_with_classification_queue', len(classified_articles), -1)
+    logger.info(f"Retrieved {len(classified_articles)} classified articles from Redis queue")
+        
+        for index, classified_article in enumerate(classified_articles, 1):
+            try:
+                classified_data = json.loads(classified_article)
+                logger.info(f"Processing classified article {index}/{len(classified_articles)}: {classified_data['url']}")
+                
+                async with session.begin():
+                    article = await session.execute(
+                        select(Article).where(Article.url == classified_data['url'])
+                )
+                article = article.scalar_one_or_none()
+
+                session.add(article)
+
+            except Exception as e:
+                logger.error(f"Error processing classified article {classified_data['url']}: {str(e)}")
+                # Continue processing other articles

@@ -22,6 +22,30 @@ class ArticleTag(SQLModel, table=True):
     article_id: uuid.UUID = Field(foreign_key="article.id", primary_key=True)
     tag_id: uuid.UUID = Field(foreign_key="tag.id", primary_key=True)
 
+class NewsArticleClassification(BaseModel, table=True):
+    article_id: uuid.UUID = Field(foreign_key="article.id", primary_key=True)
+    title: str
+    news_category: str
+    secondary_categories: List[str] = Field(sa_column=Column(Text))
+    keywords: List[str] = Field(sa_column=Column(Text))
+    sentiment: int
+    factual_accuracy: int
+    bias_score: int
+    political_leaning: int
+    geopolitical_relevance: int
+    legislative_influence_score: int
+    international_relations_impact: int
+    economic_impact_projection: int
+    social_cohesion_effect: int
+    democratic_process_implications: int
+    general_interest_score: int
+    spam_score: int
+    clickbait_score: int
+    fake_news_score: int
+    satire_score: int
+
+    article: "Article" = Relationship(back_populates="classification")
+
 class EntityLocation(SQLModel, table=True):
     entity_id: uuid.UUID = Field(foreign_key="entity.id", primary_key=True)
     location_id: uuid.UUID = Field(foreign_key="location.id", primary_key=True)
@@ -35,7 +59,9 @@ class Article(BaseModel, table=True):
     embeddings: Optional[List[float]] = Field(default=None, sa_column=Column(Vector(768)))
 
     entities: Optional[List["Entity"]] = Relationship(back_populates="articles", link_model=ArticleEntity)
+    classification: Optional[NewsArticleClassification] = Relationship(back_populates="article")
     tags: Optional[List["Tag"]] = Relationship(back_populates="articles", link_model=ArticleTag)
+
 
 class Articles(SQLModel):
     articles: List[Article]

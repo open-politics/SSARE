@@ -9,15 +9,17 @@ from rich.table import Table
 from rich.text import Text
 from rich.columns import Columns
 import time
+import os
 import statistics
 my_proxy_api_key = "sk-1234"
 my_proxy_base_url = "http://0.0.0.0:4000"
 
-client = instructor.from_openai(OpenAI(api_key=my_proxy_api_key, base_url=my_proxy_base_url))
+# client = instructor.from_openai(OpenAI(api_key=my_proxy_api_key, base_url=my_proxy_base_url))
+client = instructor.from_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
 
 class NewsArticleClassification(BaseModel):
     title: str
-    primary_category: str
+    news_category: str
     secondary_categories: List[str]
     keywords: List[str]
     sentiment: int
@@ -30,6 +32,12 @@ class NewsArticleClassification(BaseModel):
     economic_impact_projection: int
     social_cohesion_effect: int
     democratic_process_implications: int
+    general_interest_score: int
+    spam_score: int
+    clickbait_score: int
+    fake_news_score: int
+    satire_score: int
+    bias_score: int
 
 mock_articles = [
     """
@@ -111,7 +119,7 @@ As the world grapples with this new reality, it's clear that life on Earth will 
 def classify_article(article: str):
     """Perform classification on the input article."""
     return client.chat.completions.create(
-        model="llama3.1",
+        model="llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4o",
         response_model=NewsArticleClassification,
         messages=[
             {
@@ -132,64 +140,40 @@ def display_article_classification(article_classification: NewsArticleClassifica
     )
     console.print(main_panel)
 
-    # Create columns for better organization
-    col1 = []
-    col2 = []
+    # Create a single table for all scores
+    scores_table = Table(title="Article Classification Scores", show_header=True, header_style="bold magenta")
+    scores_table.add_column("Metric", style="cyan")
+    scores_table.add_column("Score", style="yellow")
 
-    # Basic information
-    basic_info = Table(show_header=False, expand=True, box=None)
-    basic_info.add_row("Primary Category", Text(article_classification.primary_category, style="green"))
-    basic_info.add_row("Political Leaning", Text(str(article_classification.political_leaning), style="yellow"))
-    basic_info.add_row("Sentiment", Text(str(article_classification.sentiment), style="magenta"))
-    col1.append(Panel(basic_info, title="Basic Information", border_style="blue"))
+    # Add all scores to the table
+    scores_table.add_row("Primary Category", article_classification.news_category)
+    scores_table.add_row("Political Leaning", str(article_classification.political_leaning))
+    scores_table.add_row("Sentiment", str(article_classification.sentiment))
+    scores_table.add_row("Geopolitical Relevance", str(article_classification.geopolitical_relevance))
+    scores_table.add_row("Legislative Influence", str(article_classification.legislative_influence_score))
+    scores_table.add_row("International Relations Impact", str(article_classification.international_relations_impact))
+    scores_table.add_row("Economic Impact Projection", str(article_classification.economic_impact_projection))
+    scores_table.add_row("Social Cohesion Effect", str(article_classification.social_cohesion_effect))
+    scores_table.add_row("Democratic Process Implications", str(article_classification.democratic_process_implications))
+    scores_table.add_row("Factual Accuracy", str(article_classification.factual_accuracy))
+    scores_table.add_row("Bias Score", str(article_classification.bias_score))
+    scores_table.add_row("General Interest Score", str(article_classification.general_interest_score))
+    scores_table.add_row("Spam Score", str(article_classification.spam_score))
+    scores_table.add_row("Clickbait Score", str(article_classification.clickbait_score))
+    scores_table.add_row("Fake News Score", str(article_classification.fake_news_score))
+    scores_table.add_row("Satire Score", str(article_classification.satire_score))
 
-    # Geopolitical relevance
-    geo_panel = Panel(
-        f"Score: {article_classification.geopolitical_relevance}",
-        title="Geopolitical Relevance",
-        border_style="green"
-    )
-    col1.append(geo_panel)
+    console.print(scores_table)
 
-    # Impact scores
-    impact_panel = Panel(
-        f"Legislative Influence: {article_classification.legislative_influence_score}\n"
-        f"International Relations: {article_classification.international_relations_impact}\n"
-        f"Social Cohesion: {article_classification.social_cohesion_effect}",
-        title="Impact Scores",
-        border_style="magenta"
-    )
-    col1.append(impact_panel)
-
-    # Secondary categories and keywords
-    categories_keywords = Table(show_header=True, header_style="bold magenta")
+    # Display secondary categories and keywords
+    categories_keywords = Table(show_header=True, header_style="bold blue")
     categories_keywords.add_column("Secondary Categories", style="cyan")
     categories_keywords.add_column("Keywords", style="yellow")
     categories_keywords.add_row(
         "\n".join(article_classification.secondary_categories),
         "\n".join(article_classification.keywords)
     )
-    col2.append(Panel(categories_keywords, title="Categories and Keywords", border_style="blue"))
-
-    # Scores
-    scores_table = Table(show_header=True, header_style="bold blue")
-    scores_table.add_column("Metric", style="cyan")
-    scores_table.add_column("Score", style="yellow")
-    scores_table.add_row("Factual Accuracy", str(article_classification.factual_accuracy))
-    scores_table.add_row("Bias Score", str(article_classification.bias_score))
-    col2.append(Panel(scores_table, title="Scores", border_style="green"))
-
-    # Display columns
-    console.print(Columns([*col1, *col2]))
-
-    # Economic and democratic implications
-    implications_panel = Panel(
-        f"Economic Impact: {article_classification.economic_impact_projection}\n\n"
-        f"Democratic Process: {article_classification.democratic_process_implications}",
-        title="Key Implications",
-        border_style="yellow"
-    )
-    console.print(implications_panel)
+    console.print(Panel(categories_keywords, title="Categories and Keywords", border_style="blue"))
 
 # Initialize lists to store metrics
 processing_times = []

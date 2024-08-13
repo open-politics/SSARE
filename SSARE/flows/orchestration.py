@@ -88,12 +88,31 @@ async def geocode_articles(batch_size: int = 50, raise_on_failure=True):
     async with httpx.AsyncClient() as client:
         response = await client.post(f"{service_urls['geo_service']}/geocode_articles", params={"batch_size": batch_size}, timeout=700)
     return response.status_code == 200
-    s
+    
 @task 
 async def store_articles_with_geocoding(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
         response = await client.post(f"{service_urls['postgres_service']}/store_articles_with_geocoding")
     return response.status_code == 200
+
+@task
+async def create_classification_jobs(raise_on_failure=True):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(f"{service_urls['postgres_service']}/create_classification_jobs", timeout=700)
+    return response.status_code == 200
+
+@task
+async def classify_articles(batch_size: int = 50, raise_on_failure=True):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(f"{service_urls['postgres_service']}/classify_articles", params={"batch_size": batch_size}, timeout=700)
+    return response.status_code == 200
+
+@task
+async def store_articles_with_classification(raise_on_failure=True):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(f"{service_urls['postgres_service']}/store_articles_with_classification")
+    return response.status_code == 200
+
 
 @flow
 async def scraping_sources_flow():
@@ -118,6 +137,12 @@ async def entity_extraction_flow():
 async def geocoding_flow():
     await create_geocoding_jobs()
     await geocode_articles()
+
+@flow
+async def classification_flow():
+    await create_classification_jobs()
+    await classify_articles()
+    await store_articles_with_classification()
 
 
 
@@ -174,3 +199,15 @@ async def scraping_flow():
     store_geocoding_result = await store_articles_with_geocoding()
     if not store_geocoding_result:
         raise ValueError("Failed to store articles with geocoding.")
+
+    create_classification_result = await create_classification_jobs()
+    if not create_classification_result:
+        raise ValueError("Failed to create classification jobs.")
+
+    classify_result = await classify_articles()
+    if not classify_result:
+        raise ValueError("Failed to classify articles.")
+    
+    store_classification_result = await store_articles_with_classification()
+    if not store_classification_result:
+        raise ValueError("Failed to store articles with classification.")

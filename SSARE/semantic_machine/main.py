@@ -19,46 +19,37 @@ logger = logging.getLogger(__name__)
 # FastAPI app
 app = FastAPI()
 
-# Configure LLM
+# Configure LiteLLM
 my_proxy_api_key = "sk-1234"
 my_proxy_base_url = "http://litellm:4000"
+
 
 if os.getenv("LOCAL_LLM") == "True":
     client = instructor.from_openai(OpenAI(base_url=my_proxy_base_url, api_key=my_proxy_api_key))
 else:
     client = instructor.from_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
 
-class ArticleTag(BaseModel):
-    name: str
-
-class ArticleSentiment(BaseModel):
-    name: str
-    value: float
-
-class PoliticalDimension(BaseModel):
-    name: str
-    value: float
-
-class ArticleMetric(BaseModel):
-    name: str
-    value: float
-
-class ArticleGeoPoliticsRelevance(BaseModel):
-    relevance: float
-
-# Pydantic models for LLM output
-class ArticleClassification(BaseModel):
-    tags: List[ArticleTag]
-    metrics: List[ArticleMetric]
-    sentiment: List[ArticleSentiment]
-    political_dimensions: List[PoliticalDimension]
-    relevance: ArticleGeoPoliticsRelevance
-
-    @validator('tags', 'metrics', 'sentiment', 'political_dimensions', 'relevance', pre=True)
-    def parse_json_string(cls, v):
-        if isinstance(v, str):
-            return json.loads(v)
-        return v
+class NewsArticleClassification(BaseModel):
+    title: str
+    news_category: str
+    secondary_categories: List[str]
+    keywords: List[str]
+    sentiment: int
+    factual_accuracy: int
+    bias_score: int
+    political_leaning: int
+    geopolitical_relevance: int
+    legislative_influence_score: int
+    international_relations_impact: int
+    economic_impact_projection: int
+    social_cohesion_effect: int
+    democratic_process_implications: int
+    general_interest_score: int
+    spam_score: int
+    clickbait_score: int
+    fake_news_score: int
+    satire_score: int
+    bias_score: int
 
 # Functions for LLM tasks
 
@@ -66,8 +57,8 @@ class ArticleClassification(BaseModel):
 def classify_article(article: Article) -> ArticleClassification:
     """Classify the article using LLM."""
     return client.chat.completions.create(
-        model="llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4",
-        response_model=ArticleClassification,
+        model="llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4o",
+        response_model=NewsArticleClassification,
         messages=[
             {
                 "role": "system",
@@ -83,9 +74,9 @@ def classify_article(article: Article) -> ArticleClassification:
 @task
 def retrieve_articles_from_redis(batch_size: int = 50) -> List[Article]:
     """Retrieve articles from Redis queue."""
-    redis_conn = Redis(host='redis', port=6379, db=3)
-    _articles = redis_conn.lrange('articles_without_tags_queue', 0, batch_size - 1)
-    redis_conn.ltrim('articles_without_tags_queue', batch_size, -1)
+    redis_conn = Redis(host='redis', port=6379, db=4)
+    _articles = redis_conn.lrange('articles_without_classification_queue', 0, batch_size - 1)
+    redis_conn.ltrim('articles_without_classification_queue', batch_size, -1)
     
     if not _articles:
         logger.warning("No articles retrieved from Redis.")
@@ -122,21 +113,21 @@ def process_articles(batch_size: int = 50):
         })
         print(classification)
     
-    # write_articles_to_redis(processed_articles)
+    write_articles_to_redis(processed_articles)
     return processed_articles
 
 @task
 def write_articles_to_redis(processed_articles):
-    redis_conn_processed = Redis(host='redis', port=6379, db=3)
+    redis_conn_processed = Redis(host='redis', port=6379, db=4)
     serialized_articles = [json.dumps(article) for article in processed_articles]
     if serialized_articles:  # Check if the list is not empty
-        redis_conn_processed.lpush('articles_with_embeddings', *serialized_articles)
-        logger.info(f"Wrote {len(processed_articles)} articles with embeddings to Redis")
+        redis_conn_processed.lpush('articles_with_classification_queue', *serialized_articles)
+        logger.info(f"Wrote {len(processed_articles)} articles with classification to Redis")
     else:
         logger.info("No articles to write to Redis")
 
-@app.post("/process_articles")
-def process_articles_endpoint(batch_size: int = 2):
+@app.post("/classify_articles")
+def classify_articles_endpoint(batch_size: int = 2):
     logger.debug("Processing articles")
     processed_articles = process_articles(batch_size)
     

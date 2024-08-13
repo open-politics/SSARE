@@ -76,6 +76,8 @@ class ServiceConfig:
         "articles_without_entities_queue": {"db": 2, "key": "articles_without_entities_queue"},
         "articles_without_geocoding_queue": {"db": 3, "key": "articles_without_geocoding_queue"},
         "articles_with_geocoding_queue": {"db": 4, "key": "articles_with_geocoding_queue"},
+        "articles_without_classification_queue" : {"db": 4, "key": "articles_without_classification_queue"},
+        "articles_with_classification_queue" : {"db": 4, "key": "articles_with_classification_queue"},
         "scraping_in_progress": {"db": 0, "key": "scraping_in_progress"}
     }
 
