@@ -130,13 +130,13 @@ async def scrape_sources_flow(flags):
         for flag in flags:
             try:
                 redis_conn = Redis(host='redis', port=6379, db=1, decode_responses=True)
-                await redis_conn.set('scraping_in_progress', '1')
+                await redis_conn.set('scrapers_running', '1')
                 articles = await scrape_source_by_script_for_flag(flag)
                 if articles is None:
                     continue
                 processed_articles = await process_articles_to_model(articles, flag)
                 await save_articles_to_redis(processed_articles.articles, flag)
-                await redis_conn.set('scraping_in_progress', '0')
+                await redis_conn.set('scrapers_running', '0')
                 await redis_conn.aclose()
             except Exception as e:
                 logger.error(f"Error in scraping for {flag}: {str(e)}")

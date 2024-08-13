@@ -46,7 +46,7 @@ async def get_flags():
 
 @task
 async def wait_for_scraping_completion(redis_conn):
-    while await redis_conn.get('scraping_in_progress') == '1':
+    while await redis_conn.get('scrapers_running') == '1':
         await asyncio.sleep(0.5)
 
 @flow
