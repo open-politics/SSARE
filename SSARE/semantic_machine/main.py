@@ -54,7 +54,7 @@ class NewsArticleClassification(BaseModel):
 # Functions for LLM tasks
 
 @task(retries=3)
-def classify_article(article: Article) -> ArticleClassification:
+def classify_article(article: Article) -> NewsArticleClassification:
     """Classify the article using LLM."""
     return client.chat.completions.create(
         model="llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4o",

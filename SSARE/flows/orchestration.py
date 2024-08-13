@@ -104,7 +104,7 @@ async def create_classification_jobs(raise_on_failure=True):
 @task
 async def classify_articles(batch_size: int = 50, raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{service_urls['postgres_service']}/classify_articles", params={"batch_size": batch_size}, timeout=700)
+        response = await client.post(f"{service_urls['classification_service']}/classify_articles", params={"batch_size": batch_size}, timeout=700)
     return response.status_code == 200
 
 @task

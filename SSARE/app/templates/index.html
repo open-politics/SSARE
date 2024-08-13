@@ -354,7 +354,7 @@
                     </div>
                     <div class="flow-container mb-4">
                         <div class="flow-step">
-                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_semantic_jobs" hx-target="#step-status">1. Create Jobs</button>
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/create_classification_jobs" hx-target="#step-status">1. Create Jobs</button>
                         </div>
                         <div class="flow-step">
                             <div class="flex items-center space-x-2">
@@ -368,7 +368,7 @@
                             </div>
                         </div>
                         <div class="flow-step">
-                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_semantic_articles" hx-target="#step-status">3. Store</button>
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded text-xs transition duration-300" hx-post="/trigger_step/store_articles_with_classification" hx-target="#step-status">3. Store</button>
                         </div>
                     </div>
                     <div id="classification-channels" hx-get="/check_channels/classification" hx-trigger="load, every 1s" hx-target="this">

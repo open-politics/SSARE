@@ -393,6 +393,7 @@ async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_sess
 @app.post("/create_geocoding_jobs")
 async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
     logger.info("Starting to create geocoding jobs.")
+    redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=3)
     try:
         async with session.begin():
             # Select articles with embeddings and entities
@@ -424,12 +425,11 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
                     articles_list.append(json.dumps(article_dict, ensure_ascii=False))
                     logger.info(f"Article {article.url} has {len(gpe_entities)} GPE or LOC entities.")
 
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=3)
-        if articles_list:
-            await redis_conn.rpush('articles_without_geocoding_queue', *articles_list)
-            logger.info(f"Pushed {len(articles_list)} articles to Redis queue for geocoding.")
-        else:
-            logger.info("No articles found that need geocoding.")
+                if articles_list:
+                    await redis_conn.rpush('articles_without_geocoding_queue', *articles_list)
+                    logger.info(f"Pushed {len(articles_list)} articles to Redis queue for geocoding.")
+                else:
+                    logger.info("No articles found that need geocoding.")
 
         await redis_conn.close()
         return {"message": f"Geocoding jobs created for {len(articles_list)} articles."}
@@ -590,19 +590,19 @@ async def store_articles_with_classification(session: AsyncSession = Depends(get
     await redis_conn.ltrim('articles_with_classification_queue', len(classified_articles), -1)
     logger.info(f"Retrieved {len(classified_articles)} classified articles from Redis queue")
         
-        for index, classified_article in enumerate(classified_articles, 1):
-            try:
-                classified_data = json.loads(classified_article)
-                logger.info(f"Processing classified article {index}/{len(classified_articles)}: {classified_data['url']}")
-                
-                async with session.begin():
-                    article = await session.execute(
-                        select(Article).where(Article.url == classified_data['url'])
-                )
+    for index, classified_article in enumerate(classified_articles, 1):
+        try:
+            classified_data = json.loads(classified_article)
+            logger.info(f"Processing classified article {index}/{len(classified_articles)}: {classified_data['url']}")
+            
+            async with session.begin():
+                article = await session.execute(
+                    select(Article).where(Article.url == classified_data['url'])
+                    )
                 article = article.scalar_one_or_none()
 
                 session.add(article)
 
-            except Exception as e:
+        except Exception as e:
                 logger.error(f"Error processing classified article {classified_data['url']}: {str(e)}")
                 # Continue processing other articles

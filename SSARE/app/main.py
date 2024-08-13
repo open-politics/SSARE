@@ -20,7 +20,8 @@ from flows.orchestration import (
     store_articles_with_embeddings, create_entity_extraction_jobs,
     extract_entities, store_articles_with_entities,
     create_geocoding_jobs, geocode_articles,
-    produce_flags, create_scrape_jobs, store_raw_articles, store_articles_with_geocoding
+    produce_flags, create_scrape_jobs, store_raw_articles, store_articles_with_geocoding,
+    create_classification_jobs, classify_articles, store_articles_with_classification
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -51,35 +52,38 @@ async def healthcheck():
 #- Dashboard
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, query: str = "culture and arts"):
-    postgres_service_url = f"{config.service_urls['postgres_service']}/articles"
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            postgres_service_url,
-            params={
-                "search_query": query,
-                "search_type": "semantic",
-                "skip": 0,
-                "limit": 10
-            }
-        )
+    try:
+        postgres_service_url = f"{config.service_urls['postgres_service']}/articles"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                postgres_service_url,
+                params={
+                    "search_query": query,
+                    "search_type": "semantic",
+                    "skip": 0,
+                    "limit": 10
+                }
+            )
 
-    if response.status_code == 200:
-        articles = response.json()
-        articles = [{
-            'score': article.get('similarity', 0),
-            'headline': article['headline'],
-            'paragraphs': article['paragraphs'],
-            'url': article['url']
-        } for article in articles]
-        logger.info("Response for search was successful")
-    else:
-        articles = []     
-        logger.info("Response for search was not successful")
+        if response.status_code == 200:
+            articles = response.json()
+            articles = [{
+                'score': article.get('similarity', 0),
+                'headline': article['headline'],
+                'paragraphs': article['paragraphs'],
+                'url': article['url']
+            } for article in articles]
+            logger.info("Response for search was successful")
+        else:
+            articles = []     
+            logger.info("Response for search was not successful")
 
-    if "HX-Request" in request.headers:
-        return templates.TemplateResponse("partials/articles_list.html", {"request": request, "articles": articles})
-    else:
-        return templates.TemplateResponse("index.html", {"request": request, "search_query": query})
+        if "HX-Request" in request.headers:
+            return templates.TemplateResponse("partials/articles_list.html", {"request": request, "articles": articles})
+        else:
+            return templates.TemplateResponse("index.html", {"request": request, "search_query": query})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch articles: {str(e)}")
 
 @app.post("/trigger_scraping_sequence")
 async def trigger_scraping_flow():
@@ -173,7 +177,8 @@ async def service_health(request: Request):
         "entity_service",
         "geo_service",
         "ollama",
-        "liteLLM"
+        "liteLLM",
+        "classification_service"
     ]
     async with httpx.AsyncClient() as client:
         for service in services_to_check:
@@ -207,7 +212,10 @@ async def trigger_step(step_name: str):
         "store_articles_with_entities": store_articles_with_entities,
         "create_geocoding_jobs": create_geocoding_jobs,
         "geocode_articles": geocode_articles,
-        "store_articles_with_geocoding": store_articles_with_geocoding
+        "store_articles_with_geocoding": store_articles_with_geocoding,
+        "create_classification_jobs": create_classification_jobs,
+        "classify_articles": classify_articles,
+        "store_articles_with_classification": store_articles_with_classification
     }
     
     if step_name not in step_functions:
