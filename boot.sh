@@ -1,6 +1,7 @@
 sudo mkdir -p ./data/placeholder
 sudo chmod 777 ./data/placeholder
 
+sudo sysctl vm.overcommit_memory=1
 
 sudo docker compose up --build -d
 
