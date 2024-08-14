@@ -72,10 +72,11 @@ async def get_articles(
     has_embeddings: Optional[bool] = Query(None, description="Filter articles with embeddings"),
     has_geocoding: Optional[bool] = Query(None, description="Filter articles with geocoding"),
     has_entities: Optional[bool] = Query(None, description="Filter articles with entities"),
+    has_classification: Optional[bool] = Query(None, description="Filter articles with classification"),
     skip: int = 0, 
     limit: int = 10, 
     session: AsyncSession = Depends(get_session)
-):
+    ):
     logger.info(f"Received search_type: {search_type}, search_query: {search_query}")
 
     logger.info(f"Received search_type: {search_type}, search_query: {search_query}")
@@ -95,6 +96,8 @@ async def get_articles(
             query = query.where(Article.embeddings.isnot(None) if has_embeddings else Article.embeddings.is_(None))
         if has_entities is not None:
             query = query.where(Article.entities.any() if has_entities else ~Article.entities.any())
+        if has_classification is not None:
+            query = query.where(Article.classification.isnot(None) if has_classification else Article.classification.is_(None))
         
         # Apply search based on search_type
         if search_query:

@@ -67,7 +67,7 @@ class NewsArticleClassification(BaseModel):
 def classify_article(article: Article) -> NewsArticleClassification:
     """Classify the article using LLM."""
     return client.chat.completions.create(
-        model="llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4o",
+        model="llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4o-2024-08-06",
         response_model=NewsArticleClassification,
         messages=[
             {
@@ -76,7 +76,7 @@ def classify_article(article: Article) -> NewsArticleClassification:
             },
             {
                 "role": "user",
-                "content": f"Analyze this article and provide tags and metrics:\n\nHeadline: {article.headline}\n\nContent: {article.paragraphs}",
+                "content": f"Analyze this article and provide tags and metrics:\n\nHeadline: {article.headline}\n\nContent: {article.paragraphs if os.getenv('LOCAL_LLM') == 'False' else article.paragraphs[:350]}",
             },
         ],
     )
@@ -112,6 +112,8 @@ def process_articles(batch_size: int = 50):
     if not articles:
         logger.warning("No articles to process.")
         return []
+    
+    logger.info(f"processing: {len(articles)} articles")
     
     processed_articles = []
     for article in articles:
