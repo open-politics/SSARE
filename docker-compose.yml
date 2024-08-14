@@ -252,7 +252,7 @@ services:
     image: redis:latest
     command: redis-server /usr/local/etc/redis/redis.conf
     volumes:
-      - ./core/configs/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./SSARE/core/configs/redis.conf:/usr/local/etc/redis/redis.conf
     ports:
       - "${REDIS_PORT}:6379"
 
