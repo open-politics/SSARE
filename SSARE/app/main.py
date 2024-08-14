@@ -202,23 +202,23 @@ async def service_health(request: Request):
     return templates.TemplateResponse("partials/service_health.html", {"request": request, "service_health": health_status})
 
 @app.post("/trigger_step/{step_name}")
-async def trigger_step(step_name: str):
+async def trigger_step(step_name: str, batch_size: int = Query(50, ge=1, le=100)):
     step_functions = {
         "produce_flags": produce_flags,
         "create_scrape_jobs": create_scrape_jobs,
         "store_raw_articles": store_raw_articles,
         "deduplicate_articles": deduplicate_articles,
         "create_embedding_jobs": create_embedding_jobs,
-        "generate_embeddings": generate_embeddings,
+        "generate_embeddings": lambda: generate_embeddings(batch_size=batch_size),
         "store_articles_with_embeddings": store_articles_with_embeddings,
         "create_entity_extraction_jobs": create_entity_extraction_jobs,
-        "extract_entities": extract_entities,
+        "extract_entities": lambda: extract_entities(batch_size=batch_size),
         "store_articles_with_entities": store_articles_with_entities,
         "create_geocoding_jobs": create_geocoding_jobs,
-        "geocode_articles": geocode_articles,
+        "geocode_articles": lambda: geocode_articles(batch_size=batch_size),
         "store_articles_with_geocoding": store_articles_with_geocoding,
         "create_classification_jobs": create_classification_jobs,
-        "classify_articles": classify_articles,
+        "classify_articles": lambda: classify_articles(batch_size=batch_size),
         "store_articles_with_classification": store_articles_with_classification
     }
     
@@ -227,7 +227,7 @@ async def trigger_step(step_name: str):
     
     try:
         result = await step_functions[step_name]()
-        return {"message": f"Step '{step_name}' completed successfully"}
+        return {"message": f"Step '{step_name}' completed successfully", "batch_size": batch_size if step_name in ["generate_embeddings", "extract_entities", "geocode_articles", "classify_articles"] else None}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to execute step '{step_name}': {str(e)}")
     
