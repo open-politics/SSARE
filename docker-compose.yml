@@ -145,6 +145,8 @@ services:
     build: 
       context: ./SSARE
       dockerfile: ./postgres_service/Dockerfile
+    volumes:
+      - ./SSARE/postgres_service/alembic/versions:/app/alembic/versions
     ports:
       - "${POSTGRES_SERVICE_PORT}:5434"
     depends_on:
