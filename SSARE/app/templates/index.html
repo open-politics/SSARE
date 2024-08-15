@@ -390,9 +390,18 @@
 
         <div class="bg-card rounded-lg p-4 mb-6">
             <h2 class="text-xl font-semibold mb-4">Prefect Dashboard</h2>
-            <iframe src="http://localhost:4200/flow-runs" width="100%" height="600" frameborder="0"></iframe>
+            <iframe id="prefect-dashboard" src="http://localhost:4200/dashboard" width="100%" height="600" frameborder="0"></iframe>
         </div>
     </div>
+    <script>
+        function refreshPrefectDashboard() {
+            const iframe = document.getElementById('prefect-dashboard');
+            iframe.src = iframe.src;
+        }
+
+        // Refresh the iframe every 30 seconds (30000 milliseconds)
+        setInterval(refreshPrefectDashboard, 30000);
+    </script>
 </body>
 
 </html>
