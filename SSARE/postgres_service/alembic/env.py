@@ -1,24 +1,27 @@
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config
+from sqlalchemy import engine_from_config, create_engine
 from sqlalchemy import pool
 from alembic import context
-from core.service_mapping import config as app_config
-from core.models import Article
 from sqlmodel import SQLModel
+import sys
+import os
 
-config = context.config
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from core.service_mapping import ServiceConfig
+from core.models import Article
 
-config.set_main_option("sqlalchemy.url", f"postgresql+asyncpg://{app_config.ARTICLES_DB_USER}:{app_config.ARTICLES_DB_PASSWORD}@articles_database:5432/{app_config.ARTICLES_DB_NAME}")
+config = ServiceConfig()
 
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+DATABASE_URL = (
+    f"postgresql://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
+    f"@articles_database:5432/{config.ARTICLES_DB_NAME}"
+)
 
 target_metadata = SQLModel.metadata
 
 def run_migrations_offline() -> None:
-    url = config.get_main_option("sqlalchemy.url")
     context.configure(
-        url=url,
+        url=DATABASE_URL,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -28,15 +31,18 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 def run_migrations_online() -> None:
+    configuration = context.config
+    configuration.set_main_option("sqlalchemy.url", DATABASE_URL)
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section),
+        configuration.get_section(configuration.config_ini_section),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata
         )
 
         with context.begin_transaction():
