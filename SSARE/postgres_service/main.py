@@ -5,34 +5,31 @@ from typing import List, Optional, Dict, Any, AsyncGenerator
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Query, Body
 from sqlmodel import SQLModel, Field, create_engine, Session, select, update
 from sqlmodel import Column, JSON
-from sqlalchemy import text
-from pgvector.sqlalchemy import Vector
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from pydantic import BaseModel, ValidationError
 from contextlib import asynccontextmanager
-from redis.asyncio import Redis
-from fastapi.responses import StreamingResponse
-from core.service_mapping import config
-from core.models import Article, Articles, ArticleEntity, ArticleTag
-from core.adb import engine, get_session, create_db_and_tables
-from sqlmodel import Session
-from typing import AsyncGenerator
-from sqlalchemy import insert, or_, func, delete
-from sqlalchemy.orm import selectinload
-#import _and
-from sqlalchemy import and_
-from core.models import Article, Entity, ArticleEntity, EntityLocation, Tag, Location
-import math
-import uuid
-import pandas as pd
 from enum import Enum
-from sqlalchemy.orm import joinedload
-from sqlalchemy.orm import joinedload
-from fastapi.encoders import jsonable_encoder
 import httpx
+import math
+import pandas as pd
+import uuid
 
 from fastapi import Query
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
+from pgvector.sqlalchemy import Vector
+from pydantic import BaseModel, ValidationError
+from redis.asyncio import Redis
+from sqlalchemy import and_, delete, func, insert, or_, text, update
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import joinedload, selectinload
+from sqlmodel import Session
+from typing import AsyncGenerator
 
+from core.adb import engine, get_session, create_db_and_tables
+from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag
+from core.service_mapping import config
+
+########################################################################################
+## SETUP
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -52,17 +49,13 @@ app = FastAPI(lifespan=lifespan)
 async def healthcheck():
     return {"message": "OK"}, 200
 
-@app.get("/flags")
-async def produce_flags():
-    await redis_conn_flags.delete("scrape_sources")
-    flags = ["cnn", "bbc", "dw"]
-    for flag in flags:
-        await redis_conn_flags.lpush("scrape_sources", flag)
-    return {"message": f"Flags produced: {', '.join(flags)}"}
 
 class SearchType(str, Enum):
     TEXT = "text"
     SEMANTIC = "semantic"
+
+########################################################################################
+## SEARCH FUNCTIONS
 
 @app.get("/articles")
 async def get_articles(
@@ -172,6 +165,39 @@ async def get_articles(
         logger.info(f"Returning {len(articles_data)} articles")
         return articles_data
         
+########################################################################################
+## HELPER FUNCTIONS
+
+@app.post("/deduplicate_articles")
+async def deduplicate_articles(session: AsyncSession = Depends(get_session)):
+    try:
+        async with session.begin():
+            query = select(Article).group_by(Article.id, Article.url).having(func.count() > 1)
+            result = await session.execute(query)
+            duplicate_articles = result.scalars().all()
+
+        for article in duplicate_articles:
+            logger.info(f"Duplicate article: {article.url}")
+            await session.delete(article)
+
+        await session.commit()
+        return {"message": "Duplicate articles deleted successfully."}
+    except Exception as e:
+        logger.error(f"Error deduplicating articles: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+########################################################################################
+## 1. SCRAPING PIPELINE
+
+# Produce Flags for scraping
+@app.get("/flags")
+async def produce_flags():
+    await redis_conn_flags.delete("scrape_sources")
+    flags = ["cnn", "bbc", "dw"]
+    for flag in flags:
+        await redis_conn_flags.lpush("scrape_sources", flag)
+    return {"message": f"Flags produced: {', '.join(flags)}"}
+
 @app.post("/store_raw_articles")
 async def store_raw_articles(session: AsyncSession = Depends(get_session)):
     try:
@@ -209,6 +235,52 @@ async def store_raw_articles(session: AsyncSession = Depends(get_session)):
         raise HTTPException(status_code=400, detail=str(e))
     finally:
         await session.close()
+
+########################################################################################
+## 2. EMBEDDING PIPELINE
+
+@app.post("/create_embedding_jobs")
+async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
+    logger.info("Trying to create embedding jobs.")
+    try:
+        async with session.begin():
+            query = select(Article).where(Article.embeddings == None)
+            result = await session.execute(query)
+            articles_without_embeddings = result.scalars().all()
+            logger.info(f"Found {len(articles_without_embeddings)} articles without embeddings.")
+
+            redis_conn_unprocessed_articles = await Redis(host='redis', port=config.REDIS_PORT, db=5)
+            
+            # Get existing articles in the queue
+            existing_urls = set(await redis_conn_unprocessed_articles.lrange('articles_without_embedding_queue', 0, -1))
+            existing_urls = {json.loads(url.decode('utf-8'))['url'] for url in existing_urls}
+
+            articles_list = []
+            not_pushed_count = 0
+            for article in articles_without_embeddings:
+                if article.url not in existing_urls:
+                    articles_list.append(json.dumps({
+                        'url': article.url,
+                        'headline': article.headline,
+                        'paragraphs': article.paragraphs
+                    }))
+                else:
+                    not_pushed_count += 1
+
+            logger.info(f"{not_pushed_count} articles already in queue, not pushed again.")
+
+        if articles_list:
+            await redis_conn_unprocessed_articles.rpush('articles_without_embedding_queue', *articles_list)
+            logger.info(f"Pushed {len(articles_list)} articles to Redis queue.")
+        else:
+            logger.info("No new articles found that need embeddings.")
+
+        await redis_conn_unprocessed_articles.close()
+        return {"message": f"Embedding jobs created for {len(articles_list)} articles."}
+    except Exception as e:
+        logger.error(f"Failed to create embedding jobs: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.post("/store_articles_with_embeddings")
 async def store_articles_with_embeddings(session: AsyncSession = Depends(get_session)):
@@ -249,8 +321,51 @@ async def store_articles_with_embeddings(session: AsyncSession = Depends(get_ses
         logger.error(f"Error storing articles with embeddings: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-from sqlalchemy import update, insert
-from core.models import Article, Entity, ArticleEntity
+########################################################################################
+## 3. ENTITY PIPELINE
+
+@app.post("/create_entity_extraction_jobs")
+async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_session)):
+    logger.info("Starting to create entity extraction jobs.")
+    try:
+        query = select(Article).where(Article.entities == None)
+        result = await session.execute(query)
+        _articles = result.scalars().all()
+
+        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=2)
+
+        # Get existing articles in the queue
+        existing_urls = set(await redis_conn.lrange('articles_without_entities_queue', 0, -1))
+        existing_urls = {json.loads(url.decode('utf-8'))['url'] for url in existing_urls}   
+        
+        articles_list = []
+        not_pushed_count = 0
+        for article in _articles:
+            if article.url not in existing_urls:
+                articles_list.append(json.dumps({
+                    'url': article.url,
+                    'headline': article.headline,
+                    'paragraphs': article.paragraphs
+                }))
+            else:
+                not_pushed_count += 1
+
+        logger.info(f"{not_pushed_count} articles already in queue, not pushed again.")
+
+        if articles_list:
+            await redis_conn.rpush('articles_without_entities_queue', *articles_list)
+            logger.info(f"Pushed {len(articles_list)} articles to Redis queue.")
+        else:
+            logger.info("No new articles found that need entities.")
+
+        await redis_conn.close()  # Close the Redis connection
+
+        logger.info(f"Entity extraction jobs for {len(_articles)} articles created.")
+        return {"message": "Entity extraction jobs created successfully."}
+    except Exception as e:
+        logger.error(f"Error creating entity extraction jobs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/store_articles_with_entities")
 async def store_articles_with_entities(session: AsyncSession = Depends(get_session)):
@@ -323,107 +438,8 @@ async def store_articles_with_entities(session: AsyncSession = Depends(get_sessi
         logger.error(f"Error processing articles with entities: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.post("/create_embedding_jobs")
-async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
-    logger.info("Trying to create embedding jobs.")
-    try:
-        async with session.begin():
-            query = select(Article).where(Article.embeddings == None)
-            result = await session.execute(query)
-            articles_without_embeddings = result.scalars().all()
-            logger.info(f"Found {len(articles_without_embeddings)} articles without embeddings.")
-
-            redis_conn_unprocessed_articles = await Redis(host='redis', port=config.REDIS_PORT, db=5)
-            
-            # Get existing articles in the queue
-            existing_urls = set(await redis_conn_unprocessed_articles.lrange('articles_without_embedding_queue', 0, -1))
-            existing_urls = {json.loads(url.decode('utf-8'))['url'] for url in existing_urls}
-
-            articles_list = []
-            not_pushed_count = 0
-            for article in articles_without_embeddings:
-                if article.url not in existing_urls:
-                    articles_list.append(json.dumps({
-                        'url': article.url,
-                        'headline': article.headline,
-                        'paragraphs': article.paragraphs
-                    }))
-                else:
-                    not_pushed_count += 1
-
-            logger.info(f"{not_pushed_count} articles already in queue, not pushed again.")
-
-        if articles_list:
-            await redis_conn_unprocessed_articles.rpush('articles_without_embedding_queue', *articles_list)
-            logger.info(f"Pushed {len(articles_list)} articles to Redis queue.")
-        else:
-            logger.info("No new articles found that need embeddings.")
-
-        await redis_conn_unprocessed_articles.close()
-        return {"message": f"Embedding jobs created for {len(articles_list)} articles."}
-    except Exception as e:
-        logger.error(f"Failed to create embedding jobs: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/deduplicate_articles")
-async def deduplicate_articles(session: AsyncSession = Depends(get_session)):
-    try:
-        async with session.begin():
-            query = select(Article).group_by(Article.id, Article.url).having(func.count() > 1)
-            result = await session.execute(query)
-            duplicate_articles = result.scalars().all()
-
-        for article in duplicate_articles:
-            logger.info(f"Duplicate article: {article.url}")
-            await session.delete(article)
-
-        await session.commit()
-        return {"message": "Duplicate articles deleted successfully."}
-    except Exception as e:
-        logger.error(f"Error deduplicating articles: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/create_entity_extraction_jobs")
-async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_session)):
-    logger.info("Starting to create entity extraction jobs.")
-    try:
-        query = select(Article).where(Article.entities == None)
-        result = await session.execute(query)
-        _articles = result.scalars().all()
-
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=2)
-
-        # Get existing articles in the queue
-        existing_urls = set(await redis_conn.lrange('articles_without_entities_queue', 0, -1))
-        existing_urls = {json.loads(url.decode('utf-8'))['url'] for url in existing_urls}   
-        
-        articles_list = []
-        not_pushed_count = 0
-        for article in _articles:
-            if article.url not in existing_urls:
-                articles_list.append(json.dumps({
-                    'url': article.url,
-                    'headline': article.headline,
-                    'paragraphs': article.paragraphs
-                }))
-            else:
-                not_pushed_count += 1
-
-        logger.info(f"{not_pushed_count} articles already in queue, not pushed again.")
-
-        if articles_list:
-            await redis_conn.rpush('articles_without_entities_queue', *articles_list)
-            logger.info(f"Pushed {len(articles_list)} articles to Redis queue.")
-        else:
-            logger.info("No new articles found that need entities.")
-
-        await redis_conn.close()  # Close the Redis connection
-
-        logger.info(f"Entity extraction jobs for {len(_articles)} articles created.")
-        return {"message": "Entity extraction jobs created successfully."}
-    except Exception as e:
-        logger.error(f"Error creating entity extraction jobs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+########################################################################################
+## 4. GEOCODING PIPELINE
 
 @app.post("/create_geocoding_jobs")
 async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
@@ -587,6 +603,9 @@ async def store_articles_with_geocoding(session: AsyncSession = Depends(get_sess
     except Exception as e:
         logger.error(f"Error storing geocoded articles: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+########################################################################################
+## 5. LLM CLASSIFICATION PIPELINE
 
 @app.post("/create_classification_jobs")
 async def create_classification_jobs(session: AsyncSession = Depends(get_session)):
