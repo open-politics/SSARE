@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from openai import OpenAI
 import instructor
 from core.models import Article, ArticleTags, Tag, Entity, Location
-from pydantic import validator
+from pydantic import validator, field_validator
 from prefect import task, flow
 from prefect_ray.task_runners import RayTaskRunner
 
@@ -29,36 +29,47 @@ if os.getenv("LOCAL_LLM") == "True":
 else:
     client = instructor.from_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
 
+from pydantic import BaseModel, field_validator
+from typing import List
+
+from pydantic import BaseModel, field_validator
+from typing import List
+import json
+
 class NewsArticleClassification(BaseModel):
     title: str
     news_category: str
     secondary_categories: List[str]
     keywords: List[str]
-    sentiment: int
-    factual_accuracy: int
-    bias_score: int
-    political_leaning: int
     geopolitical_relevance: int
     legislative_influence_score: int
-    international_relations_impact: int
-    economic_impact_projection: int
-    social_cohesion_effect: int
-    democratic_process_implications: int
+    international_relevance_score: int
+    democratic_process_implications_score: int
     general_interest_score: int
     spam_score: int
     clickbait_score: int
     fake_news_score: int
     satire_score: int
 
-    @validator('sentiment', 'factual_accuracy', 'bias_score', 'political_leaning', 
-               'geopolitical_relevance', 'legislative_influence_score', 
-               'international_relations_impact', 'economic_impact_projection', 
-               'social_cohesion_effect', 'democratic_process_implications', 
-               'general_interest_score', 'spam_score', 'clickbait_score', 
-               'fake_news_score', 'satire_score', pre=True)
+    @field_validator('geopolitical_relevance', 'legislative_influence_score', 
+                     'international_relevance_score', 'democratic_process_implications_score', 
+                     'general_interest_score', 'spam_score', 'clickbait_score', 
+                     'fake_news_score', 'satire_score', mode='before')
     def convert_to_int(cls, v):
+        if isinstance(v, dict):
+            v = v.get('score', 0)
+        if isinstance(v, (float, str)):
+            v = float(v)
+        return min(max(int(v * 10), 1), 10)  # Convert to int 1-10
+
+    @field_validator('secondary_categories', 'keywords', mode='before')
+    def parse_string_to_list(cls, v):
         if isinstance(v, str):
-            return int(v)
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                # If JSON parsing fails, split by comma as a fallback
+                return [item.strip() for item in v.strip('[]').split(',')]
         return v
 
 # Functions for LLM tasks
@@ -125,6 +136,11 @@ def process_articles(batch_size: int = 50):
                 "classification": classification
             })
             print(classification)
+            
+            if os.getenv("LOCAL_LLM") == "True":
+                sleep(2)
+            else:
+                continue
         except Exception as e:
             logger.error(f"Error processing article: {article}")
             logger.error(f"Error: {e}")
