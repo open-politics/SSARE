@@ -4,13 +4,16 @@ import logging
 from typing import List
 from redis import Redis
 from fastapi import FastAPI
-from pydantic import BaseModel, Field
 from openai import OpenAI
 import instructor
 from core.models import Article, ArticleTags, Tag, Entity, Location
+from core.utils import UUIDEncoder
+from pydantic import BaseModel, Field
 from pydantic import validator, field_validator
 from prefect import task, flow
 from prefect_ray.task_runners import RayTaskRunner
+import time
+from uuid import UUID
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -18,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 # FastAPI app
 app = FastAPI()
+
+
 
 # Configure LiteLLM
 my_proxy_api_key = "sk-1234"
@@ -117,7 +122,7 @@ def retrieve_articles_from_redis(batch_size: int = 50) -> List[Article]:
 
 @flow
 def process_articles(batch_size: int = 50):
-    """Process a batch of articles: retrieve and classify them."""
+    """Process a batch of articles: retrieve, classify, and serialize them."""
     articles = retrieve_articles_from_redis(batch_size=batch_size)
     
     if not articles:
@@ -130,36 +135,37 @@ def process_articles(batch_size: int = 50):
     for article in articles:
         try:
             classification = classify_article(article)
-        
-            processed_articles.append({
-                "article": article,
-                "classification": classification
-            })
+            
+            # Combine article and classification data
+            article_dict = article.dict()
+            article_dict['classification'] = classification.dict()
+            
+            processed_articles.append(json.dumps(article_dict, cls=UUIDEncoder))
             print(classification)
             
             if os.getenv("LOCAL_LLM") == "True":
-                sleep(2)
-            else:
-                continue
+                time.sleep(2)
         except Exception as e:
             logger.error(f"Error processing article: {article}")
             logger.error(f"Error: {e}")
     
-    write_articles_to_redis(processed_articles)
+    if processed_articles:
+        write_articles_to_redis(processed_articles)
     return processed_articles
 
 @task
-def write_articles_to_redis(processed_articles):
-    redis_conn_processed = Redis(host='redis', port=6379, db=4)
-    serialized_articles = [json.dumps(article) for article in processed_articles]
-    if serialized_articles:  # Check if the list is not empty
-        redis_conn_processed.lpush('articles_with_classification_queue', *serialized_articles)
-        logger.info(f"Wrote {len(processed_articles)} articles with classification to Redis")
-    else:
+def write_articles_to_redis(serialized_articles):
+    """Write serialized articles to Redis."""
+    if not serialized_articles:
         logger.info("No articles to write to Redis")
+        return
+
+    redis_conn_processed = Redis(host='redis', port=6379, db=4)
+    redis_conn_processed.lpush('articles_with_classification_queue', *serialized_articles)
+    logger.info(f"Wrote {len(serialized_articles)} articles with classification to Redis")
 
 @app.post("/classify_articles")
-def classify_articles_endpoint(batch_size: int = 2):
+def classify_articles_endpoint(batch_size: int = 50):
     logger.debug("Processing articles")
     processed_articles = process_articles(batch_size)
     

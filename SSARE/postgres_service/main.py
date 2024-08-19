@@ -25,7 +25,7 @@ from sqlmodel import Session
 from typing import AsyncGenerator
 
 from core.adb import engine, get_session, create_db_and_tables
-from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag
+from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag, NewsArticleClassification
 from core.service_mapping import config
 
 ########################################################################################
@@ -72,25 +72,24 @@ async def get_articles(
     ):
     logger.info(f"Received search_type: {search_type}, search_query: {search_query}")
 
-    logger.info(f"Received search_type: {search_type}, search_query: {search_query}")
-
     async with session.begin():
         query = select(Article).options(
             selectinload(Article.entities).selectinload(Entity.locations),
-            selectinload(Article.tags)
+            selectinload(Article.tags),
+            selectinload(Article.classification)
         )
         
         # Apply filters
         if url:
             query = query.where(Article.url == url)
         if has_geocoding:
-            query = query.join(Article.entities).join(Entity.locations).distinct()
+            query = query.where(Article.entities.any(Entity.locations.any()))
         if has_embeddings is not None:
-            query = query.where(Article.embeddings.isnot(None) if has_embeddings else Article.embeddings.is_(None))
+            query = query.where(Article.embeddings != None if has_embeddings else Article.embeddings == None)
         if has_entities is not None:
             query = query.where(Article.entities.any() if has_entities else ~Article.entities.any())
         if has_classification is not None:
-            query = query.where(Article.classification.isnot(None) if has_classification else Article.classification.is_(None))
+            query = query.where(Article.classification != None if has_classification else Article.classification == None)
         
         # Apply search based on search_type
         if search_query:
@@ -133,32 +132,33 @@ async def get_articles(
         for article in articles:
             article_dict = {
                 "id": str(article.id),
-                "url": article.url,
-                "headline": article.headline,
-                "source": article.source,
-                "insertion_date": article.insertion_date.isoformat() if article.insertion_date else None,
-                "paragraphs": article.paragraphs,
-                "embeddings": article.embeddings.tolist() if article.embeddings is not None else None,
-                "entities": [
-                    {
-                        "id": str(e.id),
-                        "name": e.name,
-                        "entity_type": e.entity_type,
-                        "locations": [
-                            {
-                                "name": loc.name,
-                                "type": loc.type,
-                                "coordinates": loc.coordinates.tolist() if loc.coordinates is not None else None
-                            } for loc in e.locations
-                        ] if e.locations else []
-                    } for e in article.entities
-                ] if article.entities else [],
-                "tags": [
-                    {
-                        "id": str(t.id),
-                        "name": t.name
-                    } for t in (article.tags or [])
-                ]
+            "url": article.url,
+            "headline": article.headline,
+            "source": article.source,
+            "insertion_date": article.insertion_date.isoformat() if article.insertion_date else None,
+            "paragraphs": article.paragraphs,
+            "embeddings": article.embeddings.tolist() if article.embeddings is not None else None,
+            "entities": [
+                {
+                    "id": str(e.id),
+                    "name": e.name,
+                    "entity_type": e.entity_type,
+                    "locations": [
+                        {
+                            "name": loc.name,
+                            "type": loc.type,
+                            "coordinates": loc.coordinates.tolist() if loc.coordinates is not None else None
+                        } for loc in e.locations
+                    ] if e.locations else []
+                } for e in article.entities
+            ] if article.entities else [],
+            "tags": [
+                {
+                    "id": str(t.id),
+                    "name": t.name
+                } for t in (article.tags or [])
+            ],
+            "classification": article.classification.dict() if article.classification else None
             }
             articles_data.append(article_dict)
         
@@ -648,26 +648,53 @@ async def create_classification_jobs(session: AsyncSession = Depends(get_session
 
 @app.post("/store_articles_with_classification")
 async def store_articles_with_classification(session: AsyncSession = Depends(get_session)):
-    logger.info("Starting store_articles_with_classification function")
-    redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4, decode_responses=True)
-    logger.info(f"Connected to Redis on port {config.REDIS_PORT}, db 4")
-    classified_articles = await redis_conn.lrange('articles_with_classification_queue', 0, -1)
-    await redis_conn.ltrim('articles_with_classification_queue', len(classified_articles), -1)
-    logger.info(f"Retrieved {len(classified_articles)} classified articles from Redis queue")
+    try:
+        logger.info("Starting store_articles_with_classification function")
+        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4, decode_responses=True)
+        logger.info(f"Connected to Redis on port {config.REDIS_PORT}, db 4")
+        classified_articles = await redis_conn.lrange('articles_with_classification_queue', 0, -1)
+        logger.info(f"Retrieved {len(classified_articles)} classified articles from Redis queue")
         
-    for index, classified_article in enumerate(classified_articles, 1):
-        try:
-            classified_data = json.loads(classified_article)
-            logger.info(f"Processing classified article {index}/{len(classified_articles)}: {classified_data['url']}")
-            
-            async with session.begin():
-                article = await session.execute(
-                    select(Article).where(Article.url == classified_data['url'])
+        async with session.begin():
+            logger.info("Starting database session")
+            for index, classified_article in enumerate(classified_articles, 1):
+                try:
+                    article_data = json.loads(classified_article)
+                    logger.info(f"Processing article {index}/{len(classified_articles)}: {article_data['url']}")
+                    
+                    # Find the article by URL and eagerly load the classification
+                    result = await session.execute(
+                        select(Article).options(selectinload(Article.classification)).where(Article.url == article_data['url'])
                     )
-                article = article.scalar_one_or_none()
+                    article = result.scalar_one_or_none()
 
-                session.add(article)
+                    if article:
+                        classification_data = article_data['classification']
+                        if article.classification:
+                            # Update existing classification
+                            for key, value in classification_data.items():
+                                setattr(article.classification, key, value)
+                        else:
+                            # Create new classification
+                            article.classification = NewsArticleClassification(**classification_data)
+                        
+                        session.add(article)
+                        logger.info(f"Updated article and classification: {article_data['url']}")
+                    else:
+                        logger.warning(f"Article not found in database: {article_data['url']}")
 
-        except Exception as e:
-                logger.error(f"Error processing classified article {classified_data['url']}: {str(e)}")
-                # Continue processing other articles
+                except ValidationError as e:
+                    logger.error(f"Validation error for article {article_data['url']}: {e}")
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON decoding error for article: {e}")
+
+        await session.commit()
+        logger.info("Changes committed to database")
+        await redis_conn.ltrim('articles_with_classification_queue', len(classified_articles), -1)
+        logger.info("Redis queue trimmed")
+        await redis_conn.close()
+        logger.info("Classified articles stored successfully")
+        return {"message": "Classified articles stored successfully in PostgreSQL."}
+    except Exception as e:
+        logger.error(f"Error storing classified articles: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e))

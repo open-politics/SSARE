@@ -61,7 +61,7 @@ async def process_articles_to_model(articles, flag):
                 url=str(article_data['url']),
                 headline=str(article_data['headline']),
                 paragraphs=str(article_data['paragraphs']),
-                source=str(flag),
+                source=str(article_data['source']),
             )
             processed_articles.append(article)
         except ValidationError as e:

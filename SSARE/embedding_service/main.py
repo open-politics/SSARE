@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 config = ServiceConfig()
 token = config.HUGGINGFACE_TOKEN
-model = SentenceTransformer("jinaai/jina-embeddings-v2-base-en", use_auth_token=token)
+model = SentenceTransformer("jinaai/jina-embeddings-v2-base-en", 
+                            use_auth_token=token,
+                            trust_remote_code=True)
 
 @app.get("/healthz")
 async def healthcheck():

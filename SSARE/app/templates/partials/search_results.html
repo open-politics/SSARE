@@ -7,22 +7,20 @@
         <span class="bg-gray-600 text-white px-2 py-1 rounded hover:bg-gray-500" title="Insertion Date">
             {{ article.insertion_date.strftime('%Y-%m-%d %H:%M') if article.insertion_date else 'N/A' }}
         </span>
-        <span class="{% if article.embedding %}bg-green-500 hover:bg-green-400{% else %}bg-red-500 hover:bg-red-400{% endif %} text-white px-2 py-1 rounded" title="Embedding Status">
-            {{ 'Has Embedding' if article.embedding else 'No Embedding' }}
+        <span class="{% if article.embeddings %}bg-green-500 hover:bg-green-400{% else %}bg-red-500 hover:bg-red-400{% endif %} text-white px-2 py-1 rounded" title="Embedding Status">
+            {{ 'Has Embedding' if article.embeddings else 'No Embedding' }}
         </span>
         <span class="{% if article.entities %}bg-blue-500 hover:bg-blue-400{% else %}bg-red-500 hover:bg-red-400{% endif %} text-white px-2 py-1 rounded" title="Entities Status">
             {{ 'Has Entities' if article.entities else 'No Entities' }}
         </span>
-        <span class="{% if article.tags %}bg-yellow-500 hover:bg-yellow-400{% else %}bg-red-500 hover:bg-red-400{% endif %} text-white px-2 py-1 rounded" title="Tags Status">
-            {% for tag in article.tags %}
-            {{ tag.name }}
-            {% endfor %}
+        <span class="{% if article.classification %}bg-purple-500 hover:bg-purple-400{% else %}bg-red-500 hover:bg-red-400{% endif %} text-white px-2 py-1 rounded" title="Classification Status">
+            {{ 'Has Classification' if article.classification else 'No Classification' }}
         </span>
     </div>
 </div>
 
 <!-- Overlay for article details -->
-<div id="overlay-{{ article.id }}" class="absolute inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+<div id="overlay-{{ article.id }}" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
     <div class="bg-gray-800 p-6 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <h2 class="text-2xl font-bold mb-4">{{ article.headline }}</h2>
         <p class="text-sm text-gray-400 mb-2">Source: {{ article.source }}</p>
@@ -36,18 +34,38 @@
         <div class="max-h-40 overflow-y-auto mb-4">
             <ul class="list-disc list-inside">
                 {% for entity in article.entities %}
-                <li>{{ entity.name }} ({{ entity.entity_type }})</li>
+                <li>
+                    {{ entity.name }} ({{ entity.entity_type }})
+                    {% if entity.locations %}
+                    <ul class="list-circle list-inside ml-4">
+                        {% for location in entity.locations %}
+                        <li>{{ location.name }} ({{ location.type }}): {{ location.coordinates }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </li>
                 {% endfor %}
             </ul>
         </div>
         {% endif %}
         
-        {% if article.tags %}
-        <h3 class="text-lg font-semibold mb-2">Tags:</h3>
-        <div class="flex flex-wrap gap-2 mb-4">
-            {% for tag in article.tags %}
-            <span class="bg-yellow-500 text-white px-2 py-1 rounded text-sm">{{ tag.name }}</span>
-            {% endfor %}
+        
+        
+        {% if article.classification %}
+        <h3 class="text-lg font-semibold mb-2">Classification:</h3>
+        <div class="mb-4">
+            <p><strong>News Category:</strong> {{ article.classification.news_category }}</p>
+            <p><strong>Secondary Categories:</strong> {{ article.classification.secondary_categories|join(', ') }}</p>
+            <p><strong>Keywords:</strong> {{ article.classification.keywords|join(', ') }}</p>
+            <p><strong>Geopolitical Relevance:</strong> {{ article.classification.geopolitical_relevance }}/10</p>
+            <p><strong>Legislative Influence:</strong> {{ article.classification.legislative_influence_score }}/10</p>
+            <p><strong>International Relevance:</strong> {{ article.classification.international_relevance_score }}/10</p>
+            <p><strong>Democratic Process Implications:</strong> {{ article.classification.democratic_process_implications_score }}/10</p>
+            <p><strong>General Interest:</strong> {{ article.classification.general_interest_score }}/10</p>
+            <p><strong>Spam Score:</strong> {{ article.classification.spam_score }}/10</p>
+            <p><strong>Clickbait Score:</strong> {{ article.classification.clickbait_score }}/10</p>
+            <p><strong>Fake News Score:</strong> {{ article.classification.fake_news_score }}/10</p>
+            <p><strong>Satire Score:</strong> {{ article.classification.satire_score }}/10</p>
         </div>
         {% endif %}
         
@@ -62,9 +80,11 @@
 <script>
 function showOverlay(articleId) {
     document.getElementById(`overlay-${articleId}`).classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
 }
 
 function hideOverlay(articleId) {
     document.getElementById(`overlay-${articleId}`).classList.add('hidden');
+    document.body.style.overflow = 'auto';
 }
 </script>

@@ -1,7 +1,8 @@
 from configparser import ConfigParser
 import os
 from typing import Optional
-
+import json
+from uuid import UUID
 
 def load_config():
     config = ConfigParser()
@@ -16,3 +17,9 @@ def get_data_path() -> str:
         "..",
         "data",
     )
+
+class UUIDEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, UUID):
+            return str(obj)
+        return json.JSONEncoder.default(self, obj)

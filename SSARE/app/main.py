@@ -240,10 +240,11 @@ class SearchType(str, Enum):
 async def search_articles(
     request: Request,
     search_query: str = Query(None),
-    search_type: str = Query("text"),  # Change this line
+    search_type: str = Query("text"),
     has_embedding: bool = Query(False),
     has_geocoding: bool = Query(False),
     has_entities: bool = Query(False),
+    has_classification: bool = Query(False),
     skip: int = 0,
     limit: int = 10
 ):
@@ -253,10 +254,11 @@ async def search_articles(
             postgres_service_url,
             params={
                 "search_query": search_query,
-                "search_type": search_type,  # No need to use .value here
+                "search_type": search_type,
                 "has_embedding": has_embedding,
                 "has_geocoding": has_geocoding,
                 "has_entities": has_entities,
+                "has_classification": has_classification,  
                 "skip": skip,
                 "limit": limit
             }

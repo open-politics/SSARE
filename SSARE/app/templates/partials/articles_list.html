@@ -29,6 +29,11 @@
     <div class="headline text-lg font-bold text-fluorescent-green mb-2">{{ article.headline }}</div>
     <div class="source mb-2">{{ article.source }} - <a href="{{ article.url }}" target="_blank" class="text-fluorescent-green hover:text-fluorescent-green-light">Read More</a></div>
     <div class="score mb-2">Score: {{ article.score }}</div>
+    {% if article.classification %}
+         <div class="classification mb-2">Classification: {{ article.classification }}</div>
+    {% endif %}
+    </div>
+    {% endif %}
     <div class="preview" style="white-space: pre-line;">
         {{ article.paragraphs | truncate(200, true, '...') }}
     </div>

@@ -49,7 +49,6 @@ async def get_db():
 
 @app.get("/healthz")
 async def healthcheck():
-    logger.info("Health check requested")
     return {"message": "RAG Service Running"}, 200
 
 @app.get("/articles/", response_model=List[Article])
