@@ -23,6 +23,8 @@ from flows.orchestration import (
     produce_flags, create_scrape_jobs, store_raw_articles, store_articles_with_geocoding,
     create_classification_jobs, classify_articles, store_articles_with_classification
 )
+from fastapi import Path
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -168,6 +170,36 @@ async def check_channels(request: Request, flow_name: str):
     
     return templates.TemplateResponse("partials/multiple_channel_info.html", {"request": request, "channels": channels})
 
+@app.post("/flush_redis_channels/{flow_name}")
+async def flush_redis_channels(flow_name: str = Path(..., description="The name of the flow to flush")):
+    redis_conn = Redis(host=config.service_urls['redis'].split('://')[1].split(':')[0], 
+                       port=int(config.REDIS_PORT), 
+                       decode_responses=True)
+    
+    flow_channels = {
+        "scraping": ["scrape_sources", "raw_articles_queue"],
+        "embedding": ["articles_without_embedding_queue", "articles_with_embeddings"],
+        "entity_extraction": ["articles_without_entities_queue", "articles_with_entities_queue"],
+        "geocoding": ["articles_without_geocoding_queue", "articles_with_geocoding_queue"],
+        "semantics": ["articles_without_tags_queue", "articles_with_tags_queue"],
+        "classification": ["articles_without_classification_queue", "articles_with_classification_queue"]
+    }
+    
+    if flow_name not in flow_channels:
+        raise HTTPException(status_code=404, detail=f"Invalid flow name: {flow_name}")
+    
+    flushed_channels = []
+    for channel_name in flow_channels[flow_name]:
+        queue_info = config.redis_queues.get(channel_name)
+        if queue_info:
+            await redis_conn.select(queue_info['db'])
+            await redis_conn.delete(queue_info['key'])
+            flushed_channels.append(channel_name)
+    
+    await redis_conn.aclose()
+    
+    return {"message": f"Flushed Redis channels for {flow_name}", "flushed_channels": flushed_channels}
+
 @app.get("/service_health", response_class=HTMLResponse)
 async def service_health(request: Request):
     health_status = {}
@@ -231,6 +263,70 @@ async def trigger_step(step_name: str, batch_size: int = Query(50, ge=1, le=100)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to execute step '{step_name}': {str(e)}")
     
+@app.get("/pipeline/{pipeline_name}", response_class=HTMLResponse)
+async def get_pipeline(request: Request, pipeline_name: str):
+    pipelines = {
+        "scraping": {
+            "title": "Scraping Pipeline",
+            "input": "Flags",
+            "output": "Raw Articles",
+            "steps": [
+                {"name": "produce_flags", "label": "1. Produce Flags"},
+                {"name": "create_scrape_jobs", "label": "2. Scrape"},
+                {"name": "store_raw_articles", "label": "3. Store Raw Articles"}
+            ]
+        },
+        "embedding": {
+            "title": "Embedding Pipeline",
+            "input": "Raw Articles",
+            "output": "Embedded Articles",
+            "steps": [
+                {"name": "create_embedding_jobs", "label": "1. Create Jobs"},
+                {"name": "generate_embeddings", "label": "2. Generate", "batch": True},
+                {"name": "store_articles_with_embeddings", "label": "3. Store"}
+            ]
+        },
+        "entity_extraction": {
+            "title": "Entity Extraction Pipeline",
+            "input": "Raw Articles",
+            "output": "Articles with Entities",
+            "steps": [
+                {"name": "create_entity_extraction_jobs", "label": "1. Create Jobs"},
+                {"name": "extract_entities", "label": "2. Extract", "batch": True},
+                {"name": "store_articles_with_entities", "label": "3. Store"}
+            ]
+        },
+        "geocoding": {
+            "title": "Geocoding Pipeline",
+            "input": "Articles with Entities",
+            "output": "Geocoded Articles",
+            "steps": [
+                {"name": "create_geocoding_jobs", "label": "1. Create Jobs"},
+                {"name": "geocode_articles", "label": "2. Geocode", "batch": True},
+                {"name": "store_articles_with_geocoding", "label": "3. Store"}
+            ]
+        },
+        "classification": {
+            "title": "Classification Pipeline",
+            "input": "Processed Articles",
+            "output": "Classified Articles",
+            "steps": [
+                {"name": "create_classification_jobs", "label": "1. Create Jobs"},
+                {"name": "classify_articles", "label": "2. Process", "batch": True},
+                {"name": "store_articles_with_classification", "label": "3. Store"}
+            ]
+        }
+    }
+    
+    pipeline = pipelines.get(pipeline_name)
+    if not pipeline:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    
+    return templates.TemplateResponse("partials/pipeline.html", {
+        "request": request,
+        "pipeline": pipeline,
+        "pipeline_name": pipeline_name
+    })
 
 class SearchType(str, Enum):
     TEXT = "text"
