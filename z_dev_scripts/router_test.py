@@ -1,116 +1,217 @@
-from fastapi import FastAPI, HTTPException
-from redis.asyncio import Redis
-from contextlib import asynccontextmanager
 import logging
-from prefect import task, flow
-from core.models import Article, Articles
-from core.db import engine, get_session
-import json
-import asyncio
-from script_scraper import scrape_sources_flow
-from semantic_router import Route, RouteLayer
-from semantic_router.encoders import OpenAIEncoder
+from typing import List
+import textgrad as tg
+from semantic_router.encoders import HuggingFaceEncoder
+from semantic_router import Route
+from semantic_router.layer import RouteLayer
+from semantic_router.llms.ollama import OllamaLLM
+import os
 
-logging.basicConfig(level=logging.INFO)
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Define routes for semantic router
-politics = Route(
-    name="politics",
-    utterances=[
-        "The recent Senate hearing on foreign policy has sparked intense debate among lawmakers. Critics argue that the proposed measures could strain international relations, while supporters claim they are necessary for national security. The hearing, which lasted over six hours, saw heated exchanges between senators from both parties.",
-        "In a surprising turn of events, the city council voted unanimously to approve a controversial zoning change. The decision, which will allow for the construction of a new high-rise development in the historic downtown area, has been met with mixed reactions from residents. Proponents argue that it will bring much-needed economic growth,",
-        "The President's latest executive order on climate change has drawn both praise and criticism from various sectors. Environmental groups hail it as a significant step towards reducing carbon emissions, while industry leaders express concerns about potential job losses. The order, which sets ambitious targets for renewable energy adoption,",
-        "A new poll released today shows a significant shift in public opinion regarding healthcare reform. The survey, conducted by a nonpartisan research group, indicates that a majority of Americans now support a universal healthcare system. This marks a notable change from previous years and could have major implications for upcoming policy debates.",
-        "The state legislature is set to vote on a comprehensive education bill next week. The proposed legislation aims to address longstanding issues in the public school system, including teacher pay, classroom sizes, and standardized testing. Educators and parents' groups have been lobbying intensively, with both sides making their case to lawmakers.",
-    ],
-)
+# Configure HuggingFace Encoder
+encoder = HuggingFaceEncoder()
+llm = OllamaLLM(llm_name="llama3.1")
+os.environ["OPENAI_API_KEY"] = "xxx"
+tg.set_backward_engine("gpt-4", override=True)
 
-chitchat = Route(
-    name="chitchat",
-    utterances=[
+# Define routes
+routes = [
+    Route(
+        name="politics",
+        utterances=[
+            "isn't politics the best thing ever",
+            "why don't you tell me about your political opinions",
+            "don't you just love the president",
+            "don't you just hate the president",
+            "they're going to destroy this country!",
+            "they will save the country!",
+        ],
+    ),
+    Route(
+        name="chitchat",
+        utterances=[
+            "Did you watch the game last night?",
+            "what's your favorite type of music?",
+            "Have you read any good books lately?",
+            "nice weather we're having",
+            "Do you have any plans for the weekend?",
+        ],
+    ),
+    Route(
+        name="mathematics",
+        utterances=[
+            "can you explain the concept of a derivative?",
+            "What is the formula for the area of a triangle?",
+            "how do you solve a system of linear equations?",
+            "What is the concept of a prime number?",
+            "Can you explain the Pythagorean theorem?",
+        ],
+    ),
+    Route(
+        name="biology",
+        utterances=[
+            "what is the process of osmosis?",
+            "can you explain the structure of a cell?",
+            "What is the role of RNA?",
+            "What is genetic mutation?",
+            "Can you explain the process of photosynthesis?",
+        ],
+    ),
+]
+
+# Configure RouteLayer
+rl = RouteLayer(encoder=encoder, routes=routes)
+
+def route_text(text: str) -> str:
+    """Route the input text using the semantic router."""
+    try:
+        result = rl(text)
+        logger.info(f"Routing result for '{text}': {result}")
+        return result.name if result else None
+    except Exception as e:
+        logger.error(f"Error routing text '{text}': {e}")
+        raise
+
+def process_routing_requests(texts: List[str]) -> List[str]:
+    """Process a batch of routing requests."""
+    results = []
+    for text in texts:
+        try:
+            result = route_text(text)
+            results.append(result)
+        except Exception as e:
+            logger.error(f"Error processing text '{text}': {e}")
+            results.append(None)
+    return results
+
+def test_multiple_routes(text: str):
+    """Test retrieving multiple routes for a given text."""
+    results = rl.retrieve_multiple_routes(text)
+    logger.info(f"Multiple routes for '{text}':")
+    for result in results:
+        logger.info(f"  - {result.name}: {result.similarity_score}")
+
+def optimize_routes(routes: List[Route], test_data: List[tuple]):
+    """Optimize route utterances using TextGrad."""
+    for route in routes:
+        # Join utterances into a single string
+        utterances_str = "\n".join(route.utterances)
+        utterances = tg.Variable(utterances_str, requires_grad=True, role_description=f"utterances for {route.name} route")
+        optimizer = tg.TGD(parameters=[utterances])
+        
+        evaluation_instruction = (f"Evaluate the effectiveness of these utterances for the '{route.name}' route. "
+                                  "Provide concise feedback on how to improve them. "
+                                  "Each utterance should be on a new line.")
+        loss_fn = tg.TextLoss(evaluation_instruction)
+        
+        for _ in range(3):  # Perform 3 optimization steps
+            loss = loss_fn(utterances)
+            loss.backward()
+            optimizer.step()
+        
+        # Split the optimized utterances back into a list
+        route.utterances = utterances.value.split("\n")
+    
+    return routes
+
+if __name__ == "__main__":
+    # Initial test cases
+    initial_test_texts = [
+        "don't you love politics?",
         "how's the weather today?",
-        "how are things going?",
-        "lovely weather today",
-        "the weather is horrendous",
-        "let's go to the chippy",
-    ],
-)
+        "What's DNA?",
+        "I'm interested in learning about llama 2",
+    ]
 
-routes = [politics, chitchat]
+    print("Initial testing:")
+    for text in initial_test_texts:
+        result = route_text(text)
+        print(f"Text: '{text}'\nRouted to: {result}\n")
 
-# Initialize encoder and route layer
-os.environ["OPENAI_API_KEY"] = "<YOUR_API_KEY>"
-encoder = OpenAIEncoder()
-route_layer = RouteLayer(encoder=encoder, routes=routes)
+    # Comprehensive test data
+    test_data = [
+        # politics
+        ("What's your opinion on the current government?", "politics"),
+        ("Who do you think will win the next election?", "politics"),
+        ("What are your thoughts on the new policy?", "politics"),
+        ("How do you feel about the political situation?", "politics"),
+        ("Do you agree with the president's actions?", "politics"),
+        # chitchat
+        ("What's the weather like?", "chitchat"),
+        ("It's a beautiful day today.", "chitchat"),
+        ("How's your day going?", "chitchat"),
+        ("It's raining cats and dogs.", "chitchat"),
+        ("Let's grab a coffee.", "chitchat"),
+        # mathematics
+        ("What is the Pythagorean theorem?", "mathematics"),
+        ("Can you solve this quadratic equation?", "mathematics"),
+        ("What is the derivative of x squared?", "mathematics"),
+        ("Explain the concept of integration.", "mathematics"),
+        ("What is the area of a circle?", "mathematics"),
+        # biology
+        ("What is photosynthesis?", "biology"),
+        ("Explain the process of cell division.", "biology"),
+        ("What is the function of mitochondria?", "biology"),
+        ("What is DNA?", "biology"),
+        ("What is the difference between prokaryotic and eukaryotic cells?", "biology"),
+        # None routes
+        ("What is the capital of France?", None),
+        ("how many people live in the US?", None),
+        ("when is the best time to visit Bali?", None),
+        ("how do I learn a language", None),
+        ("tell me an interesting fact", None),
+    ]
 
-@task
-async def setup_redis_connection():
-    return Redis(host='redis', port=6379, db=1, decode_responses=True)
+    # Unpack the test data
+    X, y = zip(*test_data)
 
-@task
-async def close_redis_connection(redis_conn):
-    try:
-        await redis_conn.aclose()
-    except RuntimeError as e:
-        logger.warning(f"Error closing Redis connection: {e}")
+    print("\nEvaluating with default thresholds:")
+    accuracy = rl.evaluate(X=X, y=y)
+    print(f"Accuracy: {accuracy*100:.2f}%")
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    redis_conn = Redis(host='redis', port=6379, db=1, decode_responses=True)
-    app.state.redis = redis_conn
-    yield
-    await redis_conn.aclose()
+    print("\nDefault route thresholds:")
+    print(rl.get_thresholds())
 
-app = FastAPI(lifespan=lifespan)
+    print("\nOptimizing route thresholds...")
+    rl.fit(X=X, y=y)
 
-@task
-async def get_scraper_config():
-    with open("scrapers/scrapers_config.json") as f:
-        return json.load(f)
+    print("\nUpdated route thresholds:")
+    print(rl.get_thresholds())
 
-@task
-async def get_flags():
-    redis_conn_flags = Redis(host='redis', port=6379, db=0, decode_responses=True)
-    flags = await redis_conn_flags.lrange('scrape_sources', 0, -1)
-    await redis_conn_flags.aclose()
-    return flags
+    print("\nEvaluating with optimized thresholds:")
+    accuracy = rl.evaluate(X=X, y=y)
+    print(f"Accuracy: {accuracy*100:.2f}%")
 
-@task
-async def wait_for_scraping_completion(redis_conn):
-    while await redis_conn.get('scraping_in_progress') == '1':
-        await asyncio.sleep(0.5)
+    print("\nOptimizing route utterances using TextGrad...")
+    optimized_routes = optimize_routes(routes, test_data)
 
-@flow
-async def scrape_data():
-    redis_conn = await setup_redis_connection()
-    try:
-        flags = await get_flags()
-        logger.info(f"Creating scrape jobs for {flags}")
+    # Print optimized utterances
+    for route in optimized_routes:
+        print(f"\nOptimized utterances for {route.name}:")
+        for utterance in route.utterances:
+            print(f"- {utterance}")
 
-        await scrape_sources_flow(flags)
+    # Update RouteLayer with optimized routes
+    rl = RouteLayer(encoder=encoder, routes=optimized_routes)
 
-        await wait_for_scraping_completion(redis_conn)
-    except Exception as e:
-        logger.error(f"Error in scrape_data flow: {str(e)}")
-    finally:
-        await close_redis_connection(redis_conn)
-    logger.info(f"Scrape data task completed.")
-    return {"status": "ok"}
+    print("\nEvaluating with optimized utterances and thresholds:")
+    accuracy = rl.evaluate(X=X, y=y)
+    print(f"Accuracy: {accuracy*100:.2f}%")
 
-@app.post("/create_scrape_jobs")
-async def create_scrape_jobs():
-    return await scrape_data()
+    print("\nTesting multiple route retrieval:")
+    test_multiple_routes("The impact of AI on politics and biology")
+    test_multiple_routes("Mathematical models in ecological systems")
 
-@app.get("/healthz")
-def healthz_check():
-    return {"status": "ok"}
-
-@app.post("/classify_article")
-async def classify_article(article: Article):
-    try:
-        classification = route_layer(article.headline).name
-        return {"classification": classification}
-    except Exception as e:
-        logger.error(f"Error classifying article: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error classifying article")
+    print("\nTesting edge cases:")
+    edge_cases = [
+        "This text is completely unrelated to any of the defined routes.",
+        "A mix of topics: political debates on stem cell research.",
+        "",  # Empty string
+        "Short text",
+    ]
+    for text in edge_cases:
+        result = route_text(text)
+        print(f"Text: '{text}'\nRouted to: {result}\n")
