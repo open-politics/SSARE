@@ -68,6 +68,11 @@ Multiple query interfaces to retrieve the data. From the main dashboard to (upco
 We aim to provide numerous search entrypoints from Elastic Search, Keyword Matching to Semantic Search and Geospatial Queries.
 ![Simple UI](media/opp_dashboard_0.png)
 
+Which yields results like this:
+![Results](media/ssare_results_new.png)
+
+Please note that the current classifications are derived from unoptimized prompts and arbitrary scales (some for testing purposes) using Llama 3.1 from Ollama as the classifier. In future updates, the prompt engineering for these classifications will be moved to environment files or similar configurable setups, allowing for easy customization of your system. Additionally, we plan to implement TextGrad as a background engine to automatically optimize prompts, further enhancing the classification process.
+
 
 That can be used in a lot of ways already, have fun!
 
