@@ -595,7 +595,7 @@ async def store_articles_with_geocoding(session: AsyncSession = Depends(get_sess
                 logger.error(f"Error processing geocoded article {geocoded_data['url']}: {str(e)}")
                 # Continue processing other articles
 
-        await redis_conn.ltrim('articles_with_geocoding_queue', 0, -1)
+        await redis_conn.ltrim('articles_with_geocoding_queue', len(geocoded_articles), -1)
         logger.info("Cleared Redis queue")
         await redis_conn.close()
         logger.info("Closed Redis connection")

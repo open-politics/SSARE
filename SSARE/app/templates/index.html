@@ -7,6 +7,7 @@
     <title>SSARE Vector Retrieval</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
     <script src="https://unpkg.com/htmx.org@1.5.0/dist/htmx.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
     <style>
@@ -130,9 +131,11 @@
                 <form hx-get="/articles" hx-target="#search-results" hx-trigger="submit">
                     <div class="flex flex-col space-y-4">
                         <input class="bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="text" name="search_query" placeholder="Search articles...">
-                        <div class="flex space-x-4">
-                            <div class="flex flex-col space-y-2">
-                                <label class="font-semibold">Search Type</label>
+                        
+                        <div class="flex flex-wrap -mx-2">
+                            <div class="w-full md:w-1/2 px-2 mb-4">
+                                <fieldset class="border border-gray-600 rounded p-3">
+                                    <legend class="font-semibold px-2">Search Type</legend>
                                     <div class="flex space-x-4">
                                         <label class="flex items-center">
                                             <input type="radio" name="search_type" value="text" checked class="mr-2">
@@ -143,49 +146,56 @@
                                             Semantic Search
                                         </label>
                                     </div>
+                                </fieldset>
                             </div>
-                            <div class="flex flex-col space-y-2">
-                                <label class="font-semibold">Filters</label>
-                                <div class="flex space-x-4">
-                                    <label class="flex items-center">
-                                        <input type="checkbox" name="has_embedding" value="true" class="mr-2">
-                                        Has Embedding
-                                    </label>
-                                    <label class="flex items-center">
-                                        <input type="checkbox" name="has_geocoding" value="true" class="mr-2">
-                                        Has Geocoding
-                                    </label>
-                                    <label class="flex items-center">
-                                        <input type="checkbox" name="has_entities" value="true" class="mr-2">
-                                        Has Entities
-                                    </label>
-                                    <label class="flex items-center">
-                                        <input type="checkbox" name="has_classification" value="true" class="mr-2">
-                                        Has Classification
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="flex space-x-4">
-                            <div class="flex flex-col space-y-2 w-1/2">
-                                <label class="font-semibold">Entity</label>
-                                <input class="bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="text" name="entity" placeholder="Filter by entity...">
-                            </div>
-                            <div class="flex flex-col space-y-2 w-1/2">
-                                <label class="font-semibold">Location</label>
-                                <input class="bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="text" name="location" placeholder="Filter by location...">
+                            
+                            <div class="w-full md:w-1/2 px-2 mb-4">
+                                <fieldset class="border border-gray-600 rounded p-3">
+                                    <legend class="font-semibold px-2">Filters</legend>
+                                    <div class="flex flex-wrap -mx-2">
+                                        <label class="w-1/2 px-2 flex items-center mb-2">
+                                            <input type="checkbox" name="has_embeddings" value="true" class="mr-2">
+                                            Has Embedding
+                                        </label>
+                                        <label class="w-1/2 px-2 flex items-center mb-2">
+                                            <input type="checkbox" name="has_geocoding" value="true" class="mr-2">
+                                            Has Geocoding
+                                        </label>
+                                        <label class="w-1/2 px-2 flex items-center mb-2">
+                                            <input type="checkbox" name="has_entities" value="true" class="mr-2">
+                                            Has Entities
+                                        </label>
+                                        <label class="w-1/2 px-2 flex items-center mb-2">
+                                            <input type="checkbox" name="has_classification" value="true" class="mr-2">
+                                            Has Classification
+                                        </label>
+                                    </div>
+                                </fieldset>
                             </div>
                         </div>
-                        <div class="flex space-x-4">
-                            <div class="flex flex-col space-y-2 w-1/2">
-                                <label class="font-semibold">Skip</label>
-                                <input class="bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="number" name="skip" value="0" min="0">
+                        
+                        <div class="flex flex-wrap -mx-2">
+                            <div class="w-full md:w-1/2 px-2 mb-4">
+                                <label class="block font-semibold mb-2">Entity</label>
+                                <input class="w-full bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="text" name="entity" placeholder="Filter by entity...">
                             </div>
-                            <div class="flex flex-col space-y-2 w-1/2">
-                                <label class="font-semibold">Limit</label>
-                                <input class="bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="number" name="limit" value="10" min="1">
+                            <div class="w-full md:w-1/2 px-2 mb-4">
+                                <label class="block font-semibold mb-2">Location</label>
+                                <input class="w-full bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="text" name="location" placeholder="Filter by location...">
                             </div>
                         </div>
+                        
+                        <div class="flex flex-wrap -mx-2">
+                            <div class="w-full md:w-1/2 px-2 mb-4">
+                                <label class="block font-semibold mb-2">Skip</label>
+                                <input class="w-full bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="number" name="skip" value="0" min="0">
+                            </div>
+                            <div class="w-full md:w-1/2 px-2 mb-4">
+                                <label class="block font-semibold mb-2">Limit</label>
+                                <input class="w-full bg-gray-700 text-white rounded px-4 py-2 focus:outline-none" type="number" name="limit" value="10" min="1">
+                            </div>
+                        </div>
+                        
                         <button class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-300" type="submit">
                             Search
                         </button>

@@ -22,3 +22,5 @@ init_ollama_gpu.sh
 package-lock.json
 package.json
 skaffold.yaml
+z_dev_scripts/logs
+SSARE/textgrad
