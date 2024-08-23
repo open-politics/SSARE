@@ -11,3 +11,4 @@ pgvector
 sqlmodel
 prefect
 prefect-ray
+geojson

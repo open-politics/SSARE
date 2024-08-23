@@ -92,10 +92,10 @@ def classify_article(article: Article) -> NewsArticleClassification:
             },
             {
                 "role": "user",
-                "content": f"Analyze this article and provide tags and metrics:\n\nHeadline: {article.headline}\n\nContent: {article.paragraphs if os.getenv('LOCAL_LLM') == 'False' else article.paragraphs[:350]}",
+                "content": f"Analyze this article and provide tags and metrics:\n\nHeadline: {article.headline}\n\nContent: {article.paragraphs if os.getenv('LOCAL_LLM') == 'False' else article.paragraphs[:350]}, be very critical.",
             },
         ],
-    )
+    )   
 
 @task
 def retrieve_articles_from_redis(batch_size: int = 50) -> List[Article]:

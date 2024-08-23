@@ -9,16 +9,23 @@ from collections import Counter
 import requests
 from prefect import task, flow
 from prefect_ray import RayTaskRunner
+from geojson import Feature, FeatureCollection, Point
+from fastapi.responses import JSONResponse
+from sqlalchemy.orm import selectinload
 
 from core.service_mapping import ServiceConfig
 from core.models import Article, Entity, Location
-from core.db import get_session
+from core.adb import get_session
 
 config = ServiceConfig()
 
-app = FastAPI()
+async def lifespan(app):
+    logger.info("Starting lifespan")
+    yield
 
-logging.basicConfig(level=logging.INFO)
+app = FastAPI(lifespan=lifespan)
+
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 @task
@@ -128,3 +135,67 @@ def get_country_data(country):
 @app.get("/healthz")
 def healthcheck():
     return {"message": "ok"}, 200
+
+
+@task
+async def print_hello():
+    logger.info("Starting GeoJSON generation")
+    print("Hello")
+
+@app.get("/geojson")
+async def get_locations_geojson(session: AsyncSession = Depends(get_session)):
+    await print_hello()
+    logger.info("Starting GeoJSON generation")
+    try:
+        # Query to get all locations with their associated entities and articles
+        logger.debug("Querying database for locations, entities, and articles")
+        print("Received request for /geojson endpoint")  # Add this line
+        query = select(Location).options(
+            selectinload(Location.entities).selectinload(Entity.articles)
+        )
+        result = await session.execute(query)
+        locations = result.scalars().unique().all()
+        logger.info(f"Retrieved {len(locations)} locations from database")
+
+        features = []
+        for location in locations:
+            logger.debug(f"Processing location: {location.name}")
+            # Convert coordinates to regular Python floats
+            coordinates = [float(coord) for coord in location.coordinates]
+            # Create a Point geometry
+            point = Point((coordinates[1], coordinates[0]))  # GeoJSON uses (longitude, latitude)
+
+            # Collect all articles associated with this location
+            articles = []
+            for entity in location.entities:
+                for article in entity.articles:
+                    articles.append({
+                        "url": article.url,
+                        "headline": article.headline,
+                        "source": article.source,
+                        "insertion_date": article.insertion_date.isoformat() if article.insertion_date else None
+                    })
+            logger.debug(f"Found {len(articles)} articles for location: {location.name}")
+
+            # Create a Feature
+            feature = Feature(
+                geometry=point,
+                properties={
+                    "name": location.name,
+                    "type": location.type,
+                    "article_count": len(articles),
+                    "articles": articles
+                }
+            )
+            features.append(feature)
+
+        # Create a FeatureCollection
+        feature_collection = FeatureCollection(features)
+        logger.info(f"Created FeatureCollection with {len(features)} features")
+
+        logger.info("GeoJSON generation completed successfully")
+        return JSONResponse(content=feature_collection)
+
+    except Exception as e:
+        logger.error(f"Error creating GeoJSON: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

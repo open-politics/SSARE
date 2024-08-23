@@ -12,6 +12,37 @@ services:
     ports:
       - "${ARTICLES_DB_PORT}:5432"
 
+  classification_service:
+    build: 
+      context: ./SSARE
+      dockerfile: ./classification_service/Dockerfile
+    ports:
+      - "${CLASSIFICATION_SERVICE_PORT}:5688"
+    environment:
+      - LOCAL_LLM=${LOCAL_LLM}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+    develop:
+      watch:
+        - action: sync
+          path: ./classification_service
+          target: /app/main.py
+        - action: rebuild
+          path: classification_service/requirements.txt
+
+  embedding_service:
+    build: 
+      context: ./SSARE
+      dockerfile: ./embedding_service/Dockerfile
+    restart: always
+    ports:
+      - "${EMBEDDING_SERVICE_PORT}:0420"
+    depends_on:
+      - redis
+      - postgres_service
+    environment:
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+
   entity_service:
     build: 
       context: ./SSARE
@@ -38,8 +69,22 @@ services:
       - redis
       - postgres_service
       - pelias_placeholder
+    networks:
+      - ssare_network
+      - default
     environment:
       - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    volumes:
+      - ./SSARE/litellm/config.yaml:/app/config.yaml
+    ports:
+      - "4000:4000"
+    networks:
+      - default
+    command: >
+      --config '/app/config.yaml' --debug --host 0.0.0.0 --port 4000 --num_workers 8
 
   main_core_app:
     build: 
@@ -75,31 +120,6 @@ services:
       - neo4j_import:/var/lib/neo4j/import
       - neo4j_plugins:/plugins
 
-  embedding_service:
-    build: 
-      context: ./SSARE
-      dockerfile: ./embedding_service/Dockerfile
-    restart: always
-    ports:
-      - "${EMBEDDING_SERVICE_PORT}:0420"
-    depends_on:
-      - redis
-      - postgres_service
-    environment:
-      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
-
-  litellm:
-    image: ghcr.io/berriai/litellm:main-latest
-    volumes:
-      - ./SSARE/litellm/config.yaml:/app/config.yaml
-    ports:
-      - "4000:4000"
-    networks:
-      - default
-    command: >
-      --config '/app/config.yaml' --debug --host 0.0.0.0 --port 4000 --num_workers 8
-
-    
   ollama:
     build: 
       context: ./SSARE
@@ -258,31 +278,6 @@ services:
     ports:
       - "${REDIS_PORT}:6379"
 
-  classification_service:
-    build: 
-      context: ./SSARE
-      dockerfile: ./classification_service/Dockerfile
-    ports:
-      - "${CLASSIFICATION_SERVICE_PORT}:5688"
-    environment:
-      - LOCAL_LLM=${LOCAL_LLM}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
-    develop:
-      watch:
-        - action: sync
-          path: ./classification_service
-          target: /app/main.py
-        - action: rebuild
-          path: classification_service/requirements.txt
-  
-  semantic_router:
-    build: 
-      context: ./SSARE
-      dockerfile: ./semantic_router/Dockerfile
-    ports:
-      - "${SEMANTIC_ROUTER_PORT}:5689"
-
   scraper_service:
     build: 
       context: ./SSARE
@@ -294,9 +289,18 @@ services:
     depends_on:
       - redis
 
+  semantic_router:
+    build: 
+      context: ./SSARE
+      dockerfile: ./semantic_router/Dockerfile
+    ports:
+      - "${SEMANTIC_ROUTER_PORT}:5689"
+
 networks:
   default:
     external: false
+  ssare_network:
+    external: true
 
 volumes:
   articles_db_data:
