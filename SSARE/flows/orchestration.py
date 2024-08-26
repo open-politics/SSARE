@@ -112,35 +112,80 @@ async def store_articles_with_classification(raise_on_failure=True):
 
 
 @flow
-async def scraping_sources_flow():
-    await produce_flags()
-    await create_scrape_jobs()
-    await store_raw_articles()
+async def scraping_flow():
+    redis_conn = await setup_redis_connection()
+    await redis_conn.set('Orchestration in progress', '1')
+
+    try:
+        await produce_flags()
+        await create_scrape_jobs()
+        await store_raw_articles()
+    finally:
+        await redis_conn.set('Orchestration in progress', '0')
 
 @flow
 async def embedding_flow():
-    await deduplicate_articles()
-    await create_embedding_jobs()
-    await generate_embeddings()
-    await store_articles_with_embeddings()
+    redis_conn = await setup_redis_connection()
+    await redis_conn.set('Orchestration in progress', '1')
+
+    try:
+        await deduplicate_articles()
+        await create_embedding_jobs()
+        await generate_embeddings()
+        await store_articles_with_embeddings()
+    finally:
+        await redis_conn.set('Orchestration in progress', '0')
 
 @flow
 async def entity_extraction_flow():
-    await create_entity_extraction_jobs()
-    await extract_entities()
-    await store_articles_with_entities()
+    redis_conn = await setup_redis_connection()
+    await redis_conn.set('Orchestration in progress', '1')
+
+    try:
+        await create_entity_extraction_jobs()
+        await extract_entities()
+        await store_articles_with_entities()
+    finally:
+        await redis_conn.set('Orchestration in progress', '0')
 
 @flow
 async def geocoding_flow():
-    await create_geocoding_jobs()
-    await geocode_articles()
+    redis_conn = await setup_redis_connection()
+    await redis_conn.set('Orchestration in progress', '1')
+
+    try:
+        await create_geocoding_jobs()
+        await geocode_articles()
+        await store_articles_with_geocoding()
+    finally:
+        await redis_conn.set('Orchestration in progress', '0')
 
 @flow
 async def classification_flow():
-    await create_classification_jobs()
-    await classify_articles()
-    await store_articles_with_classification()
+    redis_conn = await setup_redis_connection()
+    await redis_conn.set('Orchestration in progress', '1')
 
+    try:
+        await create_classification_jobs()
+        await classify_articles()
+        await store_articles_with_classification()
+    finally:
+        await redis_conn.set('Orchestration in progress', '0')
+
+# This function will be called from main.py
+async def run_flow(flow_name: str):
+    flows = {
+        "scraping": scraping_flow,
+        "embedding": embedding_flow,
+        "entity_extraction": entity_extraction_flow,
+        "geocoding": geocoding_flow,
+        "classification": classification_flow
+    }
+    
+    if flow_name not in flows:
+        raise ValueError(f"Unknown flow: {flow_name}")
+    
+    await flows[flow_name]()
 
 
 @flow(task_runner=SequentialTaskRunner()) 

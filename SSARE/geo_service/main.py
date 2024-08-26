@@ -74,12 +74,17 @@ def process_article(article_data):
     for location, weight in location_weights.items():
         coordinates = call_pelias_api(location, lang='en')
         if coordinates:
-            geocoded_locations.append({
-                'name': location,
-                'type': "GPE",
-                'coordinates': coordinates
-            })
-            logger.info(f"Geocoded location {location} with coordinates {coordinates}.")
+            # Confidence threshold
+            if weight > 0.05:  # Only including locations that appear in more than 5% of entities
+                geocoded_locations.append({
+                    'name': location,
+                    'type': "GPE",
+                    'coordinates': coordinates,
+                    'weight': weight
+                })
+                logger.info(f"Geocoded location {location} with coordinates {coordinates} and weight {weight}.")
+            else:
+                logger.info(f"Skipped low-weight location: {location} (weight: {weight})")
         else:
             logger.warning(f"Unable to geocode location: {location}")
 

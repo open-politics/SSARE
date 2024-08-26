@@ -72,6 +72,7 @@ class Location(BaseModel, table=True):
     name: str = Field(index=True)
     type: str = Field(index=True)  # e.g., city, state, country
     coordinates: List[float] = Field(sa_column=Column(Vector(2)))
+    weight: float = Field(default=0.0)
 
     entities: List[Entity] = Relationship(back_populates="locations", link_model=EntityLocation)
 

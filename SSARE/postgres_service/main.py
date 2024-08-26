@@ -19,6 +19,9 @@ from pgvector.sqlalchemy import Vector
 from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 from sqlalchemy import and_, delete, func, insert, or_, text, update
+from sqlalchemy import desc
+from sqlalchemy import join
+from sqlalchemy import alias, distinct
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel import Session
@@ -107,9 +110,10 @@ async def get_articles(
                         response = await client.get(f"{config.service_urls['embedding_service']}/generate_query_embeddings", params={"query": search_query})
                         response.raise_for_status()
                         query_embeddings = response.json()["embeddings"]
+                        logger.error(f"Embeddings{query_embeddings}")
 
                     embedding_array = query_embeddings
-                    query = query.order_by(Article.embeddings.l2_distance(embedding_array))
+                    query = query.order_by(Article.embeddings.l2_distance(embedding_array)).limit(limit)
                 except httpx.HTTPError as e:
                     logger.error(f"Error calling NLP service: {e}")
                     raise HTTPException(status_code=500, detail="Failed to generate query embedding")
@@ -165,6 +169,77 @@ async def get_articles(
         logger.info(f"Returning {len(articles_data)} articles")
         return articles_data
         
+@app.get("/location_entities/{location_name}")
+async def get_location_entities(
+    location_name: str, 
+    skip: int = 0, 
+    limit: int = 50, 
+    session: AsyncSession = Depends(get_session)
+):
+    try:
+        # Subquery to find articles related to the given location
+        subquery = (
+            select(Article.id)
+            .join(ArticleEntity, Article.id == ArticleEntity.article_id)
+            .join(Entity, ArticleEntity.entity_id == Entity.id)
+            .join(EntityLocation, Entity.id == EntityLocation.entity_id)
+            .join(Location, EntityLocation.location_id == Location.id)
+            .where(Location.name == location_name)
+            .distinct()
+            .subquery()
+        )
+
+        # Main query to get all entities from the articles related to the location
+        query = (
+            select(
+                Entity.name,
+                Entity.entity_type,
+                func.count(distinct(Article.id)).label('article_count'),
+                func.sum(ArticleEntity.frequency).label('total_frequency')
+            )
+            .join(ArticleEntity, Entity.id == ArticleEntity.entity_id)
+            .join(Article, ArticleEntity.article_id == Article.id)
+            .where(Article.id.in_(subquery))
+            .group_by(Entity.id, Entity.name, Entity.entity_type)
+        )
+
+        result = await session.execute(query)
+        entities = result.all()
+
+        # Filter out the original location entity and calculate relevance score
+        filtered_entities = []
+        for e in entities:
+            if e.name.lower() != location_name.lower() and e.entity_type not in ['CARDINAL', 'DATE', 'ORDINAL']:
+                relevance_score = (e.total_frequency * math.log(e.article_count + 1))
+                filtered_entities.append({
+                    "name": e.name,
+                    "type": e.entity_type,
+                    "article_count": e.article_count,
+                    "total_frequency": e.total_frequency,
+                    "relevance_score": relevance_score
+                })
+
+        # Sort by relevance score and apply pagination
+        sorted_entities = sorted(filtered_entities, key=lambda x: x['relevance_score'], reverse=True)
+        paginated_entities = sorted_entities[skip:skip+limit]
+
+        logger.info(f"Query for location '{location_name}' returned {len(paginated_entities)} entities")
+
+        return paginated_entities
+
+    except Exception as e:
+        logger.error(f"Error in get_location_entities: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    finally:
+        if not entities:
+            # If no entities are found, let's check if the location exists
+            location_check = await session.execute(select(Location).where(Location.name == location_name))
+            location = location_check.scalar_one_or_none()
+            if location:
+                logger.info(f"Location '{location_name}' exists in the database but no related entities found")
+            else:
+                logger.warning(f"Location '{location_name}' does not exist in the database")
 ########################################################################################
 ## HELPER FUNCTIONS
 
@@ -530,9 +605,17 @@ async def store_articles_with_geocoding(session: AsyncSession = Depends(get_sess
                             location = location.scalar_one_or_none()
                             
                             if not location:
-                                location = Location(name=location_data['name'], type="GPE", coordinates=location_data['coordinates'])
+                                location = Location(
+                                    name=location_data['name'],
+                                    type="GPE",
+                                    coordinates=location_data['coordinates'],
+                                    weight=location_data['weight']
+                                )
                                 session.add(location)
                                 await session.flush()  # Flush to get the location ID
+                            else:
+                                # Update the weight if the new weight is higher
+                                location.weight = max(location.weight, location_data['weight'])
                             
                             # Check if ArticleEntity already exists
                             existing_article_entity = await session.execute(

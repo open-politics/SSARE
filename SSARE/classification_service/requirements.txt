@@ -7,3 +7,5 @@ pgvector
 pydantic
 instructor
 prefect-ray
+google-generativeai
+google-auth

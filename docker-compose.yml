@@ -171,6 +171,9 @@ services:
       - "${POSTGRES_SERVICE_PORT}:5434"
     depends_on:
       - articles_database
+    networks:
+      - ssare_network
+      - default
 
   prefect_agent:
     image: prefecthq/prefect:2.16-python3.11-conda

@@ -23,6 +23,7 @@ from flows.orchestration import (
     produce_flags, create_scrape_jobs, store_raw_articles, store_articles_with_geocoding,
     create_classification_jobs, classify_articles, store_articles_with_classification
 )
+from flows.orchestration import run_flow
 from fastapi import Path
 
 
@@ -91,7 +92,7 @@ async def read_root(request: Request, query: str = "culture and arts"):
 async def trigger_scraping_flow():
     logger.info("Triggering scraping flow")
     try:
-        asyncio.create_task(scraping_flow())
+        asyncio.create_task(run_flow("scraping_flow"))
         return {"message": "Scraping flow triggered"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to trigger scraping flow: {str(e)}")
@@ -199,6 +200,17 @@ async def flush_redis_channels(flow_name: str = Path(..., description="The name 
     await redis_conn.aclose()
     
     return {"message": f"Flushed Redis channels for {flow_name}", "flushed_channels": flushed_channels}
+
+@app.post("/trigger_flow/{flow_name}")
+async def trigger_flow(flow_name: str):
+    logger.info(f"Triggering {flow_name}")
+    try:
+        asyncio.create_task(run_flow(flow_name))
+        return {"message": f"{flow_name} triggered"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to trigger {flow_name}: {str(e)}")
 
 @app.get("/service_health", response_class=HTMLResponse)
 async def service_health(request: Request):
