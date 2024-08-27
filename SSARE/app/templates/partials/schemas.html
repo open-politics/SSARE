@@ -1,0 +1,23 @@
+<div id="schemas-list">
+    <h2>Classification Schemas</h2>
+    <ul>
+        {% for schema in schemas %}
+        <li>
+            <h3>{{ schema.name }}</h3>
+            <p><strong>Prompt:</strong> {{ schema.prompt }}</p>
+            <h4>Fields:</h4>
+            <ul>
+                {% for field in schema.fields %}
+                <li>
+                    <strong>{{ field.name }}</strong> ({{ field.type }}): {{ field.description }}
+                    {% if field.min_value is not none %} Min: {{ field.min_value }}{% endif %}
+                    {% if field.max_value is not none %} Max: {{ field.max_value }}{% endif %}
+                    {% if field.max_length is not none %} Max Length: {{ field.max_length }}{% endif %}
+                    {% if field.max_items is not none %} Max Items: {{ field.max_items }}{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </li>
+        {% endfor %}
+    </ul>
+</div>

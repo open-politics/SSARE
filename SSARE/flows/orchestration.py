@@ -15,7 +15,7 @@ async def setup_redis_connection():
 @task
 async def produce_flags(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"{config.service_urls['postgres_service']}/flags")
+        response = await client.get(f"{config.service_urls['database_service']}/flags")
     return response.status_code == 200
 
 @task
@@ -27,19 +27,19 @@ async def create_scrape_jobs(raise_on_failure=True):
 @task
 async def store_raw_articles(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/store_raw_articles")
+        response = await client.post(f"{config.service_urls['database_service']}/store_raw_articles")
     return response.status_code == 200
 
 @task
 async def deduplicate_articles(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/deduplicate_articles")
+        response = await client.post(f"{config.service_urls['database_service']}/deduplicate_articles")
     return response.status_code == 200
 
 @task
 async def create_embedding_jobs(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/create_embedding_jobs")
+        response = await client.post(f"{config.service_urls['database_service']}/create_embedding_jobs")
     return response.status_code == 200
 
 @task
@@ -51,14 +51,14 @@ async def generate_embeddings(batch_size: int = 50, raise_on_failure=True):
 @task
 async def store_articles_with_embeddings(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/store_articles_with_embeddings")
+        response = await client.post(f"{config.service_urls['database_service']}/store_articles_with_embeddings")
     return response.status_code == 200
 
 
 @task
 async def create_entity_extraction_jobs(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/create_entity_extraction_jobs", timeout=700)
+        response = await client.post(f"{config.service_urls['database_service']}/create_entity_extraction_jobs", timeout=700)
     return response.status_code == 200
 
 @task
@@ -71,13 +71,13 @@ async def extract_entities(batch_size: int = 50, raise_on_failure=True):
 @task
 async def store_articles_with_entities(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/store_articles_with_entities")
+        response = await client.post(f"{config.service_urls['database_service']}/store_articles_with_entities")
     return response.status_code == 200
 
 @task
 async def create_geocoding_jobs(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/create_geocoding_jobs", timeout=700)
+        response = await client.post(f"{config.service_urls['database_service']}/create_geocoding_jobs", timeout=700)
     return response.status_code == 200
 
 @task
@@ -89,13 +89,13 @@ async def geocode_articles(batch_size: int = 50, raise_on_failure=True):
 @task 
 async def store_articles_with_geocoding(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/store_articles_with_geocoding")
+        response = await client.post(f"{config.service_urls['database_service']}/store_articles_with_geocoding")
     return response.status_code == 200
 
 @task
 async def create_classification_jobs(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/create_classification_jobs", timeout=700)
+        response = await client.post(f"{config.service_urls['database_service']}/create_classification_jobs", timeout=700)
     return response.status_code == 200
 
 @task
@@ -107,7 +107,7 @@ async def classify_articles(batch_size: int = 2, raise_on_failure=True):
 @task
 async def store_articles_with_classification(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/store_articles_with_classification")
+        response = await client.post(f"{config.service_urls['database_service']}/store_articles_with_classification")
     return response.status_code == 200
 
 

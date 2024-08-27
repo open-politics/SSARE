@@ -7,8 +7,8 @@ class AlgoQual:
     def __init__(self):
         self.schemas: Dict[uuid.UUID, Any] = {}
 
-    def load_schemas(self):
-        for schema in schema_manager.get_all_schemas():
+    async def load_schemas(self):
+        for schema in await schema_manager.get_all_schemas():
             self.schemas[schema.id] = self.create_dynamic_model(schema)
 
     def create_dynamic_model(self, schema: ClassificationSchema):
@@ -35,4 +35,3 @@ class AlgoQual:
         return f"{schema.prompt}\n\nPlease provide the following classifications:\n{field_descriptions}"
 
 algoqual = AlgoQual()
-algoqual.load_schemas()

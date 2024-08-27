@@ -39,7 +39,7 @@ services:
       - "${EMBEDDING_SERVICE_PORT}:0420"
     depends_on:
       - redis
-      - postgres_service
+      - database_service
     environment:
       - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
 
@@ -52,7 +52,7 @@ services:
       - "${ENTITY_SERVICE_PORT}:1290"
     depends_on:
       - redis
-      - postgres_service
+      - database_service
     environment:
       - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
 
@@ -67,7 +67,7 @@ services:
       - "3690"
     depends_on:
       - redis
-      - postgres_service
+      - database_service
       - pelias_placeholder
     networks:
       - ssare_network
@@ -97,7 +97,7 @@ services:
       - R2R_API_URL=http://r2r:${R2R_PORT}
     depends_on:
       - scraper_service
-      - postgres_service
+      - database_service
       - redis
 
   neo4j:
@@ -161,14 +161,14 @@ services:
     volumes:
       - ./data/placeholder:/data/placeholder
 
-  postgres_service:
+  database_service:
     build: 
       context: ./SSARE
-      dockerfile: ./postgres_service/Dockerfile
+      dockerfile: ./database_service/Dockerfile
     volumes:
-      - ./SSARE/postgres_service/alembic/versions:/app/alembic/versions
+      - ./SSARE/database_service/alembic/versions:/app/alembic/versions
     ports:
-      - "${POSTGRES_SERVICE_PORT}:5434"
+      - "${database_service_PORT}:5434"
     depends_on:
       - articles_database
     networks:

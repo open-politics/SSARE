@@ -6,21 +6,21 @@ WORKDIR /app
 ENV PYTHONPATH=/app:$PYTHONPATH
 
 # Copy the requirements.txt file
-COPY postgres_service/requirements.txt .
+COPY database_service/requirements.txt .
 RUN apt-get update && apt-get install -y netcat-traditional && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the core directory
 COPY core ./core
 
-# Copy the main.py and other files from postgres_service
-COPY postgres_service/main.py .
-COPY postgres_service/algoquan.py .
-COPY postgres_service/schemas.csv .
+# Copy the main.py and other files from database_service
+COPY database_service/main.py .
+COPY database_service/algoquan.py .
+COPY database_service/schemas.csv .
 
-COPY postgres_service/start.sh .
-COPY postgres_service/alembic.ini .
-COPY postgres_service/alembic ./alembic
+COPY database_service/start.sh .
+COPY database_service/alembic.ini .
+COPY database_service/alembic ./alembic
 
 RUN chmod +x start.sh
 

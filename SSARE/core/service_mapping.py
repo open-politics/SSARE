@@ -3,7 +3,7 @@ import os
 class ServiceConfig:
     # Service Ports
     MAIN_CORE_APP_PORT = os.getenv('MAIN_CORE_APP_PORT', '8089')
-    POSTGRES_SERVICE_PORT = os.getenv('POSTGRES_SERVICE_PORT', '5434')
+    database_service_PORT = os.getenv('database_service_PORT', '5434')
     EMBEDDING_SERVICE_PORT = os.getenv('EMBEDDING_SERVICE_PORT', '0420')
     QDRANT_SERVICE_PORT = os.getenv('QDRANT_SERVICE_PORT', '6969')
     QDRANT_STORAGE_PORT = os.getenv('QDRANT_STORAGE_PORT', '6333')
@@ -45,7 +45,7 @@ class ServiceConfig:
     # Service URLs
     service_urls = {
         "main_core_app": f"http://main_core_app:{MAIN_CORE_APP_PORT}",
-        "postgres_service": f"http://postgres_service:{POSTGRES_SERVICE_PORT}",
+        "database_service": f"http://database_service:{database_service_PORT}",
         "embedding_service": f"http://embedding_service:{EMBEDDING_SERVICE_PORT}",
         "qdrant_service": f"http://qdrant_service:{QDRANT_SERVICE_PORT}",
         "qdrant_storage": f"http://qdrant_storage:{QDRANT_STORAGE_PORT}",

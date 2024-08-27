@@ -27,7 +27,7 @@ config = ServiceConfig()
 # Database setup for main PostgreSQL
 DATABASE_URL = (
     f"postgresql+asyncpg://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
-    f"@postgres_service:{config.ARTICLES_DB_PORT}/{config.ARTICLES_DB_NAME}"
+    f"@database_service:{config.ARTICLES_DB_PORT}/{config.ARTICLES_DB_NAME}"
 )
 engine = create_async_engine(DATABASE_URL)
 

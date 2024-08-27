@@ -680,7 +680,7 @@ async def create_classification_jobs(session: AsyncSession = Depends(get_session
         existing_urls = set(await redis_conn.lrange('articles_without_classification_queue', 0, -1))
         existing_urls = {json.loads(url)['url'] for url in existing_urls}
         
-        query = select(Article).outerjoin(DynamicClassification).where(DynamicClassification == None)
+        query = select(Article).outerjoin(DynamicClassification).where(DynamicClassification.id == None)
         result = await session.execute(query)
         _articles = result.scalars().all()
 
@@ -710,57 +710,47 @@ async def create_classification_jobs(session: AsyncSession = Depends(get_session
 @app.post("/store_articles_with_classification")
 async def store_articles_with_classification(session: AsyncSession = Depends(get_session)):
     try:
-        logger.info("Starting store_articles_with_classification function")
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4, decode_responses=True)
-        logger.info(f"Connected to Redis on port {config.REDIS_PORT}, db 4")
+        redis_conn = Redis(host='redis', port=6379, db=4)
         classified_articles = await redis_conn.lrange('articles_with_classification_queue', 0, -1)
-        logger.info(f"Retrieved {len(classified_articles)} classified articles from Redis queue")
         
-        async with session.begin():
-            logger.info("Starting database session")
-            for index, classified_article in enumerate(classified_articles, 1):
-                try:
-                    article_data = json.loads(classified_article)
-                    logger.info(f"Processing article {index}/{len(classified_articles)}: {article_data['url']}")
-                    
-                    result = await session.execute(
-                        select(Article).options(selectinload(Article.classification)).where(Article.url == article_data['url'])
-                    )
-                    article = result.scalar_one_or_none()
+        for index, classified_article in enumerate(classified_articles):
+            try:
+                article_data = json.loads(classified_article)
+                logger.info(f"Processing article {index}/{len(classified_articles)}: {article_data['url']}")
+                
+                result = await session.execute(
+                    select(Article).options(selectinload(Article.classification)).where(Article.url == article_data['url'])
+                )
+                article = result.scalar_one_or_none()
 
-                    if article:
-                        classification_data = article_data['classification']
-                        schema_id = classification_data.pop('schema_id', None)
-                        if schema_id:
-                            schema = algoqual.schemas.get(schema_id)
-                            if schema:
-                                try:
-                                    validated_classification = schema(**classification_data)
-                                    if article.classification:
-                                        # Update existing classification
-                                        for key, value in validated_classification.dict().items():
-                                            setattr(article.classification, key, value)
-                                        article.classification.schema_id = schema_id
-                                    else:
-                                        # Create new classification
-                                        article.classification = DynamicClassification(
-                                            article_id=article.id,
-                                            schema_id=schema_id,
-                                            **validated_classification.dict()
-                                        )
-                                    session.add(article)
-                                    logger.info(f"Updated article and classification: {article_data['url']}")
-                                except ValidationError as e:
-                                    logger.error(f"Validation error for article {article_data['url']}: {e}")
+                if article:
+                    classification_data = article_data['classification']
+                    schema_id = article_data.get('schema_id')
+                    if schema_id in algoqual.schemas:
+                        try:
+                            validated_classification = algoqual.schemas[schema_id](**classification_data)
+                            if article.classification:
+                                # Update existing classification
+                                article.classification.classification_data = validated_classification.dict()
+                                article.classification.schema_id = schema_id
                             else:
-                                logger.error(f"Schema not found for ID: {schema_id}")
-                        else:
-                            logger.error(f"No schema_id provided for article: {article_data['url']}")
+                                # Create new classification
+                                article.classification = DynamicClassification(
+                                    article_id=article.id,
+                                    schema_id=schema_id,
+                                    classification_data=validated_classification.dict()
+                                )
+                            session.add(article)
+                            logger.info(f"Updated article and classification: {article_data['url']}")
+                        except ValidationError as e:
+                            logger.error(f"Validation error for article {article_data['url']}: {e}")
                     else:
-                        logger.warning(f"Article not found in database: {article_data['url']}")
+                        logger.error(f"Schema not found: {schema_id}")
+                else:
+                    logger.warning(f"Article not found in database: {article_data['url']}")
 
-                except json.JSONDecodeError as e:
-                    logger.error(f"JSON decoding error for article: {e}")
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON decoding error for article: {e}")
 
         await session.commit()
         logger.info("Changes committed to database")

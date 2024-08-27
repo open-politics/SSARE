@@ -19,6 +19,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.adb import get_session
+from core.classification_schema_manager import ClassificationSchemaManager
 
 
 async def lifespan(app):
@@ -31,6 +32,7 @@ app = FastAPI(lifespan=lifespan)
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+schema_manager = ClassificationSchemaManager()
 
 # Configure LiteLLM
 my_proxy_api_key = "sk-1234"
@@ -49,46 +51,9 @@ from pydantic import BaseModel, field_validator
 from typing import List, Dict, Any, Optional
 import json
 
-class NewsArticleClassification(BaseModel):
-    title: str
-    news_category: str
-    secondary_categories: List[str]
-    keywords: List[str]
-    geopolitical_relevance: int
-    legislative_influence_score: int
-    international_relevance_score: int
-    democratic_process_implications_score: int
-    general_interest_score: int
-    spam_score: int
-    clickbait_score: int
-    fake_news_score: int
-    satire_score: int
-
-    @field_validator('geopolitical_relevance', 'legislative_influence_score', 
-                     'international_relevance_score', 'democratic_process_implications_score', 
-                     'general_interest_score', 'spam_score', 'clickbait_score', 
-                     'fake_news_score', 'satire_score', mode='before')
-    def convert_to_int(cls, v):
-        if isinstance(v, dict):
-            v = v.get('score', 0)
-        if isinstance(v, (float, str)):
-            v = float(v)
-        return min(max(int(v * 10), 1), 10)  # Convert to int 1-10
-
-    @field_validator('secondary_categories', 'keywords', mode='before')
-    def parse_string_to_list(cls, v):
-        if isinstance(v, str):
-            try:
-                return json.loads(v)
-            except json.JSONDecodeError:
-                # If JSON parsing fails, split by comma as a fallback
-                return [item.strip() for item in v.strip('[]').split(',')]
-        return v
-
-# Functions for LLM tasks
 
 @task(retries=3)
-async def classify_article(article: Article, schema_id: UUID) -> Dict[str, Any]:
+async def classify_article(article: Article, schema_id: uuid.UUID) -> Dict[str, Any]:
     """Classify the article using LLM with a specific schema."""
     if schema_id not in algoqual.schemas:
         await algoqual.load_schemas()
@@ -97,7 +62,7 @@ async def classify_article(article: Article, schema_id: UUID) -> Dict[str, Any]:
     prompt = algoqual.get_llm_prompt(schema_id)
     
     classification = await client.chat.completions.create(
-        model="llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4o-2024-08-06",
+        model="llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4-0613",
         response_model=dynamic_model,
         max_retries=2,
         messages=[
@@ -114,22 +79,22 @@ async def classify_article(article: Article, schema_id: UUID) -> Dict[str, Any]:
     
     return classification.dict()
 
-@app.post("/classify_articles/{schema_name}")
-async def classify_articles_endpoint(schema_name: str, batch_size: int = 50):
-    schema = schema_manager.get_schema_by_name(schema_name)
+@app.post("/classify_articles/{schema_id}")
+async def classify_articles_endpoint(schema_id: uuid.UUID, batch_size: int = 50):
+    schema = await schema_manager.get_schema(schema_id)
     if not schema:
-        raise HTTPException(status_code=404, detail=f"Schema '{schema_name}' not found")
+        raise HTTPException(status_code=404, detail=f"Schema with id '{schema_id}' not found")
 
     articles = await retrieve_articles_from_redis(batch_size)
     processed_articles = []
     
     for article in articles:
         try:
-            classification = await classify_article(article, schema.id)
+            classification = await classify_article(article, schema_id)
             processed_article = {
                 "url": article.url,
                 "classification": classification,
-                "schema_id": str(schema.id)
+                "schema_id": schema_id
             }
             processed_articles.append(json.dumps(processed_article))
         except Exception as e:
@@ -140,7 +105,7 @@ async def classify_articles_endpoint(schema_name: str, batch_size: int = 50):
         await redis_conn.rpush('articles_with_classification_queue', *processed_articles)
         await redis_conn.close()
     
-    return {"message": f"Processed {len(processed_articles)} articles with schema {schema_name}"}
+    return {"message": f"Processed {len(processed_articles)} articles with schema {schema_id}"}
 
 @task
 async def retrieve_articles_from_redis(batch_size: int = 50) -> List[Article]:
@@ -180,7 +145,7 @@ async def process_articles(batch_size: int = 50):
     processed_articles = []
     for article in articles:
         try:
-            classification = await classify_article(article)
+            classification = await classify_article(article, schema_name)
             
             # Combine article and classification data
             article_dict = article.dict()
@@ -212,20 +177,52 @@ async def write_articles_to_redis(serialized_articles):
     logger.info(f"Wrote {len(serialized_articles)} articles with classification to Redis")
 
 @app.post("/classify_articles")
-async def classify_articles_endpoint(batch_size: int = 50):
+async def classify_articles_endpoint(batch_size: int = 50, schema_name: str = "default"):
     logger.debug("Processing articles")
-    processed_articles = await process_articles(batch_size)
+    articles = await retrieve_articles_from_redis(batch_size)
     
-    if not processed_articles:
-        return {"message": "No articles processed."}
+    if not articles:
+        return {"message": "No articles to process."}
+    
+    processed_articles = []
+    for article in articles:
+        try:
+            classification = await classify_article(article, schema_name)
+            processed_article = {
+                "url": article.url,
+                "classification": classification,
+                "schema_name": schema_name
+            }
+            processed_articles.append(json.dumps(processed_article))
+        except Exception as e:
+            logger.error(f"Error processing article {article.url}: {str(e)}")
+    
+    if processed_articles:
+        await write_articles_to_redis(processed_articles)
     
     return {
         "message": "Articles processed successfully",
-        "processed_count": len(processed_articles),
-        "processed_articles": processed_articles
+        "processed_count": len(processed_articles)
     }
 
 # Health endpoint
 @app.get("/healthz")
 def healthz():
     return {"status": "OK"}
+
+@app.post("/create_schema_from_description")
+async def create_schema_from_description(description: str):
+    try:
+        schema = await client.chat.completions.create(
+            model="llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4-0613",
+            response_model=ClassificationSchema,
+            messages=[
+                {"role": "system", "content": "Create a classification schema based on the following description."},
+                {"role": "user", "content": description},
+            ],
+        )
+        schema_id = await schema_manager.create_schema(schema)
+        return {"message": "Schema created successfully", "schema_id": schema_id}
+    except Exception as e:
+        logger.error(f"Error creating schema: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

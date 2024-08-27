@@ -1,22 +1,7 @@
 import csv
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from core.schema_models import ClassificationSchema, ClassificationField
 import uuid
-
-class ClassificationField(BaseModel):
-    name: str
-    type: str
-    description: str
-    min_value: Optional[float] = None
-    max_value: Optional[float] = None
-    max_length: Optional[int] = None
-    max_items: Optional[int] = None
-
-class ClassificationSchema(BaseModel):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4)
-    name: str
-    prompt: str
-    fields: List[ClassificationField]
 
 class ClassificationSchemaManager:
     def __init__(self, schema_file: str = 'core/schemas.csv'):

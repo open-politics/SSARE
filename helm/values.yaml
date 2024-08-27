@@ -18,7 +18,7 @@ services:
       dockerfile: ./entity_service/Dockerfile
     depends_on:
     - redis
-    - postgres_service
+    - database_service
     - prefect_server
     image: entity_service:latest
     ports:
@@ -31,7 +31,7 @@ services:
       dockerfile: ./geo_service/Dockerfile
     depends_on:
     - redis
-    - postgres_service
+    - database_service
     - pelias_placeholder
     - prefect_server
     image: geo_service:latest
@@ -45,7 +45,7 @@ services:
       dockerfile: ./app/Dockerfile
     depends_on:
     - scraper_service
-    - postgres_service
+    - database_service
     - redis
     - prefect_server
     image: main_core_app:latest
@@ -74,7 +74,7 @@ services:
       dockerfile: ./nlp_service/Dockerfile
     depends_on:
     - redis
-    - postgres_service
+    - database_service
     - prefect_server
     image: nlp_service:latest
     ports:
@@ -91,17 +91,17 @@ services:
       host: ${PELIAS_PLACEHOLDER_PORT}
     volumes:
     - data-placeholder--data-placeholder
-  postgres_service:
+  database_service:
     build:
       context: ./SSARE
-      dockerfile: ./postgres_service/Dockerfile
+      dockerfile: ./database_service/Dockerfile
     depends_on:
     - articles_database
     - prefect_server
-    image: postgres_service:latest
+    image: database_service:latest
     ports:
     - container: '5434'
-      host: ${POSTGRES_SERVICE_PORT}
+      host: ${database_service_PORT}
     volumes: []
   prefect_agent:
     build: null

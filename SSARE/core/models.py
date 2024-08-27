@@ -5,6 +5,7 @@ from sqlalchemy import Column, Integer, Text, ARRAY, JSON
 from pgvector.sqlalchemy import Vector
 import uuid
 import logging
+from core.classification_schema_manager import ClassificationSchema  # Add this import
 
 class BaseModel(SQLModel):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -25,10 +26,11 @@ class ArticleTag(SQLModel, table=True):
 
 class DynamicClassification(BaseModel, table=True):
     article_id: uuid.UUID = Field(foreign_key="article.id", primary_key=True)
-    schema_id: uuid.UUID = Field(index=True)
+    schema_id: uuid.UUID = Field(foreign_key="classificationschema.id", index=True)
     classification_data: Dict[str, Any] = Field(sa_column=Column(JSON))
 
     article: "Article" = Relationship(back_populates="classification")
+    schema: ClassificationSchema = Relationship(back_populates="classifications")
 
 class EntityLocation(SQLModel, table=True):
     entity_id: uuid.UUID = Field(foreign_key="entity.id", primary_key=True)

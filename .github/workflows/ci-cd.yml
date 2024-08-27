@@ -26,7 +26,7 @@ jobs:
             "geo_service"
             "main_core_app"
             "nlp_service"
-            "postgres_service"
+            "database_service"
             "rag_service"
             "scraper_service"
             "classification_service"

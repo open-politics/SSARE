@@ -5,7 +5,7 @@ Key changes and features:
 Updated core/models.py to include DynamicClassification for flexible article classification storage.
 Implemented AlgoQual in the classification service to handle dynamic schema creation and validation.
 Created AlgoQuan in the postgres service to handle complex querying based on classification data.
-Modified the article storage process in postgres_service/main.py to use the new dynamic classification system.
+Modified the article storage process in database_service/main.py to use the new dynamic classification system.
 Updated the article retrieval process to utilize AlgoQuan for advanced filtering and sorting based on classification dimensions.
 The system now allows for:
 Dynamic creation and application of classification schemas to articles.

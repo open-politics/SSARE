@@ -56,10 +56,10 @@ async def healthcheck():
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, query: str = "culture and arts"):
     try:
-        postgres_service_url = f"{config.service_urls['postgres_service']}/articles"
+        database_service_url = f"{config.service_urls['database_service']}/articles"
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                postgres_service_url,
+                database_service_url,
                 params={
                     "search_query": query,
                     "search_type": "semantic",
@@ -217,7 +217,7 @@ async def service_health(request: Request):
     health_status = {}
     services_to_check = [
         "main_core_app",
-        "postgres_service",
+        "database_service",
         "embedding_service",
         "scraper_service",
         "r2r",
@@ -349,6 +349,7 @@ async def search_articles(
     request: Request,
     search_query: str = Query(None),
     search_type: str = Query("text"),
+    natural_query: str = Query(None),
     has_embedding: bool = Query(False),
     has_geocoding: bool = Query(False),
     has_entities: bool = Query(False),
@@ -356,13 +357,14 @@ async def search_articles(
     skip: int = 0,
     limit: int = 10
 ):
-    postgres_service_url = f"{config.service_urls['postgres_service']}/articles"
+    database_service_url = f"{config.service_urls['database_service']}/articles"
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            postgres_service_url,
+            database_service_url,
             params={
                 "search_query": search_query,
                 "search_type": search_type,
+                "natural_query": natural_query,
                 "has_embedding": has_embedding,
                 "has_geocoding": has_geocoding,
                 "has_entities": has_entities,
