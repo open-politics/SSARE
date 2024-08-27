@@ -15,6 +15,8 @@ COPY core ./core
 
 # Copy the main.py and other files from postgres_service
 COPY postgres_service/main.py .
+COPY postgres_service/algoquan.py .
+COPY postgres_service/schemas.csv .
 
 COPY postgres_service/start.sh .
 COPY postgres_service/alembic.ini .

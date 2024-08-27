@@ -28,8 +28,9 @@ from sqlmodel import Session
 from typing import AsyncGenerator
 
 from core.adb import engine, get_session, create_db_and_tables
-from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag, NewsArticleClassification
+from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag, DynamicClassification
 from core.service_mapping import config
+from algoquan import algoquan
 
 ########################################################################################
 ## SETUP
@@ -69,103 +70,81 @@ async def get_articles(
     has_geocoding: Optional[bool] = Query(None, description="Filter articles with geocoding"),
     has_entities: Optional[bool] = Query(None, description="Filter articles with entities"),
     has_classification: Optional[bool] = Query(None, description="Filter articles with classification"),
-    skip: int = 0, 
-    limit: int = 10, 
+    classification_schema: Optional[str] = Query(None, description="Classification schema name"),
+    dimensions: Optional[str] = Query(None, description="Classification dimensions with weights and ranges (JSON)"),
+    skip: int = 0,
+    limit: int = 10,
     session: AsyncSession = Depends(get_session)
-    ):
+):  
     logger.info(f"Received search_type: {search_type}, search_query: {search_query}")
 
     async with session.begin():
-        query = select(Article).options(
-            selectinload(Article.entities).selectinload(Entity.locations),
-            selectinload(Article.tags),
-            selectinload(Article.classification)
-        )
-        
-        # Apply filters
-        if url:
-            query = query.where(Article.url == url)
-        if has_geocoding:
-            query = query.where(Article.entities.any(Entity.locations.any()))
-        if has_embeddings is not None:
-            query = query.where(Article.embeddings != None if has_embeddings else Article.embeddings == None)
-        if has_entities is not None:
-            query = query.where(Article.entities.any() if has_entities else ~Article.entities.any())
-        if has_classification is not None:
-            query = query.where(Article.classification != None if has_classification else Article.classification == None)
-        
-        # Apply search based on search_type
-        if search_query:
-            if search_type == SearchType.TEXT:
-                query = query.where(
-                    or_(
-                        Article.headline.ilike(f'%{search_query}%'), 
-                        Article.paragraphs.ilike(f'%{search_query}%')
+        if classification_schema and dimensions:
+            try:
+                dimensions_dict = json.loads(dimensions)
+                for dimension, params in dimensions_dict.items():
+                    if 'weight' in params:
+                        algoquan.set_dimension_weight(dimension, params['weight'])
+                    if 'min' in params and 'max' in params:
+                        algoquan.set_dimension_range(dimension, params['min'], params['max'])
+                
+                articles = await algoquan.retrieve_articles(session, classification_schema, limit)
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=400, detail="Invalid JSON format for dimensions")
+        else:
+            query = select(Article).options(
+                selectinload(Article.entities).selectinload(Entity.locations),
+                selectinload(Article.tags),
+                selectinload(Article.classification)
+            )
+            
+            # Apply filters
+            if url:
+                query = query.where(Article.url == url)
+            if has_geocoding:
+                query = query.where(Article.entities.any(Entity.locations.any()))
+            if has_embeddings is not None:
+                query = query.where(Article.embeddings != None if has_embeddings else Article.embeddings == None)
+            if has_entities is not None:
+                query = query.where(Article.entities.any() if has_entities else ~Article.entities.any())
+            if has_classification is not None:
+                query = query.where(Article.classification != None if has_classification else Article.classification == None)
+            
+            # Apply search based on search_type
+            if search_query:
+                if search_type == SearchType.TEXT:
+                    query = query.where(
+                        or_(
+                            Article.headline.ilike(f'%{search_query}%'), 
+                            Article.paragraphs.ilike(f'%{search_query}%')
+                        )
                     )
-                )
-            elif search_type == SearchType.SEMANTIC and has_embeddings != False:
-                try:
-                    # Get query embedding from NLP service
-                    async with httpx.AsyncClient() as client:
-                        response = await client.get(f"{config.service_urls['embedding_service']}/generate_query_embeddings", params={"query": search_query})
-                        response.raise_for_status()
-                        query_embeddings = response.json()["embeddings"]
-                        logger.error(f"Embeddings{query_embeddings}")
+                elif search_type == SearchType.SEMANTIC:
+                    # Implement semantic search logic here
+                    pass
 
-                    embedding_array = query_embeddings
-                    query = query.order_by(Article.embeddings.l2_distance(embedding_array)).limit(limit)
-                except httpx.HTTPError as e:
-                    logger.error(f"Error calling NLP service: {e}")
-                    raise HTTPException(status_code=500, detail="Failed to generate query embedding")
-                except Exception as e:
-                    logger.error(f"Unexpected error in semantic search: {e}")
-                    raise HTTPException(status_code=500, detail="Unexpected error in semantic search")
-        
-        logger.info(f"Final query: {query}")
-        
-        # Execute the query
-        try:
-            result = await session.execute(query.offset(skip).limit(limit))
+            # Apply pagination
+            query = query.offset(skip).limit(limit)
+            
+            result = await session.execute(query)
             articles = result.scalars().unique().all()
-            logger.info(f"Number of articles retrieved: {len(articles)}")
-        except Exception as e:
-            logger.error(f"Error executing query: {e}")
-            raise HTTPException(status_code=500, detail="Error retrieving articles")
-        
+
+        # Format the results
         articles_data = []
         for article in articles:
             article_dict = {
                 "id": str(article.id),
-            "url": article.url,
-            "headline": article.headline,
-            "source": article.source,
-            "insertion_date": article.insertion_date.isoformat() if article.insertion_date else None,
-            "paragraphs": article.paragraphs,
-            "embeddings": article.embeddings.tolist() if article.embeddings is not None else None,
-            "entities": [
-                {
-                    "id": str(e.id),
-                    "name": e.name,
-                    "entity_type": e.entity_type,
-                    "locations": [
-                        {
-                            "name": loc.name,
-                            "type": loc.type,
-                            "coordinates": loc.coordinates.tolist() if loc.coordinates is not None else None
-                        } for loc in e.locations
-                    ] if e.locations else []
-                } for e in article.entities
-            ] if article.entities else [],
-            "tags": [
-                {
-                    "id": str(t.id),
-                    "name": t.name
-                } for t in (article.tags or [])
-            ],
-            "classification": article.classification.dict() if article.classification else None
+                "url": article.url,
+                "headline": article.headline,
+                "paragraphs": article.paragraphs,
+                "source": article.source,
+                "insertion_date": article.insertion_date.isoformat() if article.insertion_date else None,
+                "entities": [{"name": e.name, "type": e.entity_type} for e in article.entities] if article.entities else [],
+                "tags": [t.name for t in article.tags] if article.tags else [],
+                "classification": article.classification.classification_data if article.classification else None
             }
             articles_data.append(article_dict)
-        
+
         logger.info(f"Returning {len(articles_data)} articles")
         return articles_data
         
@@ -692,42 +671,41 @@ async def store_articles_with_geocoding(session: AsyncSession = Depends(get_sess
 
 @app.post("/create_classification_jobs")
 async def create_classification_jobs(session: AsyncSession = Depends(get_session)):
-    logger.info("Starting to create classification jobs.")
     try:
-        async with session.begin():
-            # Select articles with no tags
-            query = select(Article).where(Article.classification == None)
-            result = await session.execute(query)
-            _articles = result.scalars().all()
-            logger.info(f"Found {len(_articles)} articles with no classification.")
+        logger.info("Starting create_classification_jobs function")
+        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=3, decode_responses=True)
+        logger.info(f"Connected to Redis on port {config.REDIS_PORT}, db 3")
+        
+        # Get existing articles in the queue
+        existing_urls = set(await redis_conn.lrange('articles_without_classification_queue', 0, -1))
+        existing_urls = {json.loads(url)['url'] for url in existing_urls}
+        
+        query = select(Article).outerjoin(DynamicClassification).where(DynamicClassification == None)
+        result = await session.execute(query)
+        _articles = result.scalars().all()
 
-            redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4)
-            existing_urls = set(await redis_conn.lrange('articles_without_classification_queue', 0, -1))
-            existing_urls = {json.loads(url.decode('utf-8'))['url'] for url in existing_urls}
+        articles_list = []
+        for article in _articles:
+            if article.url not in existing_urls:
+                article_dict = {
+                    "id": str(article.id),
+                    "url": article.url,
+                    "headline": article.headline,
+                    "paragraphs": article.paragraphs
+                }
+                articles_list.append(json.dumps(article_dict))
 
-            articles_list = []
-            not_pushed_count = 0
-            for article in _articles:
-                if article.url not in existing_urls:
-                    articles_list.append(json.dumps({
-                        'url': article.url,
-                        'headline': article.headline,
-                        'paragraphs': article.paragraphs,
-                        'source': article.source
-                    }))
-                else:
-                    not_pushed_count += 1
-            
         if articles_list:
             await redis_conn.rpush('articles_without_classification_queue', *articles_list)
             logger.info(f"Pushed {len(articles_list)} articles to Redis queue for classification.")
         else:
-            logger.info("No articles found that need classification.")
+            logger.info("No new articles found that need classification.")
+        
         await redis_conn.close()
-        return {"message": f"Classification jobs created for {len(_articles)} articles."}
+        return {"message": f"Classification jobs created for {len(articles_list)} articles."}
     except Exception as e:
         logger.error(f"Error creating classification jobs: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/store_articles_with_classification")
 async def store_articles_with_classification(session: AsyncSession = Depends(get_session)):
@@ -745,7 +723,6 @@ async def store_articles_with_classification(session: AsyncSession = Depends(get
                     article_data = json.loads(classified_article)
                     logger.info(f"Processing article {index}/{len(classified_articles)}: {article_data['url']}")
                     
-                    # Find the article by URL and eagerly load the classification
                     result = await session.execute(
                         select(Article).options(selectinload(Article.classification)).where(Article.url == article_data['url'])
                     )
@@ -753,21 +730,35 @@ async def store_articles_with_classification(session: AsyncSession = Depends(get
 
                     if article:
                         classification_data = article_data['classification']
-                        if article.classification:
-                            # Update existing classification
-                            for key, value in classification_data.items():
-                                setattr(article.classification, key, value)
+                        schema_id = classification_data.pop('schema_id', None)
+                        if schema_id:
+                            schema = algoqual.schemas.get(schema_id)
+                            if schema:
+                                try:
+                                    validated_classification = schema(**classification_data)
+                                    if article.classification:
+                                        # Update existing classification
+                                        for key, value in validated_classification.dict().items():
+                                            setattr(article.classification, key, value)
+                                        article.classification.schema_id = schema_id
+                                    else:
+                                        # Create new classification
+                                        article.classification = DynamicClassification(
+                                            article_id=article.id,
+                                            schema_id=schema_id,
+                                            **validated_classification.dict()
+                                        )
+                                    session.add(article)
+                                    logger.info(f"Updated article and classification: {article_data['url']}")
+                                except ValidationError as e:
+                                    logger.error(f"Validation error for article {article_data['url']}: {e}")
+                            else:
+                                logger.error(f"Schema not found for ID: {schema_id}")
                         else:
-                            # Create new classification
-                            article.classification = NewsArticleClassification(**classification_data)
-                        
-                        session.add(article)
-                        logger.info(f"Updated article and classification: {article_data['url']}")
+                            logger.error(f"No schema_id provided for article: {article_data['url']}")
                     else:
                         logger.warning(f"Article not found in database: {article_data['url']}")
 
-                except ValidationError as e:
-                    logger.error(f"Validation error for article {article_data['url']}: {e}")
                 except json.JSONDecodeError as e:
                     logger.error(f"JSON decoding error for article: {e}")
 

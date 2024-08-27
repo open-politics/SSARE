@@ -1,0 +1,10 @@
+schema_name,dimension,weight,min_value,max_value
+political_analysis,political_bias,2,0,10
+political_analysis,controversy_level,1.5,0,10
+political_analysis,credibility_score,3,0,10
+economic_impact,market_influence,2.5,0,10
+economic_impact,global_relevance,2,0,10
+economic_impact,long_term_impact,1.5,0,10
+social_trends,viral_potential,2,0,10
+social_trends,demographic_reach,1.5,0,10
+social_trends,cultural_significance,2.5,0,10

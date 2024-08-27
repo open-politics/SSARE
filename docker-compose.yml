@@ -249,29 +249,29 @@ services:
     ports:
       - "${R2R_DB_PORT}:5432"
       
-  rag_service:
-    build: 
-      context: ./SSARE
-      dockerfile: ./rag_service/Dockerfile
-    restart: always
-    ports:
-      - "${RAG_SERVICE_PORT}:4312"
-    depends_on:
-      - redis
-      - r2r_database
-    environment:
-      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
-      - POSTGRES_HOST=r2r_database
-      - POSTGRES_USER=${R2R_DB_USER}
-      - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
-      - POSTGRES_DBNAME=${R2R_DB_NAME}
-      - POSTGRES_PORT=5432
-      - POSTGRES_VECS_COLLECTION=ssare_vec
-      - INIT_DB=true
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - R2R_SERVER_URL=http://r2r:${R2R_PORT}
-    env_file:
-      - .env
+  # rag_service:
+  #   build: 
+  #     context: ./SSARE
+  #     dockerfile: ./rag_service/Dockerfile
+  #   restart: always
+  #   ports:
+  #     - "${RAG_SERVICE_PORT}:4312"
+  #   depends_on:
+  #     - redis
+  #     - r2r_database
+  #   environment:
+  #     - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+  #     - POSTGRES_HOST=r2r_database
+  #     - POSTGRES_USER=${R2R_DB_USER}
+  #     - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
+  #     - POSTGRES_DBNAME=${R2R_DB_NAME}
+  #     - POSTGRES_PORT=5432
+  #     - POSTGRES_VECS_COLLECTION=ssare_vec
+  #     - INIT_DB=true
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #     - R2R_SERVER_URL=http://r2r:${R2R_PORT}
+  #   env_file:
+  #     - .env
 
   redis:
     image: redis:latest

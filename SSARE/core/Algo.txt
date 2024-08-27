@@ -1,0 +1,17 @@
+AlgoQual (Algorithmic Qualification): This component handles dynamic classification of articles. We've created a flexible schema system that allows for different classification dimensions to be applied to articles. The DynamicClassification model in core/models.py stores this data using a JSON column, allowing for schema flexibility.
+AlgoQuan (Algorithmic Quantification): This component is responsible for retrieving articles based on their classifications. It allows for weighted querying across different classification dimensions, enabling nuanced and customizable article retrieval.
+
+Key changes and features:
+Updated core/models.py to include DynamicClassification for flexible article classification storage.
+Implemented AlgoQual in the classification service to handle dynamic schema creation and validation.
+Created AlgoQuan in the postgres service to handle complex querying based on classification data.
+Modified the article storage process in postgres_service/main.py to use the new dynamic classification system.
+Updated the article retrieval process to utilize AlgoQuan for advanced filtering and sorting based on classification dimensions.
+The system now allows for:
+Dynamic creation and application of classification schemas to articles.
+Flexible storage of classification data using JSON columns.
+Advanced article retrieval based on weighted classification dimensions.
+Tunable parameters for retrieval, potentially loaded from a CSV file for easy configuration.
+Next steps involve fine-tuning the AlgoQuan retrieval process, potentially implementing more advanced scoring mechanisms, and ensuring the system scales well with large datasets.
+
+think of a user and developer friendly way to orchestrate this. The general goal: make dimensions and filter categorisations dynamically constructable in natural language (AlgoQual) and then interactively constructing the algorithm retrieving articles across the dimensions and filtered by the tags that the system is initiliased with

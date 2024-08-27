@@ -1,9 +1,10 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from sqlmodel import Field, SQLModel, Relationship
-from sqlalchemy import Column, Integer, Text, ARRAY
+from sqlalchemy import Column, Integer, Text, ARRAY, JSON
 from pgvector.sqlalchemy import Vector
 import uuid
+import logging
 
 class BaseModel(SQLModel):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -22,21 +23,10 @@ class ArticleTag(SQLModel, table=True):
     article_id: uuid.UUID = Field(foreign_key="article.id", primary_key=True)
     tag_id: uuid.UUID = Field(foreign_key="tag.id", primary_key=True)
 
-class NewsArticleClassification(BaseModel, table=True):
+class DynamicClassification(BaseModel, table=True):
     article_id: uuid.UUID = Field(foreign_key="article.id", primary_key=True)
-    title: str
-    news_category: str
-    secondary_categories: List[str] = Field(sa_column=Column(ARRAY(Text)))
-    keywords: List[str] = Field(sa_column=Column(ARRAY(Text)))
-    geopolitical_relevance: int
-    legislative_influence_score: int
-    international_relevance_score: int
-    democratic_process_implications_score: int
-    general_interest_score: int
-    spam_score: int
-    clickbait_score: int
-    fake_news_score: int
-    satire_score: int
+    schema_id: uuid.UUID = Field(index=True)
+    classification_data: Dict[str, Any] = Field(sa_column=Column(JSON))
 
     article: "Article" = Relationship(back_populates="classification")
 
@@ -53,14 +43,12 @@ class Article(BaseModel, table=True):
     embeddings: Optional[List[float]] = Field(default=None, sa_column=Column(Vector(768)))
 
     entities: Optional[List["Entity"]] = Relationship(back_populates="articles", link_model=ArticleEntity)
-    classification: Optional[NewsArticleClassification] = Relationship(back_populates="article")
+    classification: Optional[DynamicClassification] = Relationship(back_populates="article")
     tags: Optional[List["Tag"]] = Relationship(back_populates="articles", link_model=ArticleTag)
-
 
 class Articles(SQLModel):
     articles: List[Article]
 
-    
 class Entity(BaseModel, table=True):
     name: str = Field(index=True)
     entity_type: str = Field(index=True)
@@ -83,3 +71,4 @@ class Tag(BaseModel, table=True):
 
 class ArticleTags(SQLModel):
     tags: List[Tag]
+

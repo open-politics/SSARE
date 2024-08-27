@@ -92,7 +92,7 @@ async def read_root(request: Request, query: str = "culture and arts"):
 async def trigger_scraping_flow():
     logger.info("Triggering scraping flow")
     try:
-        asyncio.create_task(run_flow("scraping_flow"))
+        asyncio.create_task(run_flow("scraping")) 
         return {"message": "Scraping flow triggered"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to trigger scraping flow: {str(e)}")

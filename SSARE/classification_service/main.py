@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from typing import List
-from redis import Redis
+from redis.asyncio import Redis
 from fastapi import FastAPI
 from openai import OpenAI
 import instructor
@@ -12,16 +12,24 @@ from pydantic import BaseModel, Field
 from pydantic import validator, field_validator
 from prefect import task, flow
 from prefect_ray.task_runners import RayTaskRunner
+from algoqual import algoqual
 import time
+import uuid
 from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from core.adb import get_session
+
+
+async def lifespan(app):
+    yield
+
+# FastAPI app
+app = FastAPI(lifespan=lifespan)
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-# FastAPI app
-app = FastAPI()
-
 
 
 # Configure LiteLLM
@@ -38,7 +46,7 @@ from pydantic import BaseModel, field_validator
 from typing import List
 
 from pydantic import BaseModel, field_validator
-from typing import List
+from typing import List, Dict, Any, Optional
 import json
 
 class NewsArticleClassification(BaseModel):
@@ -80,29 +88,66 @@ class NewsArticleClassification(BaseModel):
 # Functions for LLM tasks
 
 @task(retries=3)
-def classify_article(article: Article) -> NewsArticleClassification:
-    """Classify the article using LLM."""
-    return client.chat.completions.create(
+async def classify_article(article: Article, schema_id: UUID) -> Dict[str, Any]:
+    """Classify the article using LLM with a specific schema."""
+    if schema_id not in algoqual.schemas:
+        await algoqual.load_schemas()
+    
+    dynamic_model = algoqual.schemas[schema_id]
+    prompt = algoqual.get_llm_prompt(schema_id)
+    
+    classification = await client.chat.completions.create(
         model="llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4o-2024-08-06",
-        response_model=NewsArticleClassification,
+        response_model=dynamic_model,
+        max_retries=2,
         messages=[
             {
                 "role": "system",
-                "content": "You are an AI assistant that analyzes articles and provides tags and metrics. You are assessing the article for relevance to an open source political intelligence service. Create classifications suitable for category, issue area, topic, and top story. The metrics should be relevant to the article and the political intelligence service."
+                "content": prompt
             },
             {
                 "role": "user",
                 "content": f"Analyze this article and provide tags and metrics:\n\nHeadline: {article.headline}\n\nContent: {article.paragraphs if os.getenv('LOCAL_LLM') == 'False' else article.paragraphs[:350]}, be very critical.",
             },
         ],
-    )   
+    )
+    
+    return classification.dict()
+
+@app.post("/classify_articles/{schema_name}")
+async def classify_articles_endpoint(schema_name: str, batch_size: int = 50):
+    schema = schema_manager.get_schema_by_name(schema_name)
+    if not schema:
+        raise HTTPException(status_code=404, detail=f"Schema '{schema_name}' not found")
+
+    articles = await retrieve_articles_from_redis(batch_size)
+    processed_articles = []
+    
+    for article in articles:
+        try:
+            classification = await classify_article(article, schema.id)
+            processed_article = {
+                "url": article.url,
+                "classification": classification,
+                "schema_id": str(schema.id)
+            }
+            processed_articles.append(json.dumps(processed_article))
+        except Exception as e:
+            logger.error(f"Error processing article {article.url}: {str(e)}")
+    
+    if processed_articles:
+        redis_conn = Redis(host='redis', port=6379, db=4)
+        await redis_conn.rpush('articles_with_classification_queue', *processed_articles)
+        await redis_conn.close()
+    
+    return {"message": f"Processed {len(processed_articles)} articles with schema {schema_name}"}
 
 @task
-def retrieve_articles_from_redis(batch_size: int = 50) -> List[Article]:
+async def retrieve_articles_from_redis(batch_size: int = 50) -> List[Article]:
     """Retrieve articles from Redis queue."""
     redis_conn = Redis(host='redis', port=6379, db=4)
-    _articles = redis_conn.lrange('articles_without_classification_queue', 0, batch_size - 1)
-    redis_conn.ltrim('articles_without_classification_queue', batch_size, -1)
+    _articles = await redis_conn.lrange('articles_without_classification_queue', 0, batch_size - 1)
+    await redis_conn.ltrim('articles_without_classification_queue', batch_size, -1)
     
     if not _articles:
         logger.warning("No articles retrieved from Redis.")
@@ -118,12 +163,13 @@ def retrieve_articles_from_redis(batch_size: int = 50) -> List[Article]:
             logger.error(f"Invalid article: {article_data}")
             logger.error(f"Error: {e}")
     
+    await redis_conn.close()
     return articles
 
 @flow
-def process_articles(batch_size: int = 50):
+async def process_articles(batch_size: int = 50):
     """Process a batch of articles: retrieve, classify, and serialize them."""
-    articles = retrieve_articles_from_redis(batch_size=batch_size)
+    articles = await retrieve_articles_from_redis(batch_size=batch_size)
     
     if not articles:
         logger.warning("No articles to process.")
@@ -134,7 +180,7 @@ def process_articles(batch_size: int = 50):
     processed_articles = []
     for article in articles:
         try:
-            classification = classify_article(article)
+            classification = await classify_article(article)
             
             # Combine article and classification data
             article_dict = article.dict()
@@ -154,20 +200,21 @@ def process_articles(batch_size: int = 50):
     return processed_articles
 
 @task
-def write_articles_to_redis(serialized_articles):
+async def write_articles_to_redis(serialized_articles):
     """Write serialized articles to Redis."""
     if not serialized_articles:
         logger.info("No articles to write to Redis")
         return
 
     redis_conn_processed = Redis(host='redis', port=6379, db=4)
-    redis_conn_processed.lpush('articles_with_classification_queue', *serialized_articles)
+    await redis_conn_processed.lpush('articles_with_classification_queue', *serialized_articles)
+    await redis_conn_processed.close()
     logger.info(f"Wrote {len(serialized_articles)} articles with classification to Redis")
 
 @app.post("/classify_articles")
-def classify_articles_endpoint(batch_size: int = 50):
+async def classify_articles_endpoint(batch_size: int = 50):
     logger.debug("Processing articles")
-    processed_articles = process_articles(batch_size)
+    processed_articles = await process_articles(batch_size)
     
     if not processed_articles:
         return {"message": "No articles processed."}

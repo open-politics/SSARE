@@ -1,0 +1,16 @@
+schema_name,prompt,field_name,field_type,description,min_value,max_value,max_length,max_items
+Political Intelligence,Analyze the political implications and relevance of this article.,political_alignment,str,"The political alignment (far-left, left, center-left, center, center-right, right, far-right)",,,15,
+Political Intelligence,,policy_impact,int,Potential impact on policy (1-10),1,10,,
+Political Intelligence,,key_issues,List[str],Main political issues addressed,,,,3
+Political Intelligence,,stakeholders,List[str],Key political entities or groups affected,,,,5
+Political Intelligence,,geopolitical_relevance,int,Relevance to international relations (1-10),1,10,,
+Content Quality,Assess the quality and credibility of this article.,credibility_score,int,Overall credibility of the content (1-100),1,100,,
+Content Quality,,source_reliability,str,"Reliability of the source (high, medium, low)",,,10,
+Content Quality,,fact_density,int,Density of factual information (1-10),1,10,,
+Content Quality,,bias_level,int,Level of bias in the content (1-10 with 10 being highly biased),1,10,,
+Content Quality,,citation_quality,int,Quality of citations and references (1-10),1,10,,
+Public Impact,Evaluate the potential public impact of this article.,public_interest_score,int,Level of public interest (1-100),1,100,,
+Public Impact,,controversy_level,int,Potential to generate controversy (1-10),1,10,,
+Public Impact,,actionable_info,str,Key actionable information for the public,,,100,
+Public Impact,,demographic_reach,List[str],Key demographics likely to be impacted,,,,3
+Public Impact,,virality_potential,int,Potential for the content to go viral (1-10),1,10,,
