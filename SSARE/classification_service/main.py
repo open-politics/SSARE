@@ -1,28 +1,31 @@
 import os
 import json
 import logging
-from typing import List
+from typing import List, Dict, Any
 from redis.asyncio import Redis
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from openai import OpenAI
 import instructor
-from core.models import Article, ArticleTags, Tag, Entity, Location
+from core.models import Article, ArticleTags, Tag, Entity, Location, DynamicClassification
 from core.utils import UUIDEncoder
 from pydantic import BaseModel, Field
-from pydantic import validator, field_validator
 from prefect import task, flow
 from prefect_ray.task_runners import RayTaskRunner
-from algoqual import algoqual
 import time
 import uuid
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.adb import get_session
-from core.classification_schema_manager import ClassificationSchemaManager
+from core.classification_schema_manager import ClassificationSchemaManager, ClassificationSchema
+
+schema_manager = ClassificationSchemaManager()
+schema_manager.load_schemas()
+from algoqual import algoqual
 
 
 async def lifespan(app):
+    algoqual.load_schemas()
     yield
 
 # FastAPI app
@@ -38,19 +41,10 @@ schema_manager = ClassificationSchemaManager()
 my_proxy_api_key = "sk-1234"
 my_proxy_base_url = "http://litellm:4000"
 
-
 if os.getenv("LOCAL_LLM") == "True":
     client = instructor.from_openai(OpenAI(base_url=my_proxy_base_url, api_key=my_proxy_api_key))
 else:
     client = instructor.from_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
-
-from pydantic import BaseModel, field_validator
-from typing import List
-
-from pydantic import BaseModel, field_validator
-from typing import List, Dict, Any, Optional
-import json
-
 
 @task(retries=3)
 async def classify_article(article: Article, schema_id: uuid.UUID) -> Dict[str, Any]:
@@ -79,34 +73,6 @@ async def classify_article(article: Article, schema_id: uuid.UUID) -> Dict[str, 
     
     return classification.dict()
 
-@app.post("/classify_articles/{schema_id}")
-async def classify_articles_endpoint(schema_id: uuid.UUID, batch_size: int = 50):
-    schema = await schema_manager.get_schema(schema_id)
-    if not schema:
-        raise HTTPException(status_code=404, detail=f"Schema with id '{schema_id}' not found")
-
-    articles = await retrieve_articles_from_redis(batch_size)
-    processed_articles = []
-    
-    for article in articles:
-        try:
-            classification = await classify_article(article, schema_id)
-            processed_article = {
-                "url": article.url,
-                "classification": classification,
-                "schema_id": schema_id
-            }
-            processed_articles.append(json.dumps(processed_article))
-        except Exception as e:
-            logger.error(f"Error processing article {article.url}: {str(e)}")
-    
-    if processed_articles:
-        redis_conn = Redis(host='redis', port=6379, db=4)
-        await redis_conn.rpush('articles_with_classification_queue', *processed_articles)
-        await redis_conn.close()
-    
-    return {"message": f"Processed {len(processed_articles)} articles with schema {schema_id}"}
-
 @task
 async def retrieve_articles_from_redis(batch_size: int = 50) -> List[Article]:
     """Retrieve articles from Redis queue."""
@@ -131,39 +97,6 @@ async def retrieve_articles_from_redis(batch_size: int = 50) -> List[Article]:
     await redis_conn.close()
     return articles
 
-@flow
-async def process_articles(batch_size: int = 50):
-    """Process a batch of articles: retrieve, classify, and serialize them."""
-    articles = await retrieve_articles_from_redis(batch_size=batch_size)
-    
-    if not articles:
-        logger.warning("No articles to process.")
-        return []
-    
-    logger.info(f"processing: {len(articles)} articles")
-    
-    processed_articles = []
-    for article in articles:
-        try:
-            classification = await classify_article(article, schema_name)
-            
-            # Combine article and classification data
-            article_dict = article.dict()
-            article_dict['classification'] = classification.dict()
-            
-            processed_articles.append(json.dumps(article_dict, cls=UUIDEncoder))
-            print(classification)
-            
-            if os.getenv("LOCAL_LLM") == "True":
-                time.sleep(2)
-        except Exception as e:
-            logger.error(f"Error processing article: {article}")
-            logger.error(f"Error: {e}")
-    
-    if processed_articles:
-        write_articles_to_redis(processed_articles)
-    return processed_articles
-
 @task
 async def write_articles_to_redis(serialized_articles):
     """Write serialized articles to Redis."""
@@ -176,22 +109,22 @@ async def write_articles_to_redis(serialized_articles):
     await redis_conn_processed.close()
     logger.info(f"Wrote {len(serialized_articles)} articles with classification to Redis")
 
-@app.post("/classify_articles")
-async def classify_articles_endpoint(batch_size: int = 50, schema_name: str = "default"):
-    logger.debug("Processing articles")
+@app.post("/classify_articles/{schema_id}")
+async def classify_articles_endpoint(schema_id: uuid.UUID, batch_size: int = 50):
+    schema = schema_manager.get_schema(schema_id)
+    if not schema:
+        raise HTTPException(status_code=404, detail=f"Schema with id '{schema_id}' not found")
+
     articles = await retrieve_articles_from_redis(batch_size)
-    
-    if not articles:
-        return {"message": "No articles to process."}
-    
     processed_articles = []
+    
     for article in articles:
         try:
-            classification = await classify_article(article, schema_name)
+            classification = await classify_article(article, schema_id)
             processed_article = {
                 "url": article.url,
                 "classification": classification,
-                "schema_name": schema_name
+                "schema_id": schema_id
             }
             processed_articles.append(json.dumps(processed_article))
         except Exception as e:
@@ -200,15 +133,7 @@ async def classify_articles_endpoint(batch_size: int = 50, schema_name: str = "d
     if processed_articles:
         await write_articles_to_redis(processed_articles)
     
-    return {
-        "message": "Articles processed successfully",
-        "processed_count": len(processed_articles)
-    }
-
-# Health endpoint
-@app.get("/healthz")
-def healthz():
-    return {"status": "OK"}
+    return {"message": f"Processed {len(processed_articles)} articles with schema {schema_id}"}
 
 @app.post("/create_schema_from_description")
 async def create_schema_from_description(description: str):
@@ -226,3 +151,41 @@ async def create_schema_from_description(description: str):
     except Exception as e:
         logger.error(f"Error creating schema: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/classify_articles_batch")
+async def batch_process_endpoint(batch_size: int = 50):
+    schemas = schema_manager.get_all_schemas()
+    logger.error(f"Found {len(schemas)} schemas")
+    if not schemas:
+        raise HTTPException(status_code=404, detail="No classification schemas found")
+
+    articles = await retrieve_articles_from_redis(batch_size)
+    processed_articles = []
+
+    for article in articles:
+        article_classifications = []
+        for schema in schemas:
+            try:
+                classification = await classify_article(article, schema.id)
+                article_classifications.append({
+                    "schema_id": schema.id,
+                    "classification": classification
+                })
+            except Exception as e:
+                logger.error(f"Error processing article {article.url} with schema {schema.id}: {str(e)}")
+
+        if article_classifications:
+            processed_article = {
+                "url": article.url,
+                "classifications": article_classifications
+            }
+            processed_articles.append(json.dumps(processed_article))
+
+    if processed_articles:
+        await write_articles_to_redis(processed_articles)
+
+    return {"message": f"Batch processed {len(processed_articles)} articles with {len(schemas)} schemas"}
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "OK"}

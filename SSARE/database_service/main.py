@@ -673,14 +673,14 @@ async def store_articles_with_geocoding(session: AsyncSession = Depends(get_sess
 async def create_classification_jobs(session: AsyncSession = Depends(get_session)):
     try:
         logger.info("Starting create_classification_jobs function")
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=3, decode_responses=True)
-        logger.info(f"Connected to Redis on port {config.REDIS_PORT}, db 3")
+        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4, decode_responses=True)
+        logger.info(f"Connected to Redis on port {config.REDIS_PORT}, db 4")
         
         # Get existing articles in the queue
         existing_urls = set(await redis_conn.lrange('articles_without_classification_queue', 0, -1))
         existing_urls = {json.loads(url)['url'] for url in existing_urls}
         
-        query = select(Article).outerjoin(DynamicClassification).where(DynamicClassification.id == None)
+        query = select(Article).where(Article.classification == None)
         result = await session.execute(query)
         _articles = result.scalars().all()
 

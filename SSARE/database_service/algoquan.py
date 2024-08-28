@@ -3,18 +3,9 @@ from sqlalchemy import select, and_, func
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.models import Article, DynamicClassification
+import uuid
 import json
-import openai
 
-# Configure LiteLLM
-my_proxy_api_key = "sk-1234"
-my_proxy_base_url = "http://litellm:4000"
-
-
-if os.getenv("LOCAL_LLM") == "True":
-    client = instructor.from_openai(OpenAI(base_url=my_proxy_base_url, api_key=my_proxy_api_key))
-else:
-    client = instructor.from_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
 
 
 class AlgoQuan:
@@ -50,33 +41,7 @@ class AlgoQuan:
         result = await session.execute(query)
         return result.scalars().unique().all()
 
-    async def translate_natural_query(self, query: str, client) -> Dict[str, Any]:
-        response = await client.chat.completions.create(
-            model="llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4-0613",
-            messages=[
-                {"role": "system", "content": "Translate the following natural language query into a structured format for article retrieval."},
-                {"role": "user", "content": query},
-            ],
-            functions=[{
-                "name": "construct_query",
-                "description": "Construct a query based on the natural language input",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "dimensions": {
-                            "type": "object",
-                            "description": "Dimensions to query with their weights and ranges"
-                        },
-                        "filters": {
-                            "type": "object",
-                            "description": "Filters to apply on the query"
-                        }
-                    }
-                }
-            }],
-            function_call={"name": "construct_query"}
-        )
-        return json.loads(response.choices[0].function_call.arguments)
+    
 
     async def retrieve_articles_from_natural_query(self, session: AsyncSession, query: str, client, limit: int = 10) -> List[Article]:
         structured_query = await self.translate_natural_query(query, client)

@@ -103,7 +103,10 @@ async def check_services():
     for service, url in config.SERVICE_URLS.items():
         try:
             response = await httpx.get(f"{url}/healthz", timeout=10.0)
-            service_statuses[service] = response.status_code
+            if service == "ollama":
+                response = await httpx.get(f"{url}/api/version", timeout=10.0)
+            else:
+                response = await httpx.get(f"{url}/healthz", timeout=10.0)
         except httpx.RequestError as e:
             service_statuses[service] = str(e)
     return service_statuses

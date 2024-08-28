@@ -1,14 +1,16 @@
 from typing import Dict, Any, List
 from pydantic import create_model, Field
 import uuid
-from core.classification_schema_manager import schema_manager, ClassificationSchema
+from core.classification_schema_manager import schema_manager
+from core.schema_models import ClassificationSchema
 
 class AlgoQual:
     def __init__(self):
         self.schemas: Dict[uuid.UUID, Any] = {}
 
-    async def load_schemas(self):
-        for schema in await schema_manager.get_all_schemas():
+    def load_schemas(self):
+        schemas = schema_manager.get_all_schemas()
+        for schema in schemas:
             self.schemas[schema.id] = self.create_dynamic_model(schema)
 
     def create_dynamic_model(self, schema: ClassificationSchema):
@@ -27,8 +29,8 @@ class AlgoQual:
 
         return create_model(f"Dynamic{schema.name.replace(' ', '')}", **fields)
 
-    def get_llm_prompt(self, schema_id: uuid.UUID) -> str:
-        schema = schema_manager.get_schema(schema_id)
+    async def get_llm_prompt(self, schema_id: uuid.UUID) -> str:
+        schema = schema_manager.get_schema(schema_id)  # Remove 'await' here
         if not schema:
             raise ValueError(f"Schema with id {schema_id} not found")
         field_descriptions = "\n".join([f"- {field.name}: {field.description}" for field in schema.fields])

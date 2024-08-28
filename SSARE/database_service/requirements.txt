@@ -10,3 +10,5 @@ asyncpg
 sqlmodel
 pgvector
 httpx
+openai
+instructor

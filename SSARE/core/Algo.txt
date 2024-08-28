@@ -15,3 +15,11 @@ Tunable parameters for retrieval, potentially loaded from a CSV file for easy co
 Next steps involve fine-tuning the AlgoQuan retrieval process, potentially implementing more advanced scoring mechanisms, and ensuring the system scales well with large datasets.
 
 think of a user and developer friendly way to orchestrate this. The general goal: make dimensions and filter categorisations dynamically constructable in natural language (AlgoQual) and then interactively constructing the algorithm retrieving articles across the dimensions and filtered by the tags that the system is initiliased with
+
+We are making progress in implementing the AlgoQual and AlgoQuan components of our system. Here's an update on our current status and next steps:
+We've successfully separated the classification schema models into a dedicated file (schema_models.py) to avoid circular imports.
+We're working on resolving database table creation issues, particularly with the ClassificationSchema and ClassificationField models.
+The next step is to ensure that all imports are correctly updated across the project to use the new schema_models.py file.
+Once the database issues are resolved, we'll focus on implementing the natural language interface for creating and modifying classification schemas (AlgoQual).
+After that, we'll develop the interactive query builder for retrieving articles based on classifications and tags (AlgoQuan).
+Throughout this process, we'll be refining the data models and ensuring that the system remains flexible and scalable.
