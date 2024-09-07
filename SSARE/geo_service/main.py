@@ -21,11 +21,6 @@ config = ServiceConfig()
 
 import sys
 
-print("Starting geo_service script", file=sys.stderr)
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-logger.debug("Logging configured")
-
 async def lifespan(app):
     logger.warning("Starting lifespan")
     yield
@@ -103,7 +98,7 @@ def push_geocoded_articles(redis_conn, geocoded_articles):
         redis_conn.lpush('articles_with_geocoding_queue', json.dumps(article))
     logger.info(f"Pushed {len(geocoded_articles)} geocoded articles to Redis queue.")
 
-@flow(task_runner=RayTaskRunner())
+@flow
 def geocode_articles_flow(batch_size: int):
     logger.info("Starting geocoding process")
     redis_conn_raw = Redis(host='redis', port=6379, db=3, decode_responses=True)

@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from redis.asyncio import Redis
 from flows.orchestration import scraping_flow
-from prefect import get_client
+# from prefect import get_client
 from fastapi.staticfiles import StaticFiles 
 from fastapi.responses import JSONResponse
 from fastapi import Query

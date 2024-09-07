@@ -4,25 +4,30 @@ import logging
 from typing import List
 from redis import Redis
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 from openai import OpenAI
 import instructor
 from core.models import Article, ArticleTags, Tag, Entity, Location
 from core.utils import UUIDEncoder
+from core.service_mapping import ServiceConfig
 from pydantic import BaseModel, Field
 from pydantic import validator, field_validator
-from prefect import task, flow
-from prefect_ray.task_runners import RayTaskRunner
+# from prefect import flow, task
+# from prefect_ray.task_runners import RayTaskRunner
 import time
 from uuid import UUID
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# FastAPI app
 app = FastAPI()
+config = ServiceConfig()
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
 
+app = FastAPI(lifespan=lifespan)
 
 # Configure LiteLLM
 my_proxy_api_key = "sk-1234"
@@ -79,7 +84,7 @@ class NewsArticleClassification(BaseModel):
 
 # Functions for LLM tasks
 
-@task(retries=3)
+#@task(retries=3)
 def classify_article(article: Article) -> NewsArticleClassification:
     """Classify the article using LLM."""
     return client.chat.completions.create(
@@ -97,7 +102,7 @@ def classify_article(article: Article) -> NewsArticleClassification:
         ],
     )   
 
-@task
+#@task
 def retrieve_articles_from_redis(batch_size: int = 50) -> List[Article]:
     """Retrieve articles from Redis queue."""
     redis_conn = Redis(host='redis', port=6379, db=4)
@@ -120,7 +125,7 @@ def retrieve_articles_from_redis(batch_size: int = 50) -> List[Article]:
     
     return articles
 
-@flow
+#@flow
 def process_articles(batch_size: int = 50):
     """Process a batch of articles: retrieve, classify, and serialize them."""
     articles = retrieve_articles_from_redis(batch_size=batch_size)
@@ -153,7 +158,7 @@ def process_articles(batch_size: int = 50):
         write_articles_to_redis(processed_articles)
     return processed_articles
 
-@task
+#@task
 def write_articles_to_redis(serialized_articles):
     """Write serialized articles to Redis."""
     if not serialized_articles:

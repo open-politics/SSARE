@@ -9,7 +9,7 @@ from flair.models import SequenceTagger
 from redis import Redis
 from core.service_mapping import ServiceConfig
 from core.models import Article, Entity
-from prefect import task, flow
+# from prefect import task, flow
 import uuid
 
 app = FastAPI()
@@ -27,19 +27,19 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-@task
+#@task
 def retrieve_articles_from_redis(redis_conn, batch_size=50) -> List[Article]:
     batch = redis_conn.lrange('articles_without_entities_queue', 0, batch_size - 1)
     redis_conn.ltrim('articles_without_entities_queue', batch_size, -1)
     return [Article(**json.loads(article)) for article in batch]
 
-@task
+#@task
 def predict_ner_tags(text: str) -> List[Tuple[str, str]]:
     sentence = Sentence(text)
     ner_tagger.predict(sentence)
     return [(entity.text, entity.tag) for entity in sentence.get_spans('ner')]
 
-@task
+#@task
 def process_article(article: Article) -> Tuple[Article, List[Tuple[str, str]]]:
     text = ""
     if article.headline:
@@ -49,7 +49,7 @@ def process_article(article: Article) -> Tuple[Article, List[Tuple[str, str]]]:
     entities = predict_ner_tags(text.strip())
     return (article, entities)
 
-@task
+#@task
 def push_articles_with_entities(redis_conn, articles_with_entities: List[Tuple[Article, List[Tuple[str, str]]]]):
     try:
         for article, entities in articles_with_entities:
@@ -67,7 +67,7 @@ def push_articles_with_entities(redis_conn, articles_with_entities: List[Tuple[A
     except Exception as e:
         logger.error(f"Error pushing articles with entities to queue: {str(e)}")
 
-@flow
+#@flow
 def extract_entities_flow(batch_size: int = 50):
     logger.info("Starting entity extraction process")
     redis_conn = Redis(host='redis', port=6379, db=2, decode_responses=True)

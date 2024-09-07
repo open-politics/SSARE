@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from redis.asyncio import Redis
 from contextlib import asynccontextmanager
 import logging
-from prefect import task, flow
+# from prefect import task, flow
 from core.models import Article, Articles
 from core.db import engine, get_session
 import json
@@ -12,11 +12,11 @@ from script_scraper import scrape_sources_flow
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-@task
+#@task
 async def setup_redis_connection():
     return Redis(host='redis', port=6379, db=1, decode_responses=True)
 
-@task
+#@task
 async def close_redis_connection(redis_conn):
     try:
         await redis_conn.aclose()
@@ -32,24 +32,24 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-@task
+#@task
 async def get_scraper_config():
     with open("scrapers/scrapers_config.json") as f:
         return json.load(f)
 
-@task
+#@task
 async def get_flags():
     redis_conn_flags = Redis(host='redis', port=6379, db=0, decode_responses=True)
     flags = await redis_conn_flags.lrange('scrape_sources', 0, -1)
     await redis_conn_flags.aclose()
     return flags
 
-@task
+#@task
 async def wait_for_scraping_completion(redis_conn):
     while await redis_conn.get('scrapers_running') == '1':
         await asyncio.sleep(0.5)
 
-@flow
+#@flow
 async def scrape_data():
     redis_conn = await setup_redis_connection()
     try:
