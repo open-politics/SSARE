@@ -31,6 +31,7 @@ from core.adb import engine, get_session, create_db_and_tables
 from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag, NewsArticleClassification
 from core.service_mapping import config
 
+
 ########################################################################################
 ## SETUP
 
@@ -57,9 +58,6 @@ class SearchType(str, Enum):
     TEXT = "text"
     SEMANTIC = "semantic"
 
-########################################################################################
-## SEARCH FUNCTIONS
-
 @app.get("/articles")
 async def get_articles(
     url: Optional[str] = None,
@@ -70,104 +68,132 @@ async def get_articles(
     has_entities: Optional[bool] = Query(None, description="Filter articles with entities"),
     has_classification: Optional[bool] = Query(None, description="Filter articles with classification"),
     skip: int = 0, 
-    limit: int = 10, 
+    limit: int = 10,
+    sort_by: Optional[str] = Query(None),
+    sort_order: str = Query("desc", regex="^(asc|desc)$"),
+    filters: Optional[str] = Query(None, description="JSON string of filters"),
     session: AsyncSession = Depends(get_session)
-    ):
-    logger.info(f"Received search_type: {search_type}, search_query: {search_query}")
+):
+    logger.info(f"Received search_type: {search_type}, search_query: {search_query}, "
+                f"filters: {filters}, sort_by: {sort_by}, sort_order: {sort_order}")
 
-    async with session.begin():
-        query = select(Article).options(
-            selectinload(Article.entities).selectinload(Entity.locations),
-            selectinload(Article.tags),
-            selectinload(Article.classification)
-        )
-        
-        # Apply filters
-        if url:
-            query = query.where(Article.url == url)
-        if has_geocoding:
-            query = query.where(Article.entities.any(Entity.locations.any()))
-        if has_embeddings is not None:
-            query = query.where(Article.embeddings != None if has_embeddings else Article.embeddings == None)
-        if has_entities is not None:
-            query = query.where(Article.entities.any() if has_entities else ~Article.entities.any())
-        if has_classification is not None:
-            query = query.where(Article.classification != None if has_classification else Article.classification == None)
-        
-        # Apply search based on search_type
-        if search_query:
-            if search_type == SearchType.TEXT:
-                query = query.where(
-                    or_(
-                        Article.headline.ilike(f'%{search_query}%'), 
-                        Article.paragraphs.ilike(f'%{search_query}%')
+    try:
+        # Parse filters
+        filter_dict = json.loads(filters) if filters else {}
+
+        async with session.begin():
+            query = select(Article).options(
+                selectinload(Article.entities).selectinload(Entity.locations),
+                selectinload(Article.tags),
+                selectinload(Article.classification)
+            ).join(NewsArticleClassification)
+            
+            # Apply basic filters
+            if url:
+                query = query.where(Article.url == url)
+            if has_geocoding:
+                query = query.where(Article.entities.any(Entity.locations.any()))
+            if has_embeddings is not None:
+                query = query.where(Article.embeddings != None if has_embeddings else Article.embeddings == None)
+            if has_entities is not None:
+                query = query.where(Article.entities.any() if has_entities else ~Article.entities.any())
+            if has_classification is not None:
+                query = query.where(Article.classification != None if has_classification else Article.classification == None)
+
+            # Apply search based on search_type
+            if search_query:
+                if search_type == SearchType.TEXT:
+                    query = query.where(
+                        or_(
+                            Article.headline.ilike(f'%{search_query}%'), 
+                            Article.paragraphs.ilike(f'%{search_query}%')
+                        )
                     )
-                )
-            elif search_type == SearchType.SEMANTIC and has_embeddings != False:
-                try:
-                    # Get query embedding from NLP service
-                    async with httpx.AsyncClient() as client:
-                        response = await client.get(f"{config.service_urls['embedding_service']}/generate_query_embeddings", params={"query": search_query})
-                        response.raise_for_status()
-                        query_embeddings = response.json()["embeddings"]
-                        logger.error(f"Embeddings{query_embeddings}")
+                elif search_type == SearchType.SEMANTIC and has_embeddings != False:
+                    try:
+                        # Get query embedding from NLP service
+                        async with httpx.AsyncClient() as client:
+                            response = await client.get(f"{config.service_urls['embedding_service']}/generate_query_embeddings", params={"query": search_query})
+                            response.raise_for_status()
+                            query_embeddings = response.json()["embeddings"]
 
-                    embedding_array = query_embeddings
-                    query = query.order_by(Article.embeddings.l2_distance(embedding_array)).limit(limit)
-                except httpx.HTTPError as e:
-                    logger.error(f"Error calling NLP service: {e}")
-                    raise HTTPException(status_code=500, detail="Failed to generate query embedding")
-                except Exception as e:
-                    logger.error(f"Unexpected error in semantic search: {e}")
-                    raise HTTPException(status_code=500, detail="Unexpected error in semantic search")
-        
-        logger.info(f"Final query: {query}")
-        
-        # Execute the query
-        try:
+                        embedding_array = query_embeddings
+                        query = query.order_by(Article.embeddings.l2_distance(embedding_array)).limit(limit)
+                    except httpx.HTTPError as e:
+                        logger.error(f"Error calling NLP service: {e}")
+                        raise HTTPException(status_code=500, detail="Failed to generate query embedding")
+                    except Exception as e:
+                        logger.error(f"Unexpected error in semantic search: {e}")
+                        raise HTTPException(status_code=500, detail="Unexpected error in semantic search")
+
+            # Dynamically apply filters based on NewsArticleClassification fields
+            if filter_dict:
+                classification_fields = inspect(NewsArticleClassification).c.keys()
+                for field, value in filter_dict.items():
+                    if field in classification_fields:
+                        if field.startswith(('min_', 'max_')):
+                            operator = '>=' if field.startswith('min_') else '<='
+                            field_name = field[4:]  # Remove 'min_' or 'max_' prefix
+                            query = query.where(getattr(NewsArticleClassification, field_name).op(operator)(value))
+                        else:
+                            query = query.where(getattr(NewsArticleClassification, field) == value)
+
+            # Apply sorting
+            if sort_by:
+                sort_column = getattr(NewsArticleClassification, sort_by, None)
+                if sort_column:
+                    query = query.order_by(desc(sort_column) if sort_order == "desc" else sort_column)
+
+            # Execute query
             result = await session.execute(query.offset(skip).limit(limit))
-            articles = result.scalars().unique().all()
-            logger.info(f"Number of articles retrieved: {len(articles)}")
-        except Exception as e:
-            logger.error(f"Error executing query: {e}")
-            raise HTTPException(status_code=500, detail="Error retrieving articles")
-        
-        articles_data = []
-        for article in articles:
-            article_dict = {
-                "id": str(article.id),
-            "url": article.url,
-            "headline": article.headline,
-            "source": article.source,
-            "insertion_date": article.insertion_date.isoformat() if article.insertion_date else None,
-            "paragraphs": article.paragraphs,
-            "embeddings": article.embeddings.tolist() if article.embeddings is not None else None,
-            "entities": [
-                {
-                    "id": str(e.id),
-                    "name": e.name,
-                    "entity_type": e.entity_type,
-                    "locations": [
+            articles = result.unique().all()
+
+            articles_data = []
+            for article_tuple in articles:
+                article = article_tuple[0]  # The Article object is the first item in the tuple
+                article_dict = {
+                    "id": str(article.id),
+                    "url": article.url,
+                    "headline": article.headline,
+                    "source": article.source,
+                    "insertion_date": article.insertion_date.isoformat() if article.insertion_date else None,
+                    "paragraphs": article.paragraphs,
+                    "embeddings": article.embeddings.tolist() if article.embeddings is not None else None,
+                    "entities": [
                         {
-                            "name": loc.name,
-                            "type": loc.type,
-                            "coordinates": loc.coordinates.tolist() if loc.coordinates is not None else None
-                        } for loc in e.locations
-                    ] if e.locations else []
-                } for e in article.entities
-            ] if article.entities else [],
-            "tags": [
-                {
-                    "id": str(t.id),
-                    "name": t.name
-                } for t in (article.tags or [])
-            ],
-            "classification": article.classification.dict() if article.classification else None
-            }
-            articles_data.append(article_dict)
-        
-        logger.info(f"Returning {len(articles_data)} articles")
-        return articles_data
+                            "id": str(e.id),
+                            "name": e.name,
+                            "entity_type": e.entity_type,
+                            "locations": [
+                                {
+                                    "name": loc.name,
+                                    "type": loc.type,
+                                    "coordinates": loc.coordinates.tolist() if loc.coordinates is not None else None
+                                } for loc in e.locations
+                            ] if e.locations else []
+                        } for e in article.entities
+                    ] if article.entities else [],
+                    "tags": [
+                        {
+                            "id": str(t.id),
+                            "name": t.name
+                        } for t in (article.tags or [])
+                    ],
+                    "classification": article.classification.dict() if article.classification else None
+                }
+                articles_data.append(article_dict)
+
+            logger.info(f"Returning {len(articles_data)} articles")
+            return articles_data
+
+    except Exception as e:
+        logger.error(f"Error retrieving articles: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving articles")
+
+@app.get("/classification_fields")
+async def get_classification_fields():
+    fields = inspect(NewsArticleClassification).c
+    return {name: str(field.type) for name, field in fields.items()}
         
 
 @app.get("/location_entities/{location_name}")
