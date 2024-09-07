@@ -1,7 +1,5 @@
 from prefect import task, flow, get_run_logger
 import httpx
-from prefect.deployments import Deployment
-from prefect.task_runners import SequentialTaskRunner
 import asyncio
 from redis.asyncio import Redis
 from core.service_mapping import ServiceConfig
@@ -172,7 +170,7 @@ async def classification_flow():
     finally:
         await redis_conn.set('Orchestration in progress', '0')
 
-# This function will be called from main.py
+# This function will be called from app/main.py
 async def run_flow(flow_name: str):
     flows = {
         "scraping": scraping_flow,
@@ -188,7 +186,7 @@ async def run_flow(flow_name: str):
     await flows[flow_name]()
 
 
-@flow(task_runner=SequentialTaskRunner()) 
+@flow() 
 async def scraping_flow(): 
     redis_conn = await setup_redis_connection()
 

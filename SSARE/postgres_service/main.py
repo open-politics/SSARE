@@ -169,6 +169,7 @@ async def get_articles(
         logger.info(f"Returning {len(articles_data)} articles")
         return articles_data
         
+
 @app.get("/location_entities/{location_name}")
 async def get_location_entities(
     location_name: str, 
@@ -206,11 +207,17 @@ async def get_location_entities(
         result = await session.execute(query)
         entities = result.all()
 
-        # Filter out the original location entity and calculate relevance score
+        # Filter and calculate relevance score
         filtered_entities = []
         for e in entities:
-            if e.name.lower() != location_name.lower() and e.entity_type not in ['CARDINAL', 'DATE', 'ORDINAL']:
+            if e.name.lower() != location_name.lower():
+                # Adjust relevance score calculation
                 relevance_score = (e.total_frequency * math.log(e.article_count + 1))
+                
+                # Boost score for PERSON entities
+                if e.entity_type == 'PERSON':
+                    relevance_score *= 1.75
+                
                 filtered_entities.append({
                     "name": e.name,
                     "type": e.entity_type,

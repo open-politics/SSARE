@@ -19,8 +19,15 @@ from core.adb import get_session
 
 config = ServiceConfig()
 
+import sys
+
+print("Starting geo_service script", file=sys.stderr)
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+logger.debug("Logging configured")
+
 async def lifespan(app):
-    logger.info("Starting lifespan")
+    logger.warning("Starting lifespan")
     yield
 
 app = FastAPI(lifespan=lifespan)

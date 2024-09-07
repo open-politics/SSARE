@@ -1,5 +1,7 @@
-FROM emrgntcmplxty/r2r:latest
+FROM ragtoriches/prod
 
-COPY r2r_server/config.json /app/config.json
+COPY r2r_server/r2r.toml /app/r2r.toml
 
-RUN pip install sentence-transformers
+
+
+
