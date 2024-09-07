@@ -4,8 +4,6 @@ from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, APIRouter
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from redis.asyncio import Redis
-from flows.orchestration import scraping_flow
-# from prefect import get_client
 from fastapi.staticfiles import StaticFiles 
 from fastapi.responses import JSONResponse
 from fastapi import Query
@@ -15,28 +13,25 @@ import logging
 from core.service_mapping import ServiceConfig
 import asyncio
 import subprocess
+from prefect import flow, task
 from flows.orchestration import (
     deduplicate_articles, create_embedding_jobs, generate_embeddings,
     store_articles_with_embeddings, create_entity_extraction_jobs,
     extract_entities, store_articles_with_entities,
     create_geocoding_jobs, geocode_articles,
     produce_flags, create_scrape_jobs, store_raw_articles, store_articles_with_geocoding,
-    create_classification_jobs, classify_articles, store_articles_with_classification
+    create_classification_jobs, classify_articles, store_articles_with_classification,
+    run_flow, scraping_flow
 )
-from flows.orchestration import run_flow
 from fastapi import Path
-
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration & Mapping
 templates = Jinja2Templates(directory="templates")
 
-# El App
 app = FastAPI()
 
-# Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 router = APIRouter()
@@ -45,42 +40,43 @@ status_message = "Ready to start scraping."
 
 config = ServiceConfig()
 
-### Healthcheck & Monitoring
-
-@app.get("/healthz")
+@task
 async def healthcheck():
     return {"message": "OK"}
 
-## Monitoring
-#- Dashboard
-@app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request, query: str = "culture and arts"):
+@app.get("/healthz")
+async def healthcheck_endpoint():
+    return await healthcheck()
+
+@task
+async def fetch_articles(query: str):
+    postgres_service_url = f"{config.service_urls['postgres_service']}/articles"
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            postgres_service_url,
+            params={
+                "search_query": query,
+                "search_type": "semantic",
+                "skip": 0,
+                "limit": 10
+            }
+        )
+    if response.status_code == 200:
+        articles = response.json()
+        return [{
+            'score': article.get('similarity', 0),
+            'headline': article['headline'],
+            'paragraphs': article['paragraphs'],
+            'url': article['url']
+        } for article in articles]
+    else:
+        return []
+
+@flow
+async def read_root_flow(request: Request, query: str = "culture and arts"):
     try:
-        postgres_service_url = f"{config.service_urls['postgres_service']}/articles"
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                postgres_service_url,
-                params={
-                    "search_query": query,
-                    "search_type": "semantic",
-                    "skip": 0,
-                    "limit": 10
-                }
-            )
-
-        if response.status_code == 200:
-            articles = response.json()
-            articles = [{
-                'score': article.get('similarity', 0),
-                'headline': article['headline'],
-                'paragraphs': article['paragraphs'],
-                'url': article['url']
-            } for article in articles]
-            logger.info("Response for search was successful")
-        else:
-            articles = []     
-            logger.info("Response for search was not successful")
-
+        articles = await fetch_articles(query)
+        logger.info("Response for search was successful" if articles else "Response for search was not successful")
         if "HX-Request" in request.headers:
             return templates.TemplateResponse("partials/articles_list.html", {"request": request, "articles": articles})
         else:
@@ -88,7 +84,11 @@ async def read_root(request: Request, query: str = "culture and arts"):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch articles: {str(e)}")
 
-@app.post("/trigger_scraping_sequence")
+@app.get("/", response_class=HTMLResponse)
+async def read_root_endpoint(request: Request, query: str = "culture and arts"):
+    return await read_root_flow(request, query)
+
+@flow
 async def trigger_scraping_flow():
     logger.info("Triggering scraping flow")
     try:
@@ -97,19 +97,30 @@ async def trigger_scraping_flow():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to trigger scraping flow: {str(e)}")
 
-@app.get("/check_services")
-async def check_services():
-    service_statuses = {}
-    for service, url in config.SERVICE_URLS.items():
-        try:
-            response = await httpx.get(f"{url}/healthz", timeout=10.0)
-            service_statuses[service] = response.status_code
-        except httpx.RequestError as e:
-            service_statuses[service] = str(e)
-    return service_statuses
+@app.post("/trigger_scraping_sequence")
+async def trigger_scraping_flow_endpoint():
+    return await trigger_scraping_flow()
 
-@app.post("/trigger_scraping")
-async def trigger_scraping():
+@task
+async def check_service(service: str, url: str):
+    try:
+        response = await httpx.get(f"{url}/healthz", timeout=10.0)
+        return service, response.status_code
+    except httpx.RequestError as e:
+        return service, str(e)
+
+@flow
+async def check_services_flow():
+    tasks = [check_service(service, url) for service, url in config.SERVICE_URLS.items()]
+    results = await asyncio.gather(*tasks)
+    return dict(results)
+
+@app.get("/check_services")
+async def check_services_endpoint():
+    return await check_services_flow()
+
+@flow
+async def trigger_scraping_subprocess():
     try:
         logger.info("Triggering scraping flow")
         subprocess.run(["python", "flows/orchestration.py"], check=True)
@@ -117,14 +128,23 @@ async def trigger_scraping():
     except subprocess.CalledProcessError as e:
         raise HTTPException(status_code=500, detail=f"Failed to trigger scraping flow: {str(e)}")
 
-@app.post("/store_embeddings_in_qdrant")
-async def store_embeddings_in_qdrant():
+@app.post("/trigger_scraping")
+async def trigger_scraping_endpoint():
+    return await trigger_scraping_subprocess()
+
+@task
+async def store_embeddings_qdrant():
     response = await httpx.post(f"{config.SERVICE_URLS['qdrant_service']}/store_embeddings")
     if response.status_code == 200:
         return {"message": "Embeddings storage in Qdrant triggered successfully."}
     else:
         raise HTTPException(status_code=response.status_code, detail="Failed to trigger embeddings storage in Qdrant.")
 
+@app.post("/store_embeddings_in_qdrant")
+async def store_embeddings_in_qdrant_endpoint():
+    return await store_embeddings_qdrant()
+
+@task
 async def get_redis_queue_length(redis_db: int, queue_key: str):
     try:
         redis_conn = Redis(host=os.getenv('REDIS_HOST', 'redis'), port=int(os.getenv('REDIS_PORT', 6379)), db=redis_db)
@@ -132,9 +152,9 @@ async def get_redis_queue_length(redis_db: int, queue_key: str):
         return queue_length
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Redis error: {str(e)}")
-    
-@app.get("/check_channels/{flow_name}")
-async def check_channels(request: Request, flow_name: str):
+
+@flow
+async def check_channels_flow(request: Request, flow_name: str):
     redis_conn = Redis(host=config.service_urls['redis'].split('://')[1].split(':')[0], 
                        port=int(config.REDIS_PORT), 
                        decode_responses=True)
@@ -171,8 +191,12 @@ async def check_channels(request: Request, flow_name: str):
     
     return templates.TemplateResponse("partials/multiple_channel_info.html", {"request": request, "channels": channels})
 
-@app.post("/flush_redis_channels/{flow_name}")
-async def flush_redis_channels(flow_name: str = Path(..., description="The name of the flow to flush")):
+@app.get("/check_channels/{flow_name}")
+async def check_channels_endpoint(request: Request, flow_name: str):
+    return await check_channels_flow(request, flow_name)
+
+@flow
+async def flush_redis_channels_flow(flow_name: str):
     redis_conn = Redis(host=config.service_urls['redis'].split('://')[1].split(':')[0], 
                        port=int(config.REDIS_PORT), 
                        decode_responses=True)
@@ -201,8 +225,12 @@ async def flush_redis_channels(flow_name: str = Path(..., description="The name 
     
     return {"message": f"Flushed Redis channels for {flow_name}", "flushed_channels": flushed_channels}
 
-@app.post("/trigger_flow/{flow_name}")
-async def trigger_flow(flow_name: str):
+@app.post("/flush_redis_channels/{flow_name}")
+async def flush_redis_channels_endpoint(flow_name: str = Path(..., description="The name of the flow to flush")):
+    return await flush_redis_channels_flow(flow_name)
+
+@flow
+async def trigger_flow_task(flow_name: str):
     logger.info(f"Triggering {flow_name}")
     try:
         asyncio.create_task(run_flow(flow_name))
@@ -212,9 +240,21 @@ async def trigger_flow(flow_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to trigger {flow_name}: {str(e)}")
 
-@app.get("/service_health", response_class=HTMLResponse)
-async def service_health(request: Request):
-    health_status = {}
+@app.post("/trigger_flow/{flow_name}")
+async def trigger_flow_endpoint(flow_name: str):
+    return await trigger_flow_task(flow_name)
+
+@task
+async def check_service_health(service: str, url: str):
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(f"{url}/healthz", timeout=5.0)
+            return service, "green" if response.status_code == 200 else "red"
+        except httpx.RequestError:
+            return service, "red"
+
+@flow
+async def service_health_flow(request: Request):
     services_to_check = [
         "main_core_app",
         "postgres_service",
@@ -228,25 +268,19 @@ async def service_health(request: Request):
         "liteLLM",
         "classification_service"
     ]
-    async with httpx.AsyncClient() as client:
-        for service in services_to_check:
-            url = config.service_urls.get(service)
-            if url:
-                try:
-                    response = await client.get(f"{url}/healthz", timeout=5.0)
-                    if response.status_code == 200:
-                        health_status[service] = "green"
-                    else:
-                        health_status[service] = "red"
-                except httpx.RequestError:
-                    health_status[service] = "red"
-            else:
-                health_status[service] = "gray"
+    
+    tasks = [check_service_health(service, config.service_urls.get(service, "")) for service in services_to_check]
+    results = await asyncio.gather(*tasks)
+    health_status = dict(results)
     
     return templates.TemplateResponse("partials/service_health.html", {"request": request, "service_health": health_status})
 
-@app.post("/trigger_step/{step_name}")
-async def trigger_step(step_name: str, batch_size: int = Query(50, ge=1, le=100)):
+@app.get("/service_health", response_class=HTMLResponse)
+async def service_health_endpoint(request: Request):
+    return await service_health_flow(request)
+
+@flow
+async def trigger_step_flow(step_name: str, batch_size: int = 50):
     step_functions = {
         "produce_flags": produce_flags,
         "create_scrape_jobs": create_scrape_jobs,
@@ -274,9 +308,13 @@ async def trigger_step(step_name: str, batch_size: int = Query(50, ge=1, le=100)
         return {"message": f"Step '{step_name}' completed successfully", "batch_size": batch_size if step_name in ["generate_embeddings", "extract_entities", "geocode_articles", "classify_articles"] else None}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to execute step '{step_name}': {str(e)}")
-    
-@app.get("/pipeline/{pipeline_name}", response_class=HTMLResponse)
-async def get_pipeline(request: Request, pipeline_name: str):
+
+@app.post("/trigger_step/{step_name}")
+async def trigger_step_endpoint(step_name: str, batch_size: int = Query(50, ge=1, le=100)):
+    return await trigger_step_flow(step_name, batch_size)
+
+@flow
+async def get_pipeline_flow(request: Request, pipeline_name: str):
     pipelines = {
         "scraping": {
             "title": "Scraping Pipeline",
@@ -344,6 +382,7 @@ class SearchType(str, Enum):
     TEXT = "text"
     SEMANTIC = "semantic"
     
+@task
 @app.get("/articles", response_class=HTMLResponse)
 async def search_articles(
     request: Request,

@@ -8,7 +8,6 @@ import logging
 from collections import Counter
 import requests
 from prefect import task, flow
-from prefect_ray import RayTaskRunner
 from geojson import Feature, FeatureCollection, Point
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import selectinload
