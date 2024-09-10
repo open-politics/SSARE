@@ -19,6 +19,7 @@ from pgvector.sqlalchemy import Vector
 from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 from sqlalchemy import and_, delete, func, insert, or_, text, update
+from sqlalchemy import inspect
 from sqlalchemy import desc
 from sqlalchemy import join
 from sqlalchemy import alias, distinct
@@ -28,6 +29,7 @@ from sqlmodel import Session
 from typing import AsyncGenerator
 
 from core.adb import engine, get_session, create_db_and_tables
+from core.middleware import add_cors_middleware
 from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag, NewsArticleClassification
 from core.service_mapping import config
 
@@ -48,11 +50,12 @@ async def lifespan(app):
     yield
 
 app = FastAPI(lifespan=lifespan)
+add_cors_middleware(app)
+
 
 @app.get("/healthz")
 async def healthcheck():
     return {"message": "OK"}, 200
-
 
 class SearchType(str, Enum):
     TEXT = "text"
@@ -67,27 +70,41 @@ async def get_articles(
     has_geocoding: Optional[bool] = Query(None, description="Filter articles with geocoding"),
     has_entities: Optional[bool] = Query(None, description="Filter articles with entities"),
     has_classification: Optional[bool] = Query(None, description="Filter articles with classification"),
-    skip: int = 0, 
-    limit: int = 10,
+    skip: Optional[int] = Query(0, description="Number of articles to skip"),
+    limit: int = Query(10, description="Number of articles to return"),
     sort_by: Optional[str] = Query(None),
     sort_order: str = Query("desc", regex="^(asc|desc)$"),
     filters: Optional[str] = Query(None, description="JSON string of filters"),
     session: AsyncSession = Depends(get_session)
 ):
-    logger.info(f"Received search_type: {search_type}, search_query: {search_query}, "
-                f"filters: {filters}, sort_by: {sort_by}, sort_order: {sort_order}")
+    logger.info(f"Received parameters: url={url}, search_query={search_query}, search_type={search_type}, "
+                f"has_embeddings={has_embeddings}, has_geocoding={has_geocoding}, has_entities={has_entities}, "
+                f"has_classification={has_classification}, skip={skip}, limit={limit}, "
+                f"sort_by={sort_by}, sort_order={sort_order}, filters={filters}")
 
     try:
         # Parse filters
         filter_dict = json.loads(filters) if filters else {}
 
+        # Ensure skip is an integer
+        skip = int(skip) if skip is not None else 0
+
         async with session.begin():
+            # First, let's check if there are any articles in the database
+            count_query = select(func.count()).select_from(Article)
+            total_count = await session.execute(count_query)
+            total_count = total_count.scalar()
+            logger.info(f"Total number of articles in the database: {total_count}")
+
+            # Modify the initial query to include a join with NewsArticleClassification
             query = select(Article).options(
                 selectinload(Article.entities).selectinload(Entity.locations),
                 selectinload(Article.tags),
                 selectinload(Article.classification)
-            ).join(NewsArticleClassification)
+            ).join(NewsArticleClassification, isouter=True)  # Use outer join in case some articles don't have classification
             
+            logger.info(f"Initial query: {query}")
+
             # Apply basic filters
             if url:
                 query = query.where(Article.url == url)
@@ -100,15 +117,23 @@ async def get_articles(
             if has_classification is not None:
                 query = query.where(Article.classification != None if has_classification else Article.classification == None)
 
+            logger.info(f"Query after basic filters: {query}")
+
             # Apply search based on search_type
             if search_query:
                 if search_type == SearchType.TEXT:
-                    query = query.where(
-                        or_(
-                            Article.headline.ilike(f'%{search_query}%'), 
-                            Article.paragraphs.ilike(f'%{search_query}%')
-                        )
+                    search_condition = or_(
+                        Article.headline.ilike(f'%{search_query}%'), 
+                        Article.paragraphs.ilike(f'%{search_query}%')
                     )
+                    query = query.where(search_condition)
+                    logger.info(f"Applied text search condition: {search_condition}")
+                    
+                    # Log the count of articles that match the search condition
+                    count_query = select(func.count()).select_from(Article).where(search_condition)
+                    search_count = await session.execute(count_query)
+                    search_count = search_count.scalar()
+                    logger.info(f"Number of articles matching the search query: {search_count}")
                 elif search_type == SearchType.SEMANTIC and has_embeddings != False:
                     try:
                         # Get query embedding from NLP service
@@ -126,15 +151,18 @@ async def get_articles(
                         logger.error(f"Unexpected error in semantic search: {e}")
                         raise HTTPException(status_code=500, detail="Unexpected error in semantic search")
 
+            logger.info(f"Query after search: {query}")
+
             # Dynamically apply filters based on NewsArticleClassification fields
             if filter_dict:
                 classification_fields = inspect(NewsArticleClassification).c.keys()
                 for field, value in filter_dict.items():
                     if field in classification_fields:
-                        if field.startswith(('min_', 'max_')):
-                            operator = '>=' if field.startswith('min_') else '<='
-                            field_name = field[4:]  # Remove 'min_' or 'max_' prefix
-                            query = query.where(getattr(NewsArticleClassification, field_name).op(operator)(value))
+                        if isinstance(value, dict) and 'min' in value and 'max' in value:
+                            query = query.where(and_(
+                                getattr(NewsArticleClassification, field) >= value['min'],
+                                getattr(NewsArticleClassification, field) <= value['max']
+                            ))
                         else:
                             query = query.where(getattr(NewsArticleClassification, field) == value)
 
@@ -144,9 +172,20 @@ async def get_articles(
                 if sort_column:
                     query = query.order_by(desc(sort_column) if sort_order == "desc" else sort_column)
 
+            # After applying all filters
+            count_query = select(func.count()).select_from(query.subquery())
+            filtered_count = await session.execute(count_query)
+            filtered_count = filtered_count.scalar()
+            logger.info(f"Number of articles after applying all filters: {filtered_count}")
+
+            # Log the final SQL query
+            logger.info(f"Final SQL query: {query.compile(compile_kwargs={'literal_binds': True})}")
+
             # Execute query
             result = await session.execute(query.offset(skip).limit(limit))
             articles = result.unique().all()
+
+            logger.info(f"Number of articles returned: {len(articles)}")
 
             articles_data = []
             for article_tuple in articles:
@@ -186,10 +225,13 @@ async def get_articles(
             logger.info(f"Returning {len(articles_data)} articles")
             return articles_data
 
+    except ValueError as e:
+        logger.error(f"Invalid value for skip or limit: {e}")
+        raise HTTPException(status_code=400, detail="Invalid value for skip or limit")
     except Exception as e:
-        logger.error(f"Error retrieving articles: {e}")
+        logger.error(f"Error retrieving articles: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error retrieving articles")
-
+        
 @app.get("/classification_fields")
 async def get_classification_fields():
     fields = inspect(NewsArticleClassification).c
