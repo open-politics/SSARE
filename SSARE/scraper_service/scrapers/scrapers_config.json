@@ -11,6 +11,10 @@
         "dw": {
             "location": "scrapers/dw.py",
             "last_run": "2023-01-01 00:00:00"
+        },
+        "pynews": {
+            "location": "scrapers/pynews.py",
+            "last_run": "2023-01-01 00:00:00"
         }
     }
 }

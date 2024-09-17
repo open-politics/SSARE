@@ -205,3 +205,62 @@ async def get_locations_geojson(session: AsyncSession = Depends(get_session)):
     except Exception as e:
         logger.error(f"Error creating GeoJSON: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/geojson_events")
+async def get_geojson_by_event_type(event_type: str, session: AsyncSession = Depends(get_session)):
+    logger.info(f"Starting GeoJSON generation for event type: {event_type}")
+    try:
+        # Query to get all locations with their associated entities and articles filtered by event type
+        logger.debug("Querying database for locations, entities, and articles")
+        query = select(Location).options(
+            selectinload(Location.entities).selectinload(Entity.articles)
+        ).join(Entity).join(ArticleEntity).join(Article).join(NewsArticleClassification).where(
+            NewsArticleClassification.event_type == event_type
+        )
+        result = await session.execute(query)
+        locations = result.scalars().unique().all()
+        logger.info(f"Retrieved {len(locations)} locations from database for event type: {event_type}")
+
+        features = []
+        for location in locations:
+            logger.debug(f"Processing location: {location.name}")
+            # Convert coordinates to regular Python floats
+            coordinates = [float(coord) for coord in location.coordinates]
+            # Create a Point geometry
+            point = Point((coordinates[1], coordinates[0]))  # GeoJSON uses (longitude, latitude)
+
+            # Collect all articles associated with this location
+            articles = []
+            for entity in location.entities:
+                for article in entity.articles:
+                    articles.append({
+                        "url": article.url,
+                        "headline": article.headline,
+                        "source": article.source,
+                        "insertion_date": article.insertion_date.isoformat() if article.insertion_date else None
+                    })
+            logger.debug(f"Found {len(articles)} articles for location: {location.name}")
+
+            # Create a Feature
+            feature = Feature(
+                geometry=point,
+                properties={
+                    "name": location.name,
+                    "type": location.type,
+                    "article_count": len(articles),
+                    "articles": articles
+                }
+            )
+            features.append(feature)
+
+        # Create a FeatureCollection
+        feature_collection = FeatureCollection(features)
+        logger.info(f"Created FeatureCollection with {len(features)} features for event type: {event_type}")
+
+        logger.info("GeoJSON generation completed successfully")
+        return JSONResponse(content=feature_collection)
+
+    except Exception as e:
+        logger.error(f"Error creating GeoJSON for event type {event_type}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

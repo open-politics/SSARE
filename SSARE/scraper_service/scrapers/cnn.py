@@ -13,9 +13,10 @@ async def scrape_cnn_articles(session):
         soup = BeautifulSoup(data, features="html.parser")
         all_urls = [base_url + a['href'] for a in soup.find_all('a', href=True) 
                     if a['href'] and a['href'][0] == '/' and a['href'] != '#']
-
     def url_is_article(url, current_year='2024'):
-        return 'cnn.com/{}/'.format(current_year) in url and '/politics/' in url
+        return ('cnn.com/{}/'.format(current_year) in url and 
+                '/politics/' in url and 
+                '/video/' not in url)
 
     article_urls = [url for url in all_urls if url_is_article(url)]
     tasks = [process_article_url(session, url) for url in article_urls]

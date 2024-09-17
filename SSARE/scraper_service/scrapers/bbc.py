@@ -6,7 +6,7 @@ from newspaper import Article
 
 def scrape_articles(page, base_url, visited_urls, max_depth, current_depth=0):
     if current_depth >= max_depth:
-        return
+        return []
     
     links = page.query_selector_all('a')
     article_urls = []
@@ -34,11 +34,9 @@ def scrape_articles(page, base_url, visited_urls, max_depth, current_depth=0):
             "source": "BBC News"
         })
         
-        scrape_articles(page, url, visited_urls, max_depth, current_depth + 1)
+        data += scrape_articles(page, url, visited_urls, max_depth, current_depth + 1)
     
-    # Create a DataFrame from the scraped data
-    df = pd.DataFrame(data)
-    return df
+    return data
 
 def run(playwright: Playwright) -> None:
     browser = playwright.chromium.launch(headless=True)
@@ -49,10 +47,13 @@ def run(playwright: Playwright) -> None:
     
     visited_urls = set()
     max_depth = 1  # Adjust the depth as needed
-    df = scrape_articles(page, base_url, visited_urls, max_depth)
+    data = scrape_articles(page, base_url, visited_urls, max_depth)
     
     context.close()
     browser.close()
+    
+    # Create a DataFrame from the scraped data
+    df = pd.DataFrame(data)
     
     # Print the DataFrame
     print(df)
@@ -61,10 +62,7 @@ def run(playwright: Playwright) -> None:
     os.makedirs('/app/scrapers/data/dataframes', exist_ok=True)
 
     file_path = '/app/scrapers/data/dataframes/bbc_articles.csv'
-    if not os.path.exists(file_path):
-        # Create an empty DataFrame if the file doesn't exist
-        empty_df = pd.DataFrame(columns=["url", "headline", "paragraphs", "source"])
-        empty_df.to_csv(file_path, index=False)
+    df.to_csv(file_path, index=False)
 
 with sync_playwright() as playwright:
     run(playwright)

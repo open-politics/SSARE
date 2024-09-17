@@ -60,6 +60,7 @@ class NewsArticleClassification(BaseModel):
     clickbait_score: int
     fake_news_score: int
     satire_score: int
+    event_type: str
 
     @field_validator('geopolitical_relevance', 'legislative_influence_score', 
                      'international_relevance_score', 'democratic_process_implications_score', 
@@ -93,7 +94,7 @@ def classify_article(article: Article) -> NewsArticleClassification:
         messages=[
             {
                 "role": "system",
-                "content": "You are an AI assistant that analyzes articles and provides tags and metrics. You are assessing the article for relevance to an open source political intelligence service. Create classifications suitable for category, issue area, topic, and top story. The metrics should be relevant to the article and the political intelligence service."
+                "content": "You are an AI assistant that analyzes articles and provides tags and metrics. You are assessing the article for relevance to an open source political intelligence service. Create classifications suitable for category, issue area, topic, and top story. The metrics should be relevant to the article and the political intelligence service. You are also tasked with determining the event type of the article, which can be one of the following: 'Protests', 'Elections', 'Economic', 'Legal', 'Social', 'Crisis', 'War', 'Peace', 'Diplomacy', 'Technology', 'Science', 'Culture', 'Sports', 'Other'. The event type should be a single word or phrase that describes the main topic or theme of the article."
             },
             {
                 "role": "user",

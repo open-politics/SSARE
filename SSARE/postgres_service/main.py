@@ -343,7 +343,7 @@ async def deduplicate_articles(session: AsyncSession = Depends(get_session)):
 @app.get("/flags")
 async def produce_flags():
     await redis_conn_flags.delete("scrape_sources")
-    flags = ["cnn", "bbc", "dw"]
+    flags = ["cnn", "bbc", "dw", "pynews"]
     for flag in flags:
         await redis_conn_flags.lpush("scrape_sources", flag)
     return {"message": f"Flags produced: {', '.join(flags)}"}

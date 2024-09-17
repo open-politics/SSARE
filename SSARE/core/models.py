@@ -37,6 +37,7 @@ class NewsArticleClassification(BaseModel, table=True):
     clickbait_score: int
     fake_news_score: int
     satire_score: int
+    event_type: str
 
     article: "Article" = Relationship(back_populates="classification")
 
