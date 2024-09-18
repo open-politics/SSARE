@@ -11,9 +11,10 @@ from prefect import task, flow
 from geojson import Feature, FeatureCollection, Point
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import selectinload
+from sqlalchemy import and_
 
 from core.service_mapping import ServiceConfig
-from core.models import Article, Entity, Location
+from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag, NewsArticleClassification
 from core.adb import get_session
 
 config = ServiceConfig()
@@ -144,13 +145,13 @@ def healthcheck():
 
 
 @task
-async def print_hello():
+async def logging_geojson(position):
     logger.info("Starting GeoJSON generation")
-    print("Hello")
+    print(f"GeoJSON {position} ")
 
 @app.get("/geojson")
 async def get_locations_geojson(session: AsyncSession = Depends(get_session)):
-    await print_hello()
+    await logging_geojson("requested")
     logger.info("Starting GeoJSON generation")
     try:
         # Query to get all locations with their associated entities and articles
@@ -200,6 +201,11 @@ async def get_locations_geojson(session: AsyncSession = Depends(get_session)):
         logger.info(f"Created FeatureCollection with {len(features)} features")
 
         logger.info("GeoJSON generation completed successfully")
+        await logging_geojson("generation completed")
+        return JSONResponse(content=feature_collection)
+
+    except Exception as e:
+        await logging_geojson("error")
         return JSONResponse(content=feature_collection)
 
     except Exception as e:
@@ -207,16 +213,22 @@ async def get_locations_geojson(session: AsyncSession = Depends(get_session)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/geojson_events")
+@app.get("/geojson_events/{event_type}")
 async def get_geojson_by_event_type(event_type: str, session: AsyncSession = Depends(get_session)):
     logger.info(f"Starting GeoJSON generation for event type: {event_type}")
+    await logging_geojson("events requested")
     try:
         # Query to get all locations with their associated entities and articles filtered by event type
         logger.debug("Querying database for locations, entities, and articles")
-        query = select(Location).options(
-            selectinload(Location.entities).selectinload(Entity.articles)
-        ).join(Entity).join(ArticleEntity).join(Article).join(NewsArticleClassification).where(
-            NewsArticleClassification.event_type == event_type
+        query = (
+            select(Location)
+            .options(selectinload(Location.entities).selectinload(Entity.articles))
+            .join(EntityLocation, EntityLocation.location_id == Location.id)
+            .join(Entity, Entity.id == EntityLocation.entity_id)
+            .join(ArticleEntity, ArticleEntity.entity_id == Entity.id)
+            .join(Article, Article.id == ArticleEntity.article_id)
+            .join(NewsArticleClassification, NewsArticleClassification.article_id == Article.id)
+            .where(NewsArticleClassification.event_type == event_type)
         )
         result = await session.execute(query)
         locations = result.scalars().unique().all()
@@ -257,6 +269,7 @@ async def get_geojson_by_event_type(event_type: str, session: AsyncSession = Dep
         # Create a FeatureCollection
         feature_collection = FeatureCollection(features)
         logger.info(f"Created FeatureCollection with {len(features)} features for event type: {event_type}")
+        await logging_geojson("events generation completed")
 
         logger.info("GeoJSON generation completed successfully")
         return JSONResponse(content=feature_collection)

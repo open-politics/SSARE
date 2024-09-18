@@ -315,6 +315,76 @@ async def get_location_entities(
                 logger.info(f"Location '{location_name}' exists in the database but no related entities found")
             else:
                 logger.warning(f"Location '{location_name}' does not exist in the database")
+            
+    @app.get("/articles_by_entity/{entity_name}")
+async def get_articles_by_entity(
+    entity_name: str,
+    skip: int = 0,
+    limit: int = 10,
+    session: AsyncSession = Depends(get_session)
+):
+    try:
+        # Subquery to find articles related to the given entity
+        subquery = (
+            select(Article.id)
+            .join(ArticleEntity, Article.id == ArticleEntity.article_id)
+            .join(Entity, ArticleEntity.entity_id == Entity.id)
+            .where(Entity.name == entity_name)
+            .distinct()
+            .subquery()
+        )
+
+        # Main query to get articles related to the entity
+        query = (
+            select(Article)
+            .where(Article.id.in_(subquery))
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await session.execute(query)
+        articles = result.scalars().all()
+
+        articles_data = []
+        for article in articles:
+            article_dict = {
+                "id": str(article.id),
+                "url": article.url,
+                "headline": article.headline,
+                "source": article.source,
+                "insertion_date": article.insertion_date.isoformat() if article.insertion_date else None,
+                "paragraphs": article.paragraphs,
+                "embeddings": article.embeddings.tolist() if article.embeddings is not None else None,
+                "entities": [
+                    {
+                        "id": str(e.id),
+                        "name": e.name,
+                        "entity_type": e.entity_type,
+                        "locations": [
+                            {
+                                "name": loc.name,
+                                "type": loc.type,
+                                "coordinates": loc.coordinates.tolist() if loc.coordinates is not None else None
+                            } for loc in e.locations
+                        ] if e.locations else []
+                    } for e in article.entities
+                ] if article.entities else [],
+                "tags": [
+                    {
+                        "id": str(t.id),
+                        "name": t.name
+                    } for t in (article.tags or [])
+                ],
+                "classification": article.classification.dict() if article.classification else None
+            }
+            articles_data.append(article_dict)
+
+        logger.info(f"Returning {len(articles_data)} articles for entity '{entity_name}'")
+        return articles_data
+
+    except Exception as e:
+        logger.error(f"Error retrieving articles for entity '{entity_name}': {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error retrieving articles")
 ########################################################################################
 ## HELPER FUNCTIONS
 
