@@ -65,12 +65,12 @@ class NewsArticleClassification(BaseModel):
                      'international_relevance_score', 'democratic_process_implications_score', 
                      'general_interest_score', 'spam_score', 'clickbait_score', 
                      'fake_news_score', 'satire_score', mode='before')
-    def convert_to_int(cls, v):
-        if isinstance(v, dict):
-            v = v.get('score', 0)
-        if isinstance(v, (float, str)):
-            v = float(v)
-        return min(max(int(v * 10), 1), 10)  # Convert to int 1-10
+    def ensure_int_range(cls, v):
+        if not isinstance(v, int):
+            raise ValueError(f"Value {v} is not an integer")
+        if not (1 <= v <= 10):
+            raise ValueError(f"Value {v} is out of range (1-10)")
+        return v
 
     @field_validator('secondary_categories', 'keywords', mode='before')
     def parse_string_to_list(cls, v):
@@ -93,7 +93,7 @@ def classify_article(article: Article) -> NewsArticleClassification:
         messages=[
             {
                 "role": "system",
-                "content": "You are an AI assistant that analyzes articles and provides tags and metrics. You are assessing the article for relevance to an open source political intelligence service. Create classifications suitable for category, issue area, topic, and top story. The metrics should be relevant to the article and the political intelligence service. You are also tasked with determining the event type of the article, which can be one of the following: 'Protests', 'Elections', 'Economic', 'Legal', 'Social', 'Crisis', 'War', 'Peace', 'Diplomacy', 'Technology', 'Science', 'Culture', 'Sports', 'Other'. The event type should be a single word or phrase that describes the main topic or theme of the article."
+                "content": "You are an AI assistant that analyzes articles and provides tags and metrics. You are assessing the article for relevance to an open source political intelligence service. Create classifications suitable for category, issue area, topic, and top story. The metrics should be relevant to the article and the political intelligence service, ensuring that the values provided are carefully weighted and not overly extreme. You are also tasked with determining the event type of the article, which can be one of the following: 'Protests', 'Elections', 'Economic', 'Legal', 'Social', 'Crisis', 'War', 'Peace', 'Diplomacy', 'Technology', 'Science', 'Culture', 'Sports', 'Other'. The event type should be a single word or phrase that describes the main topic or theme of the article."
             },
             {
                 "role": "user",

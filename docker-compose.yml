@@ -60,9 +60,13 @@ services:
       - "3690"
     networks:
       - ssare_network
+      - global_network
       - default
     environment:
       - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=global_network
 
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
@@ -88,6 +92,10 @@ services:
       - scraper_service
       - postgres_service
       - redis
+    networks:
+      - ssare_network
+      - global_network
+      - default
 
   neo4j:
     image: neo4j:latest
@@ -163,6 +171,7 @@ services:
     networks:
       - ssare_network
       - default
+      - global_network
 
   prefect_worker:
     image: prefecthq/prefect:3-latest
@@ -296,6 +305,10 @@ networks:
   default:
     external: false
   ssare_network:
+    external: true
+  global_network:
+    external: true
+  internal_network:
     external: true
 
 volumes:

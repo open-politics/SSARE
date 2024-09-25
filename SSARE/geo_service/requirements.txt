@@ -10,5 +10,5 @@ requests
 pgvector
 sqlmodel
 prefect
-prefect-ray
 geojson
+httpx

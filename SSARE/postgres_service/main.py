@@ -11,6 +11,7 @@ import httpx
 import math
 import pandas as pd
 import uuid
+from io import StringIO
 
 from fastapi import Query
 from fastapi.encoders import jsonable_encoder
@@ -60,6 +61,7 @@ async def healthcheck():
 class SearchType(str, Enum):
     TEXT = "text"
     SEMANTIC = "semantic"
+    STRUCTURED = "structured"
 
 @app.get("/articles")
 async def get_articles(
@@ -75,7 +77,10 @@ async def get_articles(
     sort_by: Optional[str] = Query(None),
     sort_order: str = Query("desc", regex="^(asc|desc)$"),
     filters: Optional[str] = Query(None, description="JSON string of filters"),
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session),
+    news_category: Optional[str] = Query(None, description="Filter by news category"),
+    secondary_category: Optional[str] = Query(None, description="Filter by secondary category"),
+    keyword: Optional[str] = Query(None, description="Filter by keyword"),
 ):
     logger.info(f"Received parameters: url={url}, search_query={search_query}, search_type={search_type}, "
                 f"has_embeddings={has_embeddings}, has_geocoding={has_geocoding}, has_entities={has_entities}, "
@@ -118,6 +123,18 @@ async def get_articles(
                 query = query.where(Article.classification != None if has_classification else Article.classification == None)
 
             logger.info(f"Query after basic filters: {query}")
+
+            if news_category or secondary_category or keyword:
+                category_conditions = []
+                if news_category:
+                    category_conditions.append(NewsArticleClassification.news_category == news_category)
+                if secondary_category:
+                    category_conditions.append(NewsArticleClassification.secondary_categories.any(secondary_category))
+                if keyword:
+                    category_conditions.append(NewsArticleClassification.keywords.any(keyword))
+                
+                if category_conditions:
+                    query = query.where(or_(*category_conditions))
 
             # Apply search based on search_type
             if search_query:
@@ -316,7 +333,7 @@ async def get_location_entities(
             else:
                 logger.warning(f"Location '{location_name}' does not exist in the database")
             
-    @app.get("/articles_by_entity/{entity_name}")
+@app.get("/articles_by_entity/{entity_name}")
 async def get_articles_by_entity(
     entity_name: str,
     skip: int = 0,
@@ -668,7 +685,12 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
         async with session.begin():
             # Select articles with embeddings and entities
             query = select(Article).options(selectinload(Article.entities)).where(
-                Article.entities.any(or_(Entity.entity_type == 'GPE', Entity.entity_type == 'LOC'))
+                Article.entities.any(
+                    and_(
+                        or_(Entity.entity_type == 'GPE', Entity.entity_type == 'LOC'),
+                        ~Entity.locations.any(Location.coordinates != None)
+                    )
+                )
             )
             result = await session.execute(query)
             articles = result.scalars().all()
@@ -926,3 +948,129 @@ async def store_articles_with_classification(session: AsyncSession = Depends(get
     except Exception as e:
         logger.error(f"Error storing classified articles: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
+
+
+#### MISC
+
+@app.delete("/delete_all_classifications")
+async def delete_all_classifications(session: AsyncSession = Depends(get_session)):
+    try:
+        async with session.begin():
+            # Delete all records from the NewsArticleClassification table
+            await session.execute(delete(NewsArticleClassification))
+            await session.commit()
+            logger.info("All classifications deleted successfully.")
+            return {"message": "All classifications deleted successfully."}
+    except Exception as e:
+        logger.error(f"Error deleting classifications: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error deleting classifications")
+
+@app.get("/articles_csv_quick")
+async def get_articles_csv(session: AsyncSession = Depends(get_session)):
+    try:
+        async with session.begin():
+            query = select(Article)
+            result = await session.execute(query)
+            articles = result.scalars().all()
+
+        # Convert articles to a list of dictionaries
+        articles_data = [article.dict() for article in articles]
+
+        # Create a DataFrame
+        df = pd.DataFrame(articles_data)
+
+        # Convert DataFrame to CSV
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False)
+        csv_buffer.seek(0)
+
+        return StreamingResponse(csv_buffer, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=articles.csv"})
+
+    except Exception as e:
+        logger.error(f"Error generating CSV: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error generating CSV")
+
+@app.get("/articles_csv_full")
+async def get_articles_csv(session: AsyncSession = Depends(get_session)):
+    try:
+        async with session.begin():
+            query = select(Article).options(
+                selectinload(Article.entities).selectinload(Entity.locations),
+                selectinload(Article.tags),
+                selectinload(Article.classification)
+            )
+            result = await session.execute(query)
+            articles = result.scalars().all()
+
+        # Convert articles to a list of dictionaries
+        articles_data = []
+        for article in articles:
+            article_dict = {
+                "id": str(article.id),
+                "url": article.url,
+                "headline": article.headline,
+                "source": article.source,
+                "insertion_date": article.insertion_date.isoformat() if article.insertion_date else None,
+                "paragraphs": article.paragraphs,
+                "embeddings": article.embeddings.tolist() if article.embeddings is not None else None,
+                "entities": [
+                    {
+                        "id": str(e.id),
+                        "name": e.name,
+                        "entity_type": e.entity_type,
+                        "locations": [
+                            {
+                                "name": loc.name,
+                                "type": loc.type,
+                                "coordinates": loc.coordinates.tolist() if loc.coordinates is not None else None
+                            } for loc in e.locations
+                        ] if e.locations else []
+                    } for e in article.entities
+                ] if article.entities else [],
+                "tags": [
+                    {
+                        "id": str(t.id),
+                        "name": t.name
+                    } for t in (article.tags or [])
+                ],
+                "classification": article.classification.dict() if article.classification else None
+            }
+            articles_data.append(article_dict)
+
+        # Flatten the data for CSV
+        flattened_data = []
+        for article in articles_data:
+            base_data = {
+                "id": article["id"],
+                "url": article["url"],
+                "headline": article["headline"],
+                "source": article["source"],
+                "insertion_date": article["insertion_date"],
+                "paragraphs": article["paragraphs"],
+                "embeddings": article["embeddings"],
+            }
+            if article["entities"]:
+                for entity in article["entities"]:
+                    entity_data = {
+                        "entity_id": entity["id"],
+                        "entity_name": entity["name"],
+                        "entity_type": entity["entity_type"],
+                        "locations": json.dumps(entity["locations"]),
+                    }
+                    flattened_data.append({**base_data, **entity_data})
+            else:
+                flattened_data.append(base_data)
+
+        # Create a DataFrame
+        df = pd.DataFrame(flattened_data)
+
+        # Convert DataFrame to CSV
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False)
+        csv_buffer.seek(0)
+
+        return StreamingResponse(csv_buffer, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=articles.csv"})
+
+    except Exception as e:
+        logger.error(f"Error generating CSV: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error generating CSV")

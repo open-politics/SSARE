@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11
 
 WORKDIR /app
 
@@ -21,4 +21,4 @@ COPY app/start.sh .
 RUN chmod +x start.sh
 
 # Start cron service and use a shell to run both the start script and uvicorn
-CMD service cron start && ./start.sh & uvicorn main:app --host 0.0.0.0 --port 8089
+CMD ["./start.sh"]
