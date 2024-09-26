@@ -63,6 +63,65 @@ class SearchType(str, Enum):
     SEMANTIC = "semantic"
     STRUCTURED = "structured"
 
+import os
+import json
+import logging
+from typing import List, Optional, Dict, Any, AsyncGenerator
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Query, Body
+from sqlmodel import SQLModel, Field, create_engine, Session, select, update
+from sqlmodel import Column, JSON
+from contextlib import asynccontextmanager
+from enum import Enum
+import httpx
+import math
+import pandas as pd
+import uuid
+from io import StringIO
+
+from fastapi import Query
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
+from pgvector.sqlalchemy import Vector
+from pydantic import BaseModel, ValidationError
+from redis.asyncio import Redis
+from sqlalchemy import and_, delete, func, insert, or_, text, update
+from sqlalchemy import inspect
+from sqlalchemy import desc
+from sqlalchemy import join
+from sqlalchemy import alias, distinct
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import joinedload, selectinload
+from sqlmodel import Session
+from typing import AsyncGenerator
+
+from core.adb import engine, get_session, create_db_and_tables
+from core.middleware import add_cors_middleware
+from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag, NewsArticleClassification
+from core.service_mapping import config
+
+# Setup Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Redis connection
+redis_conn_flags = Redis(host='redis', port=config.REDIS_PORT, db=0)  # For flags
+
+async def lifespan(app):
+    await create_db_and_tables()
+    yield
+
+app = FastAPI(lifespan=lifespan)
+add_cors_middleware(app)
+
+@app.get("/healthz")
+async def healthcheck():
+    return {"message": "OK"}, 200
+
+class SearchType(str, Enum):
+    TEXT = "text"
+    SEMANTIC = "semantic"
+    STRUCTURED = "structured"
+
 @app.get("/articles")
 async def get_articles(
     url: Optional[str] = None,
@@ -81,15 +140,29 @@ async def get_articles(
     news_category: Optional[str] = Query(None, description="Filter by news category"),
     secondary_category: Optional[str] = Query(None, description="Filter by secondary category"),
     keyword: Optional[str] = Query(None, description="Filter by keyword"),
+    entities: Optional[str] = Query(None, description="Comma-separated list of entities"),
+    locations: Optional[str] = Query(None, description="Comma-separated list of locations"),
+    topics: Optional[str] = Query(None, description="Comma-separated list of topics"),
+    classification_scores: Optional[str] = Query(None, description="JSON string of classification score ranges"),
+    keyword_weights: Optional[str] = Query(None, description="JSON string of keyword weights"),  # New parameter for keyword weights
+    exclude_keywords: Optional[str] = Query(None, description="Comma-separated list of exclude keywords"),  # New parameter for exclude keywords
 ):
     logger.info(f"Received parameters: url={url}, search_query={search_query}, search_type={search_type}, "
                 f"has_embeddings={has_embeddings}, has_geocoding={has_geocoding}, has_entities={has_entities}, "
                 f"has_classification={has_classification}, skip={skip}, limit={limit}, "
-                f"sort_by={sort_by}, sort_order={sort_order}, filters={filters}")
+                f"sort_by={sort_by}, sort_order={sort_order}, filters={filters}, "
+                f"entities={entities}, locations={locations}, topics={topics}, classification_scores={classification_scores}, "
+                f"keyword_weights={keyword_weights}, exclude_keywords={exclude_keywords}")
 
     try:
         # Parse filters
         filter_dict = json.loads(filters) if filters else {}
+        entity_list = entities.split(",") if entities else []
+        location_list = locations.split(",") if locations else []
+        topic_list = topics.split(",") if topics else []
+        score_filters = json.loads(classification_scores) if classification_scores else {}
+        keyword_weights_dict = json.loads(keyword_weights) if keyword_weights else {}
+        exclude_keywords_list = exclude_keywords.split(",") if exclude_keywords else []
 
         # Ensure skip is an integer
         skip = int(skip) if skip is not None else 0
@@ -170,6 +243,48 @@ async def get_articles(
 
             logger.info(f"Query after search: {query}")
 
+            # Apply entity filters
+            if entity_list:
+                query = query.join(Article.entities).where(Entity.name.in_(entity_list))
+
+            # Apply location filters
+            if location_list:
+                query = query.join(Article.entities).join(Entity.locations).where(Location.name.in_(location_list))
+
+            # Apply topic filters
+            if topic_list:
+                query = query.where(NewsArticleClassification.secondary_categories.any(topic_list))
+
+            # Apply classification score filters
+            for score_type, score_range in score_filters.items():
+                min_score, max_score = score_range
+                query = query.where(
+                    and_(
+                        getattr(NewsArticleClassification, score_type) >= min_score,
+                        getattr(NewsArticleClassification, score_type) <= max_score
+                    )
+                )
+
+            # Apply keyword weights
+            if keyword_weights_dict:
+                for keyword, weight in keyword_weights_dict.items():
+                    query = query.where(
+                        or_(
+                            Article.headline.ilike(f'%{keyword}%') * weight,
+                            Article.paragraphs.ilike(f'%{keyword}%') * weight
+                        )
+                    )
+
+            # Apply exclusion keywords
+            if exclude_keywords_list:
+                for keyword in exclude_keywords_list:
+                    query = query.where(
+                        and_(
+                            ~Article.headline.ilike(f'%{keyword}%'),
+                            ~Article.paragraphs.ilike(f'%{keyword}%')
+                        )
+                    )
+
             # Dynamically apply filters based on NewsArticleClassification fields
             if filter_dict:
                 classification_fields = inspect(NewsArticleClassification).c.keys()
@@ -249,12 +364,14 @@ async def get_articles(
         logger.error(f"Error retrieving articles: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error retrieving articles")
         
+
 @app.get("/classification_fields")
 async def get_classification_fields():
     fields = inspect(NewsArticleClassification).c
     return {name: str(field.type) for name, field in fields.items()}
         
 
+###### ENTITIES SECTION
 @app.get("/location_entities/{location_name}")
 async def get_location_entities(
     location_name: str, 
