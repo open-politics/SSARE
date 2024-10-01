@@ -800,8 +800,10 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
     logger.info("Starting to create geocoding jobs.")
     try:
         async with session.begin():
-            # Select articles with embeddings and entities
-            query = select(Article).options(selectinload(Article.entities)).where(
+            # Select articles with entities that are locations and do not have geocoding
+            query = select(Article).options(
+                selectinload(Article.entities).selectinload(Entity.locations)
+            ).where(
                 Article.entities.any(
                     and_(
                         or_(Entity.entity_type == 'GPE', Entity.entity_type == 'LOC'),
@@ -811,7 +813,7 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
             )
             result = await session.execute(query)
             articles = result.scalars().all()
-            logger.info(f"Found {len(articles)} articles with embeddings and entities.")
+            logger.info(f"Found {len(articles)} articles with entities that need geocoding.")
 
             redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=3)
 
@@ -823,7 +825,7 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
             not_pushed_count = 0
             for article in articles:
                 if article.url not in existing_urls:
-                    gpe_entities = [entity for entity in article.entities if entity.entity_type in ('GPE', 'LOC')]
+                    gpe_entities = [entity for entity in article.entities if entity.entity_type in ('GPE', 'LOC') and not entity.locations]
                     
                     if gpe_entities:
                         article_dict = {
@@ -833,7 +835,7 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
                             'entities': [{'name': entity.name, 'entity_type': entity.entity_type} for entity in gpe_entities]
                         }
                         articles_list.append(json.dumps(article_dict, ensure_ascii=False))
-                        logger.info(f"Article {article.url} has {len(gpe_entities)} GPE or LOC entities.")
+                        logger.info(f"Article {article.url} has {len(gpe_entities)} GPE or LOC entities that need geocoding.")
                 else:
                     not_pushed_count += 1
 
