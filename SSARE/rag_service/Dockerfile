@@ -3,7 +3,7 @@ FROM ragtoriches/prod
 WORKDIR /app
 
 COPY rag_service/ .
-COPY core/ ./bcore
+COPY core/ ./core
 
 RUN pip install -r requirements.txt
 

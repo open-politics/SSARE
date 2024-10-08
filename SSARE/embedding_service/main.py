@@ -5,11 +5,11 @@ import json
 import logging
 from redis import Redis
 import asyncio
-# from prefect import task, flow
+from prefect import task, flow
 from core.service_mapping import ServiceConfig
 from tenacity import retry, wait_fixed, stop_after_attempt, retry_if_exception_type
 import time
-# from prefect_ray import RayTaskRunner
+from prefect_ray import RayTaskRunner
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,13 +27,13 @@ async def healthcheck():
     return {"message": "NLP Service Running"}, 200
 
 
-#@task
+@task
 def retrieve_articles_from_redis(redis_conn_raw, batch_size=50):
     batch = redis_conn_raw.lrange('articles_without_embedding_queue', 0, batch_size - 1)
     redis_conn_raw.ltrim('articles_without_embedding_queue', batch_size, -1)
     return [Article(**json.loads(article)) for article in batch]
 
-#@task
+@task
 def process_article(article: Article):
     # Dynamically check if headline and paragraphs are not None
     text_to_encode = ""
@@ -58,7 +58,7 @@ def process_article(article: Article):
         logger.warning(f"No text available to generate embeddings for article: {article.url}")
         return None
 
-#@task
+@task
 def write_articles_to_redis(redis_conn_processed, articles_with_embeddings):
     serialized_articles = [json.dumps(article) for article in articles_with_embeddings]
     if serialized_articles:  # Check if the list is not empty
@@ -67,7 +67,7 @@ def write_articles_to_redis(redis_conn_processed, articles_with_embeddings):
     else:
         logger.info("No articles to write to Redis")
         
-#@flow(task_runner=RayTaskRunner())
+@flow(task_runner=RayTaskRunner())
 def generate_embeddings_flow(batch_size: int):
     logger.info("Starting embeddings generation process")
     redis_conn_raw = Redis(host='redis', port=6379, db=5, decode_responses=True)

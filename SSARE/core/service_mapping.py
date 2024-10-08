@@ -11,6 +11,7 @@ class ServiceConfig:
     RAG_SERVICE_PORT = os.getenv('RAG_SERVICE_PORT', '4312')
     ENTITY_SERVICE_PORT = os.getenv('ENTITY_SERVICE_PORT', '1290')
     GEO_SERVICE_PORT = os.getenv('GEO_SERVICE_PORT', '3690')
+    RERANKER_SERVICE_PORT = os.getenv('RERANKER_SERVICE_PORT', '6930')
     REDIS_PORT = os.getenv('REDIS_PORT', '6379')
     PREFECT_SERVER_PORT = os.getenv('PREFECT_SERVER_PORT', '4200')
     PELIAS_PLACEHOLDER_PORT = os.getenv('PELIAS_PLACEHOLDER_PORT', '3999')
@@ -33,7 +34,7 @@ class ServiceConfig:
     ARTICLES_DB_USER = os.getenv('ARTICLES_DB_USER', 'articles_user')
     ARTICLES_DB_PASSWORD = os.getenv('ARTICLES_DB_PASSWORD', 'articles_password')
     ARTICLES_DB_NAME = os.getenv('ARTICLES_DB_NAME', 'articles_db')
-    ARTICLES_DB_PORT = os.getenv('ARTICLES_DB_PORT', '5434')
+    ARTICLES_DB_PORT = os.getenv('ARTICLES_DB_PORT', '5473')
 
     OLLAMA_PORT = os.getenv('OLLAMA_PORT', '11434')
     LITELLM_PORT = os.getenv('LITELLM_PORT', '11435')
@@ -55,6 +56,7 @@ class ServiceConfig:
         "geo_service": f"http://geo_service:{GEO_SERVICE_PORT}",
         "redis": f"redis://redis:{REDIS_PORT}",
         "prefect_server": f"http://prefect_server:{PREFECT_SERVER_PORT}",
+        "reranker_service": f"http://reranker_service:{RERANKER_SERVICE_PORT}",
         "pelias_placeholder": f"http://pelias_placeholder:{PELIAS_PLACEHOLDER_PORT}",
         "r2r": f"http://r2r:{R2R_PORT}",
         "rag_service": f"http://rag_service:{RAG_SERVICE_PORT}",

@@ -283,6 +283,15 @@ services:
     ports:
       - "${REDIS_PORT}:6379"
 
+  reranker_service:
+    build: 
+      context: ./SSARE
+      dockerfile: ./reranker_service/Dockerfile
+    ports:
+      - "${RERANKER_SERVICE_PORT}:6930"
+    environment:
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+
   scraper_service:
     build: 
       context: ./SSARE

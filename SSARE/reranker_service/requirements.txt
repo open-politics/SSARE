@@ -1,0 +1,12 @@
+uvicorn 
+fastapi
+sqlalchemy
+pydantic
+redis 
+asyncpg
+requests
+pgvector
+sqlmodel
+prefect
+httpx
+cohere
