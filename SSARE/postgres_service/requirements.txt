@@ -10,3 +10,4 @@ asyncpg
 sqlmodel
 pgvector
 httpx
+tenacity

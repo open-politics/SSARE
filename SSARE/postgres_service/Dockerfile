@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Set PYTHONPATH
-ENV PYTHONPATH=/app:$PYTHONPATH
+ENV PYTHONPATH=/app/postgres_service:$PYTHONPATH
 
 # Copy the requirements.txt file
 COPY postgres_service/requirements.txt .
@@ -13,13 +13,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the core directory
 COPY core ./core
 
-# Copy the main.py and other files from postgres_service
-COPY postgres_service/main.py .
+# Copy the postgres_service directory
+COPY postgres_service ./postgres_service
 
-COPY postgres_service/start.sh .
-COPY postgres_service/alembic.ini .
-COPY postgres_service/alembic ./alembic
+RUN chmod +x postgres_service/start.sh
 
-RUN chmod +x start.sh
-
-CMD ["./start.sh"]
+CMD ["./postgres_service/start.sh"]
