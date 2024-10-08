@@ -159,12 +159,11 @@ cnn_articles_df.to_csv('cnn_articles.csv', index=False)
 ## Architecture and Storage
 SSARE's architecture fosters communication through a decoupled microservices design, ensuring scalability and maintainability.Redis stores task queues. The system is composed of the following services:
 -  Scraper Service
--  Vectorization/NLP Service
--  Qdrant Service
--  PostgreSQL Service
--  Entity Service
--  Geocoding Service
--  API Service
+-  Vectorization/Embedding Service
+-  PostgreSQL Service (manages pipelines and has rudimentary search functions)
+-  Entity Service (Extracts Entities)
+-  Geocoding Service (Geocodes Location Entities to Geocodes)
+-  Dashboard (Monitoring and Basic Retrieval)
 
 Services communicate and signal each other by producing flags and pushings tasks and data to Redis queues.
 
