@@ -4,18 +4,16 @@ import pandas as pd
 import logging
 from redis.asyncio import Redis
 from pydantic import ValidationError
-# from prefect import task, flow
-# from prefect_ray.task_runners import RayTaskRunner
+from prefect import task, flow
+from prefect_ray.task_runners import RayTaskRunner
 from core.models import Article, Articles
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from core.db import engine
+from core.utils import logger
 import asyncio
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-#@task
+@task
 async def load_config(config_file="./scrapers/scrapers_config.json"):
     if not os.path.exists(config_file):
         logger.warning(f"Configuration file not found: {config_file}. Creating an empty file.")
@@ -25,7 +23,7 @@ async def load_config(config_file="./scrapers/scrapers_config.json"):
     with open(config_file) as file:
         return json.load(file)
     
-#@task
+@task
 async def load_csv_data(csv_file):
     try:
         if os.path.getsize(csv_file) == 0:
@@ -39,7 +37,7 @@ async def load_csv_data(csv_file):
         logger.warning(f"Error loading CSV file: {csv_file}. {e}. Skipping article processing.")
         return None
 
-#@task
+@task
 async def run_scraper_script(script_location):
     process = await asyncio.create_subprocess_exec(
         "python", script_location,
@@ -52,7 +50,7 @@ async def run_scraper_script(script_location):
         return None
     return stdout.decode()
 
-#@task
+@task
 async def process_articles_to_model(articles, flag):
     processed_articles = []
     for article_data in articles:
@@ -68,7 +66,7 @@ async def process_articles_to_model(articles, flag):
             logger.error(f"Validation error for article from {flag}: {str(e)}")
     return Articles(articles=processed_articles)
 
-#@task
+@task
 async def save_articles_to_redis(articles, flag):
     redis_conn = Redis(host='redis', port=6379, db=1, decode_responses=True)
     for article in articles:
@@ -85,7 +83,7 @@ async def save_articles_to_redis(articles, flag):
     await redis_conn.aclose()
     logger.info("Articles saved to Redis")
 
-#@task
+@task
 async def process_articles_to_model(articles, flag):
     processed_articles = []
     for article_data in articles:
@@ -101,7 +99,7 @@ async def process_articles_to_model(articles, flag):
             logger.error(f"Validation error for article from {flag}: {str(e)}")
     return Articles(articles=processed_articles)
 
-#@task
+@task
 async def scrape_source_by_script_for_flag(flag: str):
     logger.info(f"Scraping started for source: {flag}")
     try:
@@ -123,7 +121,7 @@ async def scrape_source_by_script_for_flag(flag: str):
         logger.error(f"Error in scraping for {flag}: {str(e)}")
         raise e
 
-#@flow(task_runner=RayTaskRunner())
+@flow(task_runner=RayTaskRunner())
 async def scrape_sources_flow(flags):
     redis_conn = None
     try:

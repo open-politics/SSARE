@@ -19,11 +19,7 @@ from core.adb import get_session
 from core.models import Article, Entity, Location, NewsArticleClassification
 from core.service_mapping import config
 from .models import SearchType
-
-# Setup Logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
+from core.utils import logger
 
 router = APIRouter()
 

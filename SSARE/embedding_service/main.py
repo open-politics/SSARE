@@ -7,12 +7,10 @@ from redis import Redis
 import asyncio
 from prefect import task, flow
 from core.service_mapping import ServiceConfig
+from core.utils import logger
 from tenacity import retry, wait_fixed, stop_after_attempt, retry_if_exception_type
 import time
 from prefect_ray import RayTaskRunner
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 app = FastAPI()

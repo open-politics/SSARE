@@ -3,6 +3,11 @@ import os
 from typing import Optional
 import json
 from uuid import UUID
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 def load_config():
     config = ConfigParser()

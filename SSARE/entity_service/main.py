@@ -8,6 +8,7 @@ from flair.data import Sentence
 from flair.models import SequenceTagger
 from redis import Redis
 from core.service_mapping import ServiceConfig
+from core.utils import logger
 from core.models import Article, Entity
 from prefect import task, flow
 import uuid
@@ -17,9 +18,6 @@ config = ServiceConfig()
 
 # Load the NER model
 ner_tagger = SequenceTagger.load("flair/ner-english-ontonotes-large")
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

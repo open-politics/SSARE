@@ -32,7 +32,7 @@ from core.adb import engine, get_session, create_db_and_tables
 from core.middleware import add_cors_middleware
 from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag, NewsArticleClassification
 from core.service_mapping import config
-
+from core.utils import logger
 
 ## Setup 
 # App API Router

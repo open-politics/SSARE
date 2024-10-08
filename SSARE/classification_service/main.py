@@ -8,16 +8,15 @@ from contextlib import asynccontextmanager
 from openai import OpenAI
 import instructor
 from core.models import Article, ArticleTags, Tag, Entity, Location
-from core.utils import UUIDEncoder
+from core.utils import UUIDEncoder, logger
 from core.service_mapping import ServiceConfig
 from pydantic import BaseModel, Field
 from pydantic import validator, field_validator
 from prefect import flow, task
 import time
 from uuid import UUID
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from pydantic import BaseModel, field_validator
+from typing import List
 
 app = FastAPI()
 config = ServiceConfig()
@@ -32,19 +31,12 @@ app = FastAPI(lifespan=lifespan)
 my_proxy_api_key = "sk-1234"
 my_proxy_base_url = "http://litellm:4000"
 
-
 if os.getenv("LOCAL_LLM") == "True":
     client = instructor.from_openai(OpenAI(base_url=my_proxy_base_url, api_key=my_proxy_api_key))
 else:
     client = instructor.from_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
 
-from pydantic import BaseModel, field_validator
-from typing import List
-
-from pydantic import BaseModel, field_validator
-from typing import List
-import json
-
+# Extraction Data Model
 class NewsArticleClassification(BaseModel):
     title: str
     news_category: str
@@ -83,7 +75,6 @@ class NewsArticleClassification(BaseModel):
         return v
 
 # Functions for LLM tasks
-
 @task(retries=3)
 def classify_article(article: Article) -> NewsArticleClassification:
     """Classify the article using LLM."""

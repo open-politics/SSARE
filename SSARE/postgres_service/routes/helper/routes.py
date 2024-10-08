@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel import Session
 from typing import AsyncGenerator
-
+from core.utils import logger
 from core.adb import engine, get_session, create_db_and_tables
 from core.middleware import add_cors_middleware
 from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag, NewsArticleClassification

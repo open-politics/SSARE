@@ -13,23 +13,20 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import selectinload
 from sqlalchemy import and_
 import cohere
-
+import sys
 from core.service_mapping import ServiceConfig
 from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag, NewsArticleClassification
 from core.adb import get_session
+from core.utils import logger
 
 config = ServiceConfig()
 
-import sys
 
 async def lifespan(app):
-    logger.warning("Starting lifespan")
+    logger.info("Starting lifespan")
     yield
 
 app = FastAPI(lifespan=lifespan)
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
 
 co = cohere.Client(config.COHERE_API_KEY)
 

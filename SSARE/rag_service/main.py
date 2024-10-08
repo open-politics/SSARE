@@ -9,18 +9,16 @@ from core.models import Article, NewsArticleClassification
 import numpy as np
 import logging
 from core.adb import get_session
-
+from core.utils import logger
 import cohere as co
 
+# Instantiating App
 app = FastAPI()
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Load configuration
 config = ServiceConfig()
 
+# Health endpoint
 @app.get("/healthz")
 async def healthcheck():
     return {"message": "RAG Service Running"}, 200

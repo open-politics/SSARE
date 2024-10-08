@@ -12,7 +12,7 @@ from geojson import Feature, FeatureCollection, Point
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import selectinload
 from sqlalchemy import and_
-
+from core.utils import logger
 from core.service_mapping import ServiceConfig
 from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag, NewsArticleClassification
 from core.adb import get_session
@@ -27,8 +27,6 @@ async def lifespan(app):
 
 app = FastAPI(lifespan=lifespan)
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
 
 @task
 def retrieve_articles_from_redis(redis_conn, batch_size=50):

@@ -8,9 +8,7 @@ from core.db import engine, get_session
 import json
 import asyncio
 from script_scraper import scrape_sources_flow
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.utils import logger
 
 @task
 async def setup_redis_connection():
