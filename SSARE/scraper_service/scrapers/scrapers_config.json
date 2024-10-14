@@ -2,7 +2,7 @@
     "scrapers": {
         "cnn": {
             "location": "scrapers/cnn.py",
-            "last_run": "2015-01-01 00:00:00"
+            "last_run": "2023-01-01 00:00:00"
         },
         "bbc": {
             "location": "scrapers/bbc.py",

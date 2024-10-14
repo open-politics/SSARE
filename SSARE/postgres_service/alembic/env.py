@@ -2,7 +2,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from sqlmodel import SQLModel
 from core.service_mapping import ServiceConfig
-from core.models import Article
+from core.models import Content
 
 config = ServiceConfig()
 

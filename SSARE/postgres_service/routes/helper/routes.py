@@ -1,63 +1,54 @@
 import os
 import json
 import logging
-from typing import List, Optional, Dict, Any, AsyncGenerator
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Query, Body
-from sqlmodel import SQLModel, Field, create_engine, Session, select, update
-from sqlmodel import Column, JSON
-from contextlib import asynccontextmanager
-from enum import Enum
-import httpx
-import math
+from typing import List, Optional, Dict, Any
+from fastapi import HTTPException, Depends, APIRouter
+from sqlmodel import select, update, delete
+from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 import pandas as pd
-import uuid
 from io import StringIO
-
-from fastapi import Query, APIRouter
-from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
-from pgvector.sqlalchemy import Vector
-from pydantic import BaseModel, ValidationError
-from redis.asyncio import Redis
-from sqlalchemy import and_, delete, func, insert, or_, text, update
-from sqlalchemy import inspect
-from sqlalchemy import desc
-from sqlalchemy import join
-from sqlalchemy import alias, distinct
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import joinedload, selectinload
-from sqlmodel import Session
-from typing import AsyncGenerator
+
 from core.utils import logger
-from core.adb import engine, get_session, create_db_and_tables
-from core.middleware import add_cors_middleware
-from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag, NewsArticleClassification
-from core.service_mapping import config
+from core.adb import get_session
+from core.models import (
+    Content, ContentClassification, ContentEntity, ContentTag, Entity, EntityLocation,
+    Location, Tag
+)
 
 router = APIRouter()
 
 ########################################################################################
 ## HELPER FUNCTIONS
 
-@router.post("/deduplicate_articles")
-async def deduplicate_articles(session: AsyncSession = Depends(get_session)):
+@router.post("/deduplicate_contents")
+async def deduplicate_contents(session: AsyncSession = Depends(get_session)):
     try:
         async with session.begin():
-            query = select(Article).group_by(Article.id, Article.url).having(func.count() > 1)
+            # Find duplicate contents based on URL
+            query = select(Content.url, func.count(Content.url)).group_by(Content.url).having(func.count(Content.url) > 1)
             result = await session.execute(query)
-            duplicate_articles = result.scalars().all()
+            duplicates = result.fetchall()
 
-        for article in duplicate_articles:
-            logger.info(f"Duplicate article: {article.url}")
-            await session.delete(article)
+            for url, count in duplicates:
+                # Keep one content and delete the rest
+                subquery = (
+                    select(Content.id)
+                    .where(Content.url == url)
+                    .order_by(Content.insertion_date.desc())
+                    .offset(1)
+                )
+                delete_query = delete(Content).where(Content.id.in_(subquery))
+                await session.execute(delete_query)
+                logger.info(f"Deleted duplicates for URL: {url}")
 
-        await session.commit()
-        return {"message": "Duplicate articles deleted successfully."}
+            await session.commit()
+            return {"message": "Duplicate contents deleted successfully."}
     except Exception as e:
-        logger.error(f"Error deduplicating articles: {e}")
+        logger.error(f"Error deduplicating contents: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
 
 #### MISC
 
@@ -65,8 +56,8 @@ async def deduplicate_articles(session: AsyncSession = Depends(get_session)):
 async def delete_all_classifications(session: AsyncSession = Depends(get_session)):
     try:
         async with session.begin():
-            # Delete all records from the NewsArticleClassification table
-            await session.execute(delete(NewsArticleClassification))
+            # Delete all records from the ContentClassification table
+            await session.execute(delete(ContentClassification))
             await session.commit()
             logger.info("All classifications deleted successfully.")
             return {"message": "All classifications deleted successfully."}
@@ -78,8 +69,8 @@ async def delete_all_classifications(session: AsyncSession = Depends(get_session
 async def delete_all_embeddings(session: AsyncSession = Depends(get_session)):
     try:
         async with session.begin():
-            # Delete all embeddings from all articles
-            await session.execute(update(Article).values(embeddings=None))
+            # Delete all embeddings from all contents
+            await session.execute(update(Content).values(embeddings=None))
             await session.commit()
             logger.info("All embeddings deleted successfully.")
             return {"message": "All embeddings deleted successfully."}
@@ -87,75 +78,51 @@ async def delete_all_embeddings(session: AsyncSession = Depends(get_session)):
         logger.error(f"Error deleting embeddings: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error deleting embeddings")
 
-@router.get("/articles_csv_quick")
-async def get_articles_csv_quick(session: AsyncSession = Depends(get_session)):
+@router.get("/contents_csv_quick")
+async def get_contents_csv_quick(session: AsyncSession = Depends(get_session)):
     try:
         async with session.begin():
-            query = select(Article.id, Article.url, Article.headline, Article.source, Article.insertion_date)
+            query = select(Content.id, Content.url, Content.title, Content.source, Content.insertion_date)
             result = await session.execute(query)
-            articles = result.fetchall()
+            contents = result.fetchall()
 
         # Create a DataFrame
-        df = pd.DataFrame(articles, columns=['id', 'url', 'headline', 'source', 'insertion_date'])
+        df = pd.DataFrame(contents, columns=['id', 'url', 'title', 'source', 'insertion_date'])
 
         # Convert DataFrame to CSV
         csv_buffer = StringIO()
         df.to_csv(csv_buffer, index=False)
         csv_buffer.seek(0)
 
-        return StreamingResponse(csv_buffer, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=articles_quick.csv"})
+        return StreamingResponse(csv_buffer, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=contents_quick.csv"})
 
     except Exception as e:
         logger.error(f"Error generating quick CSV: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error generating quick CSV")
-    
-async def get_articles_csv(session: AsyncSession = Depends(get_session)):
+
+@router.get("/contents_csv_full")
+async def get_contents_csv_full(session: AsyncSession = Depends(get_session)):
     try:
         async with session.begin():
-            query = select(Article)
-            result = await session.execute(query)
-            articles = result.scalars().all()
-
-        # Convert articles to a list of dictionaries
-        articles_data = [article.dict() for article in articles]
-
-        # Create a DataFrame
-        df = pd.DataFrame(articles_data)
-
-        # Convert DataFrame to CSV
-        csv_buffer = StringIO()
-        df.to_csv(csv_buffer, index=False)
-        csv_buffer.seek(0)
-
-        return StreamingResponse(csv_buffer, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=articles.csv"})
-
-    except Exception as e:
-        logger.error(f"Error generating CSV: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Error generating CSV")
-
-@router.get("/articles_csv_full")
-async def get_articles_csv(session: AsyncSession = Depends(get_session)):
-    try:
-        async with session.begin():
-            query = select(Article).options(
-                selectinload(Article.entities).selectinload(Entity.locations),
-                selectinload(Article.tags),
-                selectinload(Article.classification)
+            query = select(Content).options(
+                selectinload(Content.entities).selectinload(Entity.locations),
+                selectinload(Content.tags),
+                selectinload(Content.classification)
             )
             result = await session.execute(query)
-            articles = result.scalars().all()
+            contents = result.scalars().all()
 
-        # Convert articles to a list of dictionaries
-        articles_data = []
-        for article in articles:
-            article_dict = {
-                "id": str(article.id),
-                "url": article.url,
-                "headline": article.headline,
-                "source": article.source,
-                "insertion_date": article.insertion_date.isoformat() if article.insertion_date else None,
-                "paragraphs": article.paragraphs,
-                "embeddings": article.embeddings.tolist() if article.embeddings is not None else None,
+        # Convert contents to a list of dictionaries
+        contents_data = []
+        for content in contents:
+            content_dict = {
+                "id": str(content.id),
+                "url": content.url,
+                "title": content.title,
+                "source": content.source,
+                "insertion_date": content.insertion_date.isoformat() if content.insertion_date else None,
+                "text_content": content.text_content,
+                "embeddings": content.embeddings.tolist() if content.embeddings is not None else None,
                 "entities": [
                     {
                         "id": str(e.id),
@@ -168,32 +135,32 @@ async def get_articles_csv(session: AsyncSession = Depends(get_session)):
                                 "coordinates": loc.coordinates.tolist() if loc.coordinates is not None else None
                             } for loc in e.locations
                         ] if e.locations else []
-                    } for e in article.entities
-                ] if article.entities else [],
+                    } for e in content.entities
+                ] if content.entities else [],
                 "tags": [
                     {
                         "id": str(t.id),
                         "name": t.name
-                    } for t in (article.tags or [])
+                    } for t in (content.tags or [])
                 ],
-                "classification": article.classification.dict() if article.classification else None
+                "classification": content.classification.dict() if content.classification else None
             }
-            articles_data.append(article_dict)
+            contents_data.append(content_dict)
 
         # Flatten the data for CSV
         flattened_data = []
-        for article in articles_data:
+        for content in contents_data:
             base_data = {
-                "id": article["id"],
-                "url": article["url"],
-                "headline": article["headline"],
-                "source": article["source"],
-                "insertion_date": article["insertion_date"],
-                "paragraphs": article["paragraphs"],
-                "embeddings": article["embeddings"],
+                "id": content["id"],
+                "url": content["url"],
+                "title": content["title"],
+                "source": content["source"],
+                "insertion_date": content["insertion_date"],
+                "text_content": content["text_content"],
+                "embeddings": content["embeddings"],
             }
-            if article["entities"]:
-                for entity in article["entities"]:
+            if content["entities"]:
+                for entity in content["entities"]:
                     entity_data = {
                         "entity_id": entity["id"],
                         "entity_name": entity["name"],
@@ -212,7 +179,7 @@ async def get_articles_csv(session: AsyncSession = Depends(get_session)):
         df.to_csv(csv_buffer, index=False)
         csv_buffer.seek(0)
 
-        return StreamingResponse(csv_buffer, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=articles.csv"})
+        return StreamingResponse(csv_buffer, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=contents_full.csv"})
 
     except Exception as e:
         logger.error(f"Error generating CSV: {e}", exc_info=True)

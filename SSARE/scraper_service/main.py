@@ -1,14 +1,14 @@
+import json
+import logging
 from fastapi import FastAPI, HTTPException
 from redis.asyncio import Redis
 from contextlib import asynccontextmanager
-import logging
 from prefect import task, flow
-from core.models import Article, Articles
+from core.models import Content
 from core.db import engine, get_session
-import json
+from core.utils import logger
 import asyncio
 from script_scraper import scrape_sources_flow
-from core.utils import logger
 
 @task
 async def setup_redis_connection():
@@ -23,10 +23,10 @@ async def close_redis_connection(redis_conn):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    redis_conn = Redis(host='redis', port=6379, db=1, decode_responses=True)
+    redis_conn = await setup_redis_connection()
     app.state.redis = redis_conn
     yield
-    await redis_conn.aclose()
+    await close_redis_connection(redis_conn)
 
 app = FastAPI(lifespan=lifespan)
 

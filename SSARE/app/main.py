@@ -56,7 +56,7 @@ async def healthcheck():
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, query: str = "culture and arts"):
     try:
-        postgres_service_url = f"{config.service_urls['postgres_service']}/articles"
+        postgres_service_url = f"{config.service_urls['postgres_service']}/contents"
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 postgres_service_url,
@@ -69,24 +69,26 @@ async def read_root(request: Request, query: str = "culture and arts"):
             )
 
         if response.status_code == 200:
-            articles = response.json()
-            articles = [{
-                'score': article.get('similarity', 0),
-                'headline': article['headline'],
-                'paragraphs': article['paragraphs'],
-                'url': article['url']
-            } for article in articles]
+            contents = response.json()
+            contents = [{
+                'score': content.get('similarity', 0),
+                'title': content['title'],
+                'text_content': content['text_content'],
+                'url': content['url']
+            } for content in contents]
             logger.info("Response for search was successful")
         else:
-            articles = []     
+            contents = []
             logger.info("Response for search was not successful")
 
         if "HX-Request" in request.headers:
-            return templates.TemplateResponse("partials/articles_list.html", {"request": request, "articles": articles})
+            return templates.TemplateResponse("partials/contents_list.html", {"request": request, "contents": contents})
         else:
-            return templates.TemplateResponse("index.html", {"request": request, "search_query": query})
+            return templates.TemplateResponse("index.html", {"request": request, "search_query": query, "contents": contents})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch articles: {str(e)}")
+        logger.error(f"Failed to fetch contents: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch contents: {str(e)}")
+
 
 @app.post("/trigger_scraping_sequence")
 async def trigger_scraping_flow():
