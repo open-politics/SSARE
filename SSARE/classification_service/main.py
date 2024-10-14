@@ -60,7 +60,7 @@ class NewsArticleClassification(BaseModel):
     def ensure_int_range(cls, v):
         if not isinstance(v, int):
             raise ValueError(f"Value {v} is not an integer")
-        if not (1 <= v <= 10):
+        if not (0 <= v <= 10):
             raise ValueError(f"Value {v} is out of range (1-10)")
         return v
 
@@ -178,3 +178,21 @@ def classify_articles_endpoint(batch_size: int = 50):
 @app.get("/healthz")
 def healthz():
     return {"status": "OK"}
+
+
+@app.get("/location_from_query")
+def get_location_from_query(query: str):
+
+    class LocationFromQuery(BaseModel):
+        """Return the location name most relevant to the query."""
+        location: str
+
+    response = client.chat.completions.create(
+        model="llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4o-2024-08-06",
+        response_model=LocationFromQuery,
+        messages=[
+            {"role": "system", "content": "You are an AI assistant embedded as a function in a larger application. You are given a query and you need to return the location name most relevant to the query. Your response should be geo-codable to a region, city, town, country or continent."},
+            {"role": "user", "content": f"The query is: {query}"}
+        ],
+    )
+    return response.location

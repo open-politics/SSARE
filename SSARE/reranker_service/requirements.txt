@@ -9,4 +9,3 @@ pgvector
 sqlmodel
 prefect
 httpx
-cohere

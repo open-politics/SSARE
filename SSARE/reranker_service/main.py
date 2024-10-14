@@ -8,11 +8,9 @@ import logging
 from collections import Counter
 import requests
 from prefect import task, flow
-from geojson import Feature, FeatureCollection, Point
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import selectinload
 from sqlalchemy import and_
-import cohere
 import sys
 from core.service_mapping import ServiceConfig
 from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag, NewsArticleClassification
@@ -21,26 +19,28 @@ from core.utils import logger
 
 config = ServiceConfig()
 
-
 async def lifespan(app):
     logger.info("Starting lifespan")
     yield
 
 app = FastAPI(lifespan=lifespan)
 
-co = cohere.Client(config.COHERE_API_KEY)
+async def run_test():
+    logger.info("Success")
 
-@app.post("/rerank")
-async def rerank(query: str, documents: List[str], top_n: int = None, return_documents: bool = True):
-    try:
-        response = co.rerank(
-            model="rerank-english-v3.0",
-            query=query,
-            documents=documents,
-            top_n=top_n,
-            return_documents=return_documents
-        )
-        return JSONResponse(content=response.dict())
-    except Exception as e:
-        logger.error(f"Error in reranking: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error in reranking")
+@task
+async def run_test_task():
+    await run_test()
+
+@flow
+async def testing_flow():
+    await run_test_task()
+
+@app.get("/rerank")
+async def xtest():
+    await testing_flow() 
+    return JSONResponse(content={"message": "OK"}, status_code=200) 
+
+
+if __name__ == "__main__":
+       testing_flow.serve(name="my-first-deployment")

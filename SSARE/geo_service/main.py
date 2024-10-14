@@ -112,6 +112,16 @@ def geocode_articles_flow(batch_size: int):
 
     logger.info("Geocoding process completed")
 
+@app.get("/geocode_location")
+def geocode_location(location: str):
+    logger.info(f"Geocoding location: {location}")
+    coordinates = call_pelias_api(location, lang='en')
+    logger.warning(f"Coordinates: {coordinates}")
+    if coordinates:
+        return {"coordinates": coordinates}
+    else:
+        return {"error": "Unable to geocode location"}
+
 @app.post("/geocode_articles")
 def geocode_articles(batch_size: int = 50):
     logger.info("GEOCODING ARTICLES")

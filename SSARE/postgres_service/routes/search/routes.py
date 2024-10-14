@@ -1,5 +1,6 @@
 import json
 import logging
+import math 
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, Depends, Query, APIRouter
 from sqlmodel import select
@@ -9,17 +10,20 @@ import httpx
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, func, or_, desc, distinct
 from sqlalchemy import inspect
-from sqlalchemy import desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from core.adb import get_session
-from core.models import Article, Entity, Location, NewsArticleClassification
+from core.models import Article, Entity, Location, NewsArticleClassification, ArticleEntity, EntityLocation  # Ensure all models are imported
 from core.service_mapping import config
 from .models import SearchType
 from core.utils import logger
+
+from pydantic import BaseModel
+import uuid
+
 
 router = APIRouter()
 
@@ -274,6 +278,7 @@ async def get_location_entities(
     limit: int = 50, 
     session: AsyncSession = Depends(get_session)
     ):
+    entities = []  # Initialize entities to avoid UnboundLocalError
     try:
         # Subquery to find articles related to the given location
         subquery = (
@@ -284,8 +289,7 @@ async def get_location_entities(
             .join(Location, EntityLocation.location_id == Location.id)
             .where(Location.name == location_name)
             .distinct()
-            .subquery()
-        )
+        ).subquery()  # Ensure subquery is correctly defined
 
         # Main query to get all entities from the articles related to the location
         query = (
@@ -297,7 +301,7 @@ async def get_location_entities(
             )
             .join(ArticleEntity, Entity.id == ArticleEntity.entity_id)
             .join(Article, ArticleEntity.article_id == Article.id)
-            .where(Article.id.in_(subquery))
+            .where(Article.id.in_(select(subquery)))  # Explicitly convert subquery to select()
             .group_by(Entity.id, Entity.name, Entity.entity_type)
         )
 
@@ -323,11 +327,30 @@ async def get_location_entities(
                     "relevance_score": relevance_score
                 })
 
-        # Sort by relevance score and apply pagination
-        sorted_entities = sorted(filtered_entities, key=lambda x: x['relevance_score'], reverse=True)
+        # Merge similar entities
+        merged_entities = {}
+        for entity in filtered_entities:
+            name = entity['name'].lower()
+            found = False
+            for key in merged_entities:
+                if name in key or key in name:
+                    # Merge the entities
+                    merged_entities[key]['article_count'] += entity['article_count']
+                    merged_entities[key]['total_frequency'] += entity['total_frequency']
+                    merged_entities[key]['relevance_score'] += entity['relevance_score']
+                    # Keep the longer name
+                    if len(entity['name']) > len(merged_entities[key]['name']):
+                        merged_entities[key]['name'] = entity['name']
+                    found = True
+                    break
+            if not found:
+                merged_entities[name] = entity
+
+        # Convert back to list and sort
+        sorted_entities = sorted(merged_entities.values(), key=lambda x: x['relevance_score'], reverse=True)
         paginated_entities = sorted_entities[skip:skip+limit]
 
-        logger.info(f"Query for location '{location_name}' returned {len(paginated_entities)} entities")
+        logger.info(f"Query for location '{location_name}' returned {len(paginated_entities)} merged entities")
 
         return paginated_entities
 
@@ -344,6 +367,81 @@ async def get_location_entities(
                 logger.info(f"Location '{location_name}' exists in the database but no related entities found")
             else:
                 logger.warning(f"Location '{location_name}' does not exist in the database")
+
+class MostRelevantEntitiesRequest(BaseModel):
+    article_ids: List[str]
+    skip: int = 0
+    limit: int = 10
+
+@router.post("/most_relevant_entities")
+async def get_most_relevant_entities(
+    request: MostRelevantEntitiesRequest,
+    session: AsyncSession = Depends(get_session)
+):
+    try:
+        # Convert article_ids to UUIDs
+        article_uuids = [uuid.UUID(article_id) for article_id in request.article_ids]
+
+        # Query to get entities related to the given article IDs
+        query = (
+            select(
+                Entity.name,
+                Entity.entity_type,
+                func.count(distinct(Article.id)).label('article_count'),
+                func.sum(ArticleEntity.frequency).label('total_frequency')
+            )
+            .join(ArticleEntity, Entity.id == ArticleEntity.entity_id)
+            .join(Article, ArticleEntity.article_id == Article.id)
+            .where(Article.id.in_(article_uuids))
+            .group_by(Entity.id, Entity.name, Entity.entity_type)
+        )
+
+        result = await session.execute(query)
+        entities = result.all()
+
+        # Calculate relevance score and filter entities
+        filtered_entities = []
+        for e in entities:
+            relevance_score = (e.total_frequency * math.log(e.article_count + 1))
+            if e.entity_type == 'PERSON':
+                relevance_score *= 1.75
+
+            filtered_entities.append({
+                "name": e.name,
+                "type": e.entity_type,
+                "article_count": e.article_count,
+                "total_frequency": e.total_frequency,
+                "relevance_score": relevance_score
+            })
+
+        # Merge similar entities
+        merged_entities = {}
+        for entity in filtered_entities:
+            name = entity['name'].lower()
+            found = False
+            for key in merged_entities:
+                if name in key or key in name:
+                    merged_entities[key]['article_count'] += entity['article_count']
+                    merged_entities[key]['total_frequency'] += entity['total_frequency']
+                    merged_entities[key]['relevance_score'] += entity['relevance_score']
+                    if len(entity['name']) > len(merged_entities[key]['name']):
+                        merged_entities[key]['name'] = entity['name']
+                    found = True
+                    break
+            if not found:
+                merged_entities[name] = entity
+
+        # Convert back to list and sort
+        sorted_entities = sorted(merged_entities.values(), key=lambda x: x['relevance_score'], reverse=True)
+        paginated_entities = sorted_entities[request.skip:request.skip+request.limit]
+
+        logger.info(f"Returning {len(paginated_entities)} most relevant entities for given articles")
+
+        return paginated_entities
+
+    except Exception as e:
+        logger.error(f"Error in get_most_relevant_entities: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
     
 
 #### Articles By Entitiy
@@ -416,3 +514,4 @@ async def get_articles_by_entity(
     except Exception as e:
         logger.error(f"Error retrieving articles for entity '{entity_name}': {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error retrieving articles")
+
