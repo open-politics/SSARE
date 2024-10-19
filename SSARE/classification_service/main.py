@@ -75,7 +75,7 @@ class NewsArticleClassification(BaseModel):
         return v
 
 # Functions for LLM tasks
-@task(retries=3)
+@task(retries=1)
 def classify_article(article: Article) -> NewsArticleClassification:
     """Classify the article using LLM."""
     return client.chat.completions.create(
@@ -196,3 +196,95 @@ def get_location_from_query(query: str):
         ],
     )
     return response.location
+
+
+from enum import Enum
+from typing import Union, Optional 
+
+@app.get("/split_query")
+def split_query(query: str):
+
+    logger.info(f"Splitting query: {query}")
+
+    class QueryType(Enum):
+        International_Politics = "International Politics"
+        Entity_Related = "Entity Related"
+        Location_Related = "Location Related"
+        Topic = "Topic"
+
+
+        General = "General"
+
+    class GeoDistribution(BaseModel):
+        """
+        The main location is where we want to zoom to. The secondary location is the list of countries tangent to the query.
+        """
+        main_location: str
+        secondary_locations: List[str]
+    
+    class SearchQueries(BaseModel):
+        """
+        Represents a collection of search queries tailored for prompt engineering.
+        This includes a primary natural language query, which is used to retrieve its closest vector snippets.
+        Additionally, it encompasses a set of semantic queries designed to augment the primary query, aiming to gather complementary information.
+        The goal is to simulate the retrieval of the most relevant and recent context information that a political intelligence analyst would seek through semantic search query retrieval.
+
+        Perform query expansion. If there are multiple common ways of phrasing a user question \
+        or common synonyms for key words in the question, make sure to return multiple versions \
+        of the query with the different phrasings.
+
+        If there are acronyms or words you are not familiar with, do not try to rephrase them.
+        Aim for 3-5 search queries.
+        
+        """
+        search_queries: Union[List[str], str, dict]
+    
+    class QueryResult(BaseModel):
+        """
+        The result of the query.
+        If its entity related, return the entities in the query.
+        """
+        query_type: QueryType
+        geo_distribution: GeoDistribution
+        search_queries: SearchQueries
+        entities: Optional[List[str]] = None
+
+    @task(retries=3)
+    def split_query_task(query: str) -> QueryResult:
+        response = client.chat.completions.create(
+            model="llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4o-2024-08-06",
+            response_model=QueryResult,
+            messages=[
+                {"role": "system", "content": "You are a political intelligence AI."},
+                {"role": "user", "content": f"The query is: {query}"}
+            ],
+        )
+        return response.dict()
+
+    return split_query_task(query)
+
+    # class CombinedQuery(BaseModel):
+    #     """
+    #     The primary query is a natural language query. It's closest snippets of vectors will be retrieved.
+    #     The primary query is extended through several other semantic queryies, they aim to perform retrieval towards complementary information to the same query.
+
+    #     This is supported by method queries. Choosing from the following options:
+    #     - "entity retrieval"
+    #     - "topic retrieval"
+    #     - "location retrieval"
+    #     """
+    #     original_query: str
+    #     combined_queries: List[str]
+
+    # class CombinedQueryResult(BaseModel):
+    #     """
+    #     The result of the combined query.
+    #     """
+    #     primary_query: str
+    #     combined_queries: List[str]
+
+
+
+
+
+

@@ -33,10 +33,6 @@ async def get_articles(
     url: Optional[str] = None,
     search_query: Optional[str] = None,
     search_type: SearchType = SearchType.TEXT,
-    has_embeddings: Optional[bool] = Query(None, description="Filter articles with embeddings"),
-    has_geocoding: Optional[bool] = Query(None, description="Filter articles with geocoding"),
-    has_entities: Optional[bool] = Query(None, description="Filter articles with entities"),
-    has_classification: Optional[bool] = Query(None, description="Filter articles with classification"),
     skip: Optional[int] = Query(0, description="Number of articles to skip"),
     limit: int = Query(10, description="Number of articles to return"),
     sort_by: Optional[str] = Query(None),
@@ -54,9 +50,7 @@ async def get_articles(
     exclude_keywords: Optional[str] = Query(None, description="Comma-separated list of exclude keywords"),
     ):
     logger.info(f"Received parameters: url={url}, search_query={search_query}, search_type={search_type}, "
-                f"has_embeddings={has_embeddings}, has_geocoding={has_geocoding}, has_entities={has_entities}, "
-                f"has_classification={has_classification}, skip={skip}, limit={limit}, "
-                f"sort_by={sort_by}, sort_order={sort_order}, filters={filters}, "
+                f"skip={skip}, limit={limit}, sort_by={sort_by}, sort_order={sort_order}, filters={filters}, "
                 f"entities={entities}, locations={locations}, topics={topics}, classification_scores={classification_scores}, "
                 f"keyword_weights={keyword_weights}, exclude_keywords={exclude_keywords}")
 
@@ -92,14 +86,7 @@ async def get_articles(
             # Apply basic filters
             if url:
                 query = query.where(Article.url == url)
-            if has_geocoding:
-                query = query.where(Article.entities.any(Entity.locations.any()))
-            if has_embeddings is not None:
-                query = query.where(Article.embeddings != None if has_embeddings else Article.embeddings == None)
-            if has_entities is not None:
-                query = query.where(Article.entities.any() if has_entities else ~Article.entities.any())
-            if has_classification is not None:
-                query = query.where(Article.classification != None if has_classification else Article.classification == None)
+            
 
             logger.info(f"Query after basic filters: {query}")
 
@@ -130,7 +117,7 @@ async def get_articles(
                     search_count = await session.execute(count_query)
                     search_count = search_count.scalar()
                     logger.info(f"Number of articles matching the search query: {search_count}")
-                elif search_type == SearchType.SEMANTIC and has_embeddings != False:
+                elif search_type == SearchType.SEMANTIC:
                     try:
                         # Get query embedding from NLP service
                         async with httpx.AsyncClient() as client:
@@ -139,6 +126,11 @@ async def get_articles(
                             query_embeddings = response.json()["embeddings"]
 
                         embedding_array = query_embeddings
+
+
+                        ## The actual vector search
+
+                        ## Let's get some stuff moving here
                         query = query.order_by(Article.embeddings.l2_distance(embedding_array)).limit(limit)
                     except httpx.HTTPError as e:
                         logger.error(f"Error calling NLP service: {e}")
