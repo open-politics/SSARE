@@ -12,3 +12,5 @@ prefect-ray
 tenacity
 sqlmodel
 pgvector
+numpy
+nltk==3.7

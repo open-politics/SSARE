@@ -1,70 +1,139 @@
-from fastapi import FastAPI, HTTPException
-from sentence_transformers import SentenceTransformer
-from core.models import Article, Articles
 import json
 import logging
+import time
+import numpy as np
+import nltk
 from redis import Redis
-import asyncio
+from fastapi import FastAPI, HTTPException
+from sentence_transformers import SentenceTransformer
+from sqlmodel import Session
+from typing import List, Optional
 from prefect import task, flow
+from core.models import Content, ContentChunk
 from core.service_mapping import ServiceConfig
 from core.utils import logger
-from tenacity import retry, wait_fixed, stop_after_attempt, retry_if_exception_type
-import time
-from prefect_ray import RayTaskRunner
-
+from prefect_ray.task_runners import RayTaskRunner
 
 app = FastAPI()
+
+# Download 'punkt' tokenizer if not already downloaded
+nltk.download('punkt')
+
+# Model Initialization
 config = ServiceConfig()
 token = config.HUGGINGFACE_TOKEN
-model = SentenceTransformer("jinaai/jina-embeddings-v2-base-en", 
-                            use_auth_token=token,
-                            trust_remote_code=True)
+model = SentenceTransformer(
+    "jinaai/jina-embeddings-v2-base-en",
+    use_auth_token=token,
+    trust_remote_code=True
+)
 
 @app.get("/healthz")
 async def healthcheck():
     return {"message": "NLP Service Running"}, 200
 
+@task
+def retrieve_contents_from_redis(redis_conn_raw, batch_size=50):
+    batch = redis_conn_raw.lrange('contents_without_embedding_queue', 0, batch_size - 1)
+    redis_conn_raw.ltrim('contents_without_embedding_queue', batch_size, -1)
+    return [Content(**json.loads(content)) for content in batch]
+
+def semantic_chunking(text, max_chunk_size=512, similarity_threshold=0.95):
+    # Tokenize text into sentences
+    sentences = nltk.sent_tokenize(text, language='english')
+
+    # Encode each sentence using your model
+    sentence_embeddings = model.encode(sentences)
+
+    chunks = []
+    current_chunk = []
+    current_chunk_embeddings = []
+
+    for i, sentence in enumerate(sentences):
+        current_chunk.append(sentence)
+        current_chunk_embeddings.append(sentence_embeddings[i])
+
+        # Check if we should start a new chunk
+        if len(current_chunk_embeddings) > 1:
+            # Compute cosine similarity between the last two sentence embeddings
+            vec_a = current_chunk_embeddings[-1]
+            vec_b = current_chunk_embeddings[-2]
+
+            # Calculate cosine similarity using NumPy
+            cos_sim = np.dot(vec_a, vec_b) / (np.linalg.norm(vec_a) * np.linalg.norm(vec_b))
+
+            # Start a new chunk if similarity is below threshold or max chunk size exceeded
+            if cos_sim < similarity_threshold or len(' '.join(current_chunk)) >= max_chunk_size:
+                chunk_text = ' '.join(current_chunk[:-1])
+                if chunk_text.strip():
+                    chunks.append(chunk_text)
+                # Reset current chunk
+                current_chunk = [sentence]
+                current_chunk_embeddings = [current_chunk_embeddings[-1]]
+
+    # Add the last chunk
+    if current_chunk:
+        chunk_text = ' '.join(current_chunk)
+        if chunk_text.strip():
+            chunks.append(chunk_text)
+    logger.warning(f"Chunks: {chunks}")
+    return chunks
 
 @task
-def retrieve_articles_from_redis(redis_conn_raw, batch_size=50):
-    batch = redis_conn_raw.lrange('articles_without_embedding_queue', 0, batch_size - 1)
-    redis_conn_raw.ltrim('articles_without_embedding_queue', batch_size, -1)
-    return [Article(**json.loads(article)) for article in batch]
-
-@task
-def process_article(article: Article):
-    # Dynamically check if headline and paragraphs are not None
+def process_content(content: Content):
+    # Combine title and text content
     text_to_encode = ""
-    if article.headline is not None:
-        text_to_encode += article.headline + " "
-    if article.paragraphs is not None:
-        text_to_encode += article.paragraphs + " "
-    
+    if content.title:
+        text_to_encode += content.title + ". "
+    if content.text_content:
+        text_to_encode += content.text_content
+
     # Only generate embeddings if there's text to encode
-    if text_to_encode:
-        embeddings = model.encode(text_to_encode).tolist()
-        
-        # Update the article with new embeddings
-        article.embeddings = embeddings
-        
-        # Convert the updated article back to a dictionary
-        article_dict = article.dict(exclude_unset=True)
-        
-        logger.info(f"Generated embeddings for article: {article.url}, Embeddings Length: {len(embeddings)}")
-        return article_dict
+    if text_to_encode.strip():
+        # Perform semantic chunking
+        chunks = semantic_chunking(text_to_encode)
+        chunk_objects = []
+        chunk_embeddings_list = []
+
+        for idx, chunk_text in enumerate(chunks):
+            # Generate embeddings for each chunk
+            chunk_embeddings = model.encode(chunk_text).tolist()
+            chunk_embeddings_list.append(chunk_embeddings)
+
+            # Create dictionary representing ContentChunk
+            chunk_object = {
+                "chunk_number": idx,
+                "text": chunk_text,
+                "embeddings": chunk_embeddings
+            }
+            chunk_objects.append(chunk_object)
+
+        # Update the content with new embeddings (average of chunk embeddings)
+        content.embeddings = np.mean(chunk_embeddings_list, axis=0).tolist()
+
+        # Add chunks to content
+        content_dict = content.dict(exclude_unset=True)
+        content_dict["chunks"] = chunk_objects
+        content_dict["id"] = str(content.id)  # Ensure id is included
+
+        logger.info(f"Generated embeddings for content: {content.url}, Number of chunks: {len(chunks)}")
+        return content_dict
     else:
-        logger.warning(f"No text available to generate embeddings for article: {article.url}")
+        logger.warning(f"No text available to generate embeddings for content: {content.url}")
         return None
 
 @task
-def write_articles_to_redis(redis_conn_processed, articles_with_embeddings):
-    serialized_articles = [json.dumps(article) for article in articles_with_embeddings]
-    if serialized_articles:  # Check if the list is not empty
-        redis_conn_processed.lpush('articles_with_embeddings', *serialized_articles)
-        logger.info(f"Wrote {len(articles_with_embeddings)} articles with embeddings to Redis")
+def write_contents_to_redis(redis_conn_processed, contents_with_embeddings):
+    serialized_contents = []
+    for content in contents_with_embeddings:
+        if content:
+            serialized_contents.append(json.dumps(content))
+    if serialized_contents:  # Check if the list is not empty
+        redis_conn_processed.lpush('contents_with_embeddings', *serialized_contents)
+        logger.info(f"Wrote {len(serialized_contents)} contents with embeddings to Redis")
     else:
-        logger.info("No articles to write to Redis")
-        
+        logger.info("No contents to write to Redis")
+
 @flow(task_runner=RayTaskRunner())
 def generate_embeddings_flow(batch_size: int):
     logger.info("Starting embeddings generation process")
@@ -72,9 +141,9 @@ def generate_embeddings_flow(batch_size: int):
     redis_conn_processed = Redis(host='redis', port=6379, db=6, decode_responses=True)
 
     try:
-        raw_articles = retrieve_articles_from_redis(redis_conn_raw, batch_size)
-        _articles_with_embeddings = [process_article(article) for article in raw_articles]
-        write_articles_to_redis(redis_conn_processed, _articles_with_embeddings)
+        raw_contents = retrieve_contents_from_redis(redis_conn_raw, batch_size)
+        contents_with_embeddings = [process_content(content) for content in raw_contents]
+        write_contents_to_redis(redis_conn_processed, contents_with_embeddings)
     finally:
         redis_conn_raw.close()
         redis_conn_processed.close()
@@ -82,7 +151,6 @@ def generate_embeddings_flow(batch_size: int):
 
     logger.info("Embeddings generation process completed")
 
-    
 @app.post("/generate_embeddings")
 def generate_embeddings(batch_size: int = 100):
     logger.debug("GENERATING EMBEDDINGS")

@@ -16,12 +16,12 @@ from core.service_mapping import ServiceConfig
 import asyncio
 import subprocess
 from flows.orchestration import (
-    deduplicate_articles, create_embedding_jobs, generate_embeddings,
-    store_articles_with_embeddings, create_entity_extraction_jobs,
-    extract_entities, store_articles_with_entities,
-    create_geocoding_jobs, geocode_articles,
-    produce_flags, create_scrape_jobs, store_raw_articles, store_articles_with_geocoding,
-    create_classification_jobs, classify_articles, store_articles_with_classification
+    deduplicate_contents, create_embedding_jobs, generate_embeddings,
+    store_contents_with_embeddings, create_entity_extraction_jobs,
+    extract_entities, store_contents_with_entities,
+    create_geocoding_jobs, geocode_contents,
+    produce_flags, create_scrape_jobs, store_raw_contents, store_contents_with_geocoding,
+    create_classification_jobs, classify_contents, store_contents_with_classification
 )
 from flows.orchestration import run_flow
 from fastapi import Path
@@ -56,7 +56,7 @@ async def healthcheck():
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, query: str = "culture and arts"):
     try:
-        postgres_service_url = f"{config.service_urls['postgres_service']}/articles"
+        postgres_service_url = f"{config.service_urls['postgres_service']}/contents"
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 postgres_service_url,
@@ -69,24 +69,24 @@ async def read_root(request: Request, query: str = "culture and arts"):
             )
 
         if response.status_code == 200:
-            articles = response.json()
-            articles = [{
-                'score': article.get('similarity', 0),
-                'headline': article['headline'],
-                'paragraphs': article['paragraphs'],
-                'url': article['url']
-            } for article in articles]
+            contents = response.json()
+            contents = [{
+                'score': content.get('similarity', 0),
+                'headline': content['title'],
+                'paragraphs': content['text_content'],
+                'url': content['url']
+            } for content in contents]
             logger.info("Response for search was successful")
         else:
-            articles = []     
+            contents = []     
             logger.info("Response for search was not successful")
 
         if "HX-Request" in request.headers:
-            return templates.TemplateResponse("partials/articles_list.html", {"request": request, "articles": articles})
+            return templates.TemplateResponse("partials/contents_list.html", {"request": request, "contents": contents})
         else:
             return templates.TemplateResponse("index.html", {"request": request, "search_query": query})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch articles: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch contents: {str(e)}")
 
 @app.post("/trigger_scraping_sequence")
 async def trigger_scraping_flow():
@@ -142,12 +142,12 @@ async def check_channels(request: Request, flow_name: str):
     flow_channels = {
         "status": {"Orchestration in progress"},
         "scrapers_running": {"scrapers_running"},
-        "scraping": ["scrape_sources", "raw_articles_queue"],
-        "embedding": ["articles_without_embedding_queue", "articles_with_embeddings"],
-        "entity_extraction": ["articles_without_entities_queue", "articles_with_entities_queue"],
-        "geocoding": ["articles_without_geocoding_queue", "articles_with_geocoding_queue"],
-        "semantics": ["articles_without_tags_queue", "articles_with_tags_queue"],
-        "classification": ["articles_without_classification_queue", "articles_with_classification_queue"]
+        "scraping": ["scrape_sources", "raw_contents_queue"],
+        "embedding": ["contents_without_embedding_queue", "contents_with_embeddings"],
+        "entity_extraction": ["contents_without_entities_queue", "contents_with_entities_queue"],
+        "geocoding": ["contents_without_geocoding_queue", "contents_with_geocoding_queue"],
+        "semantics": ["contents_without_tags_queue", "contents_with_tags_queue"],
+        "classification": ["contents_without_classification_queue", "contents_with_classification_queue"]
     }
     
     if flow_name not in flow_channels:
@@ -178,12 +178,12 @@ async def flush_redis_channels(flow_name: str = Path(..., description="The name 
                        decode_responses=True)
     
     flow_channels = {
-        "scraping": ["scrape_sources", "raw_articles_queue"],
-        "embedding": ["articles_without_embedding_queue", "articles_with_embeddings"],
-        "entity_extraction": ["articles_without_entities_queue", "articles_with_entities_queue"],
-        "geocoding": ["articles_without_geocoding_queue", "articles_with_geocoding_queue"],
-        "semantics": ["articles_without_tags_queue", "articles_with_tags_queue"],
-        "classification": ["articles_without_classification_queue", "articles_with_classification_queue"]
+        "scraping": ["scrape_sources", "raw_contents_queue"],
+        "embedding": ["contents_without_embedding_queue", "contents_with_embeddings"],
+        "entity_extraction": ["contents_without_entities_queue", "contents_with_entities_queue"],
+        "geocoding": ["contents_without_geocoding_queue", "contents_with_geocoding_queue"],
+        "semantics": ["contents_without_tags_queue", "contents_with_tags_queue"],
+        "classification": ["contents_without_classification_queue", "contents_with_classification_queue"]
     }
     
     if flow_name not in flow_channels:
@@ -250,20 +250,20 @@ async def trigger_step(step_name: str, batch_size: int = Query(50, ge=1, le=100)
     step_functions = {
         "produce_flags": produce_flags,
         "create_scrape_jobs": create_scrape_jobs,
-        "store_raw_articles": store_raw_articles,
-        "deduplicate_articles": deduplicate_articles,
+        "store_raw_contents": store_raw_contents,
+        "deduplicate_contents": deduplicate_contents,
         "create_embedding_jobs": create_embedding_jobs,
         "generate_embeddings": lambda: generate_embeddings(batch_size=batch_size),
-        "store_articles_with_embeddings": store_articles_with_embeddings,
+        "store_contents_with_embeddings": store_contents_with_embeddings,
         "create_entity_extraction_jobs": create_entity_extraction_jobs,
         "extract_entities": lambda: extract_entities(batch_size=batch_size),
-        "store_articles_with_entities": store_articles_with_entities,
+        "store_contents_with_entities": store_contents_with_entities,
         "create_geocoding_jobs": create_geocoding_jobs,
-        "geocode_articles": lambda: geocode_articles(batch_size=batch_size),
-        "store_articles_with_geocoding": store_articles_with_geocoding,
+        "geocode_contents": lambda: geocode_contents(batch_size=batch_size),
+        "store_contents_with_geocoding": store_contents_with_geocoding,
         "create_classification_jobs": create_classification_jobs,
-        "classify_articles": lambda: classify_articles(batch_size=batch_size),
-        "store_articles_with_classification": store_articles_with_classification
+        "classify_contents": lambda: classify_contents(batch_size=batch_size),
+        "store_contents_with_classification": store_contents_with_classification
     }
     
     if step_name not in step_functions:
@@ -271,7 +271,7 @@ async def trigger_step(step_name: str, batch_size: int = Query(50, ge=1, le=100)
     
     try:
         result = await step_functions[step_name]()
-        return {"message": f"Step '{step_name}' completed successfully", "batch_size": batch_size if step_name in ["generate_embeddings", "extract_entities", "geocode_articles", "classify_articles"] else None}
+        return {"message": f"Step '{step_name}' completed successfully", "batch_size": batch_size if step_name in ["generate_embeddings", "extract_entities", "geocode_contents", "classify_contents"] else None}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to execute step '{step_name}': {str(e)}")
     
@@ -281,51 +281,51 @@ async def get_pipeline(request: Request, pipeline_name: str):
         "scraping": {
             "title": "Scraping Pipeline",
             "input": "Flags",
-            "output": "Raw Articles",
+            "output": "Raw Contents",
             "steps": [
                 {"name": "produce_flags", "label": "1. Produce Flags"},
                 {"name": "create_scrape_jobs", "label": "2. Scrape"},
-                {"name": "store_raw_articles", "label": "3. Store Raw Articles"}
+                {"name": "store_raw_contents", "label": "3. Store Raw Contents"}
             ]
         },
         "embedding": {
             "title": "Embedding Pipeline",
-            "input": "Raw Articles",
-            "output": "Embedded Articles",
+            "input": "Raw Contents",
+            "output": "Embedded Contents",
             "steps": [
                 {"name": "create_embedding_jobs", "label": "1. Create Jobs"},
                 {"name": "generate_embeddings", "label": "2. Generate", "batch": True},
-                {"name": "store_articles_with_embeddings", "label": "3. Store"}
+                {"name": "store_contents_with_embeddings", "label": "3. Store"}
             ]
         },
         "entity_extraction": {
             "title": "Entity Extraction Pipeline",
-            "input": "Raw Articles",
-            "output": "Articles with Entities",
+            "input": "Raw Contents",
+            "output": "Contents with Entities",
             "steps": [
                 {"name": "create_entity_extraction_jobs", "label": "1. Create Jobs"},
                 {"name": "extract_entities", "label": "2. Extract", "batch": True},
-                {"name": "store_articles_with_entities", "label": "3. Store"}
+                {"name": "store_contents_with_entities", "label": "3. Store"}
             ]
         },
         "geocoding": {
             "title": "Geocoding Pipeline",
-            "input": "Articles with Entities",
-            "output": "Geocoded Articles",
+            "input": "Contents with Entities",
+            "output": "Geocoded Contents",
             "steps": [
                 {"name": "create_geocoding_jobs", "label": "1. Create Jobs"},
-                {"name": "geocode_articles", "label": "2. Geocode", "batch": True},
-                {"name": "store_articles_with_geocoding", "label": "3. Store"}
+                {"name": "geocode_contents", "label": "2. Geocode", "batch": True},
+                {"name": "store_contents_with_geocoding", "label": "3. Store"}
             ]
         },
         "classification": {
             "title": "Classification Pipeline",
-            "input": "Processed Articles",
-            "output": "Classified Articles",
+            "input": "Processed Contents",
+            "output": "Classified Contents",
             "steps": [
                 {"name": "create_classification_jobs", "label": "1. Create Jobs"},
-                {"name": "classify_articles", "label": "2. Process", "batch": True},
-                {"name": "store_articles_with_classification", "label": "3. Store"}
+                {"name": "classify_contents", "label": "2. Process", "batch": True},
+                {"name": "store_contents_with_classification", "label": "3. Store"}
             ]
         }
     }
@@ -344,8 +344,8 @@ class SearchType(str, Enum):
     TEXT = "text"
     SEMANTIC = "semantic"
     
-@app.get("/articles", response_class=HTMLResponse)
-async def search_articles(
+@app.get("/contents", response_class=HTMLResponse)
+async def search_contents(
     request: Request,
     search_query: str = Query(None),
     search_type: str = Query("text"),
@@ -356,7 +356,7 @@ async def search_articles(
     skip: int = 0,
     limit: int = 10
 ):
-    postgres_service_url = f"{config.service_urls['postgres_service']}/articles"
+    postgres_service_url = f"{config.service_urls['postgres_service']}/contents"
     async with httpx.AsyncClient() as client:
         response = await client.get(
             postgres_service_url,
@@ -373,7 +373,7 @@ async def search_articles(
         )
 
     if response.status_code == 200:
-        articles = response.json()
-        return templates.TemplateResponse("partials/search_results.html", {"request": request, "articles": articles})
+        contents = response.json()
+        return templates.TemplateResponse("partials/search_results.html", {"request": request, "contents": contents})
     else:
-        raise HTTPException(status_code=response.status_code, detail="Failed to fetch articles from PostgreSQL service")
+        raise HTTPException(status_code=response.status_code, detail="Failed to fetch contents from PostgreSQL service")

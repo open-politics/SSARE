@@ -2,7 +2,7 @@ import logging
 from fastapi import FastAPI
 from core.adb import create_db_and_tables
 from core.middleware import add_cors_middleware
-from postgres_service.routes.main import api_router
+from routes.main import api_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

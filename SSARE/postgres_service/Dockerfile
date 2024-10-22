@@ -1,21 +1,26 @@
 FROM python:3.11-slim
 
-WORKDIR /app
+WORKDIR /app/
 
 # Set PYTHONPATH
-ENV PYTHONPATH=/app/postgres_service:$PYTHONPATH
+ENV PYTHONPATH=/.
 
-# Copy the requirements.txt file
-COPY postgres_service/requirements.txt .
-RUN apt-get update && apt-get install -y netcat-traditional && rm -rf /var/lib/apt/lists/*
-RUN pip install --no-cache-dir -r requirements.txt
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y netcat-traditional && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy the requirements.txt file and install Python dependencies
+COPY postgres_service/requirements.txt /app/
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy the postgres_service directory
+COPY postgres_service .
 
 # Copy the core directory
 COPY core ./core
 
-# Copy the postgres_service directory
-COPY postgres_service ./postgres_service
+# Make the start script executable
+RUN chmod +x /app/start.sh
 
-RUN chmod +x postgres_service/start.sh
-
-CMD ["./postgres_service/start.sh"]
+CMD ["/app/start.sh"]

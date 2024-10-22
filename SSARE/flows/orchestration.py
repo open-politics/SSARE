@@ -23,15 +23,15 @@ async def create_scrape_jobs(raise_on_failure=True):
     return response.status_code == 200
 
 #@task
-async def store_raw_articles(raise_on_failure=True):
+async def store_raw_contents(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/store_raw_articles")
+        response = await client.post(f"{config.service_urls['postgres_service']}/store_raw_contents")
     return response.status_code == 200
 
 #@task
-async def deduplicate_articles(raise_on_failure=True):
+async def deduplicate_contents(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/deduplicate_articles")
+        response = await client.post(f"{config.service_urls['postgres_service']}/deduplicate_contents")
     return response.status_code == 200
 
 #@task
@@ -47,9 +47,9 @@ async def generate_embeddings(batch_size: int = 50, raise_on_failure=True):
     return response.status_code == 200
 
 #@task
-async def store_articles_with_embeddings(raise_on_failure=True):
+async def store_contents_with_embeddings(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/store_articles_with_embeddings")
+        response = await client.post(f"{config.service_urls['postgres_service']}/store_contents_with_embeddings")
     return response.status_code == 200
 
 
@@ -67,9 +67,9 @@ async def extract_entities(batch_size: int = 50, raise_on_failure=True):
 
 
 #@task
-async def store_articles_with_entities(raise_on_failure=True):
+async def store_contents_with_entities(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/store_articles_with_entities")
+        response = await client.post(f"{config.service_urls['postgres_service']}/store_contents_with_entities")
     return response.status_code == 200
 
 #@task
@@ -79,15 +79,15 @@ async def create_geocoding_jobs(raise_on_failure=True):
     return response.status_code == 200
 
 #@task
-async def geocode_articles(batch_size: int = 50, raise_on_failure=True):
+async def geocode_contents(batch_size: int = 50, raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['geo_service']}/geocode_articles", params={"batch_size": batch_size}, timeout=700)
+        response = await client.post(f"{config.service_urls['geo_service']}/geocode_contents", params={"batch_size": batch_size}, timeout=700)
     return response.status_code == 200
     
 #@task 
-async def store_articles_with_geocoding(raise_on_failure=True):
+async def store_contents_with_geocoding(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/store_articles_with_geocoding")
+        response = await client.post(f"{config.service_urls['postgres_service']}/store_contents_with_geocoding")
     return response.status_code == 200
 
 #@task
@@ -97,15 +97,15 @@ async def create_classification_jobs(raise_on_failure=True):
     return response.status_code == 200
 
 #@task
-async def classify_articles(batch_size: int = 50, raise_on_failure=True):
+async def classify_contents(batch_size: int = 50, raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['classification_service']}/classify_articles", params={"batch_size": batch_size}, timeout=700)
+        response = await client.post(f"{config.service_urls['classification_service']}/classify_contents", params={"batch_size": batch_size}, timeout=700)
     return response.status_code == 200
 
 #@task
-async def store_articles_with_classification(raise_on_failure=True):
+async def store_contents_with_classification(raise_on_failure=True):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{config.service_urls['postgres_service']}/store_articles_with_classification")
+        response = await client.post(f"{config.service_urls['postgres_service']}/store_contents_with_classification")
     return response.status_code == 200
 
 
@@ -117,7 +117,7 @@ async def scraping_flow():
     try:
         await produce_flags()
         await create_scrape_jobs()
-        await store_raw_articles()
+        await store_raw_contents()
     finally:
         await redis_conn.set('Orchestration in progress', '0')
 
@@ -127,10 +127,10 @@ async def embedding_flow():
     await redis_conn.set('Orchestration in progress', '1')
 
     try:
-        await deduplicate_articles()
+        await deduplicate_contents()
         await create_embedding_jobs()
         await generate_embeddings()
-        await store_articles_with_embeddings()
+        await store_contents_with_embeddings()
     finally:
         await redis_conn.set('Orchestration in progress', '0')
 
@@ -142,7 +142,7 @@ async def entity_extraction_flow():
     try:
         await create_entity_extraction_jobs()
         await extract_entities()
-        await store_articles_with_entities()
+        await store_contents_with_entities()
     finally:
         await redis_conn.set('Orchestration in progress', '0')
 
@@ -153,8 +153,8 @@ async def geocoding_flow():
 
     try:
         await create_geocoding_jobs()
-        await geocode_articles()
-        await store_articles_with_geocoding()
+        await geocode_contents()
+        await store_contents_with_geocoding()
     finally:
         await redis_conn.set('Orchestration in progress', '0')
 
@@ -165,8 +165,8 @@ async def classification_flow():
 
     try:
         await create_classification_jobs()
-        await classify_articles()
-        await store_articles_with_classification()
+        await classify_contents()
+        await store_contents_with_classification()
     finally:
         await redis_conn.set('Orchestration in progress', '0')
 
@@ -200,13 +200,13 @@ async def scraping_flow():
     if not scrape_result:
         raise ValueError("Failed to create scrape jobs.")
     
-    store_raw_result = await store_raw_articles()
+    store_raw_result = await store_raw_contents()
     if not store_raw_result:
-        raise ValueError("Failed to store raw articles.")
+        raise ValueError("Failed to store raw contents.")
     
-    deduplicate_result = await deduplicate_articles()
+    deduplicate_result = await deduplicate_contents()
     if not deduplicate_result:
-        raise ValueError("Failed to deduplicate articles.")
+        raise ValueError("Failed to deduplicate contents.")
     
     embedding_jobs_result = await create_embedding_jobs()
     if not embedding_jobs_result:
@@ -216,9 +216,9 @@ async def scraping_flow():
     if not generate_embeddings_result:
         raise ValueError("Failed to generate embeddings.")
     
-    store_embeddings_result = await store_articles_with_embeddings()
+    store_embeddings_result = await store_contents_with_embeddings()
     if not store_embeddings_result:
-        raise ValueError("Failed to store articles with embeddings.")
+        raise ValueError("Failed to store contents with embeddings.")
     
     extraction_jobs = await create_entity_extraction_jobs()
     if not extraction_jobs:
@@ -228,32 +228,32 @@ async def scraping_flow():
     if not entity_extraction_result:
         raise ValueError("Failed to extract entities.")
     
-    store_entities_result = await store_articles_with_entities()
+    store_entities_result = await store_contents_with_entities()
     if not store_entities_result:
-        raise ValueError("Failed to store articles with entities.")
+        raise ValueError("Failed to store contents with entities.")
     
     create_geocoding_result = await create_geocoding_jobs()
     if not create_geocoding_result:
         raise ValueError("Failed to create geocoding jobs.")
 
-    geocode_result = await geocode_articles()
+    geocode_result = await geocode_contents()
     if not geocode_result:
-        raise ValueError("Failed to geocode articles.")
+        raise ValueError("Failed to geocode contents.")
 
-    store_geocoding_result = await store_articles_with_geocoding()
+    store_geocoding_result = await store_contents_with_geocoding()
     if not store_geocoding_result:
-        raise ValueError("Failed to store articles with geocoding.")
+        raise ValueError("Failed to store contents with geocoding.")
 
     create_classification_result = await create_classification_jobs()
     if not create_classification_result:
         raise ValueError("Failed to create classification jobs.")
 
-    classify_result = await classify_articles()
+    classify_result = await classify_contents()
     if not classify_result:
-        raise ValueError("Failed to classify articles.")
+        raise ValueError("Failed to classify contents.")
     
-    store_classification_result = await store_articles_with_classification()
+    store_classification_result = await store_contents_with_classification()
     if not store_classification_result:
-        raise ValueError("Failed to store articles with classification.")
+        raise ValueError("Failed to store contents with classification.")
     
     await redis_conn.set('Orchestration complete', '0')

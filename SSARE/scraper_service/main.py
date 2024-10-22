@@ -3,7 +3,7 @@ from redis.asyncio import Redis
 from contextlib import asynccontextmanager
 import logging
 from prefect import task, flow
-from core.models import Article, Articles
+from core.models import Content
 from core.db import engine, get_session
 import json
 import asyncio

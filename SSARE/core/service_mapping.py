@@ -70,16 +70,16 @@ class ServiceConfig:
 
     # Redis channel mappings
     redis_queues = {
-        "articles_without_embedding_queue": {"db": 5, "key": "articles_without_embedding_queue"},
-        "articles_with_entities_queue": {"db": 2, "key": "articles_with_entities_queue"},
+        "contents_without_embedding_queue": {"db": 5, "key": "contents_without_embedding_queue"},
+        "contents_with_entities_queue": {"db": 2, "key": "contents_with_entities_queue"},
         "scrape_sources": {"db": 0, "key": "scrape_sources"},
-        "raw_articles_queue": {"db": 1, "key": "raw_articles_queue"},
-        "articles_with_embeddings": {"db": 6, "key": "articles_with_embeddings"},
-        "articles_without_entities_queue": {"db": 2, "key": "articles_without_entities_queue"},
-        "articles_without_geocoding_queue": {"db": 3, "key": "articles_without_geocoding_queue"},
-        "articles_with_geocoding_queue": {"db": 4, "key": "articles_with_geocoding_queue"},
-        "articles_without_classification_queue" : {"db": 4, "key": "articles_without_classification_queue"},
-        "articles_with_classification_queue" : {"db": 4, "key": "articles_with_classification_queue"},
+        "raw_contents_queue": {"db": 1, "key": "raw_contents_queue"},
+        "contents_with_embeddings": {"db": 6, "key": "contents_with_embeddings"},
+        "contents_without_entities_queue": {"db": 2, "key": "contents_without_entities_queue"},
+        "contents_without_geocoding_queue": {"db": 3, "key": "contents_without_geocoding_queue"},
+        "contents_with_geocoding_queue": {"db": 4, "key": "contents_with_geocoding_queue"},
+        "contents_without_classification_queue" : {"db": 4, "key": "contents_without_classification_queue"},
+        "contents_with_classification_queue" : {"db": 4, "key": "contents_with_classification_queue"},
         "Orchestration in progress": {"db": 1, "key": "Orchestration in progress"},
         "scrapers_running": {"db": 1, "key": "scrapers_running"}
     }

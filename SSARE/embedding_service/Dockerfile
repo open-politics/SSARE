@@ -6,8 +6,8 @@ WORKDIR /app
 COPY embedding_service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the core directory
-COPY core ./core
+# Copy the rest of the application code
+COPY . .
 
 # Copy the main.py and other files from postgres_service
 COPY embedding_service/main.py .

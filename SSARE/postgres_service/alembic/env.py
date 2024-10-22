@@ -1,8 +1,14 @@
 from sqlalchemy import engine_from_config, pool
 from alembic import context
-from sqlmodel import SQLModel
-from core.service_mapping import ServiceConfig
-from core.models import Article
+from app.core.models import SQLModel
+from app.core.service_mapping import ServiceConfig
+import os
+import logging
+import pgvector
+from logging.config import fileConfig
+
+config = context.config
+fileConfig(config.config_file_name)
 
 config = ServiceConfig()
 
@@ -12,6 +18,8 @@ DATABASE_URL = (
 )
 
 target_metadata = SQLModel.metadata
+logger = logging.getLogger('alembic')
+logger.info("target_metadata: %s", target_metadata)
 
 
 def run_migrations_offline():
@@ -28,6 +36,20 @@ def run_migrations_offline():
         context.run_migrations()
 
 
+def do_run_migrations(connection):
+    """Run migrations with vector type support."""
+    # Add the 'vector' type to the dialect's ischema_names
+    connection.dialect.ischema_names['vector'] = pgvector.sqlalchemy.Vector
+
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
 def run_migrations_online():
     """Run migrations in 'online' mode."""
     connectable = engine_from_config(
@@ -37,15 +59,7 @@ def run_migrations_online():
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            compare_type=True
-        )
-
-        with context.begin_transaction():
-            context.run_migrations()
-
+        do_run_migrations(connection)
 
 if context.is_offline_mode():
     run_migrations_offline()

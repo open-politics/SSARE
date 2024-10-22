@@ -31,7 +31,7 @@ from typing import AsyncGenerator
 from core.utils import logger
 from core.adb import engine, get_session, create_db_and_tables
 from core.middleware import add_cors_middleware
-from core.models import Article, Articles, ArticleEntity, ArticleTag, Entity, EntityLocation, Location, Tag, NewsArticleClassification
+from core.models import Content, ContentEntity, ContentTag, Entity, EntityLocation, Location, Tag, ContentClassification  # Updated imports
 from core.service_mapping import config
 
 router = APIRouter()
@@ -39,25 +39,23 @@ router = APIRouter()
 ########################################################################################
 ## HELPER FUNCTIONS
 
-@router.post("/deduplicate_articles")
-async def deduplicate_articles(session: AsyncSession = Depends(get_session)):
+@router.post("/deduplicate_contents")
+async def deduplicate_contents(session: AsyncSession = Depends(get_session)):
     try:
         async with session.begin():
-            query = select(Article).group_by(Article.id, Article.url).having(func.count() > 1)
+            query = select(Content).group_by(Content.id, Content.url).having(func.count() > 1)
             result = await session.execute(query)
-            duplicate_articles = result.scalars().all()
+            duplicate_contents = result.scalars().all()
 
-        for article in duplicate_articles:
-            logger.info(f"Duplicate article: {article.url}")
-            await session.delete(article)
+        for content in duplicate_contents:
+            logger.info(f"Duplicate content: {content.url}")
+            await session.delete(content)
 
         await session.commit()
-        return {"message": "Duplicate articles deleted successfully."}
+        return {"message": "Duplicate contents deleted successfully."}
     except Exception as e:
-        logger.error(f"Error deduplicating articles: {e}")
+        logger.error(f"Error deduplicating contents: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
 
 #### MISC
 
@@ -65,8 +63,8 @@ async def deduplicate_articles(session: AsyncSession = Depends(get_session)):
 async def delete_all_classifications(session: AsyncSession = Depends(get_session)):
     try:
         async with session.begin():
-            # Delete all records from the NewsArticleClassification table
-            await session.execute(delete(NewsArticleClassification))
+            # Delete all records from the ContentClassification table
+            await session.execute(delete(ContentClassification))
             await session.commit()
             logger.info("All classifications deleted successfully.")
             return {"message": "All classifications deleted successfully."}
@@ -78,84 +76,84 @@ async def delete_all_classifications(session: AsyncSession = Depends(get_session
 async def delete_all_embeddings(session: AsyncSession = Depends(get_session)):
     try:
         async with session.begin():
-            # Delete all embeddings from all articles
-            await session.execute(update(Article).values(embeddings=None))
+            # Delete all embeddings from all contents
+            await session.execute(update(Content).values(embeddings=None))
             await session.commit()
             logger.info("All embeddings deleted successfully.")
             return {"message": "All embeddings deleted successfully."}
     except Exception as e:
-        logger.error(f"Error deleting embeddings: {e}", exc_info=True)
+        logger.error(f"Error deleting embeddings: {e}")
         raise HTTPException(status_code=500, detail="Error deleting embeddings")
 
-@router.get("/articles_csv_quick")
-async def get_articles_csv_quick(session: AsyncSession = Depends(get_session)):
+@router.get("/contents_csv_quick")
+async def get_contents_csv_quick(session: AsyncSession = Depends(get_session)):
     try:
         async with session.begin():
-            query = select(Article.id, Article.url, Article.headline, Article.source, Article.insertion_date)
+            query = select(Content.id, Content.url, Content.title, Content.source, Content.insertion_date)
             result = await session.execute(query)
-            articles = result.fetchall()
+            contents = result.fetchall()
 
         # Create a DataFrame
-        df = pd.DataFrame(articles, columns=['id', 'url', 'headline', 'source', 'insertion_date'])
+        df = pd.DataFrame(contents, columns=['id', 'url', 'title', 'source', 'insertion_date'])
 
         # Convert DataFrame to CSV
         csv_buffer = StringIO()
         df.to_csv(csv_buffer, index=False)
         csv_buffer.seek(0)
 
-        return StreamingResponse(csv_buffer, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=articles_quick.csv"})
+        return StreamingResponse(csv_buffer, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=contents_quick.csv"})
 
     except Exception as e:
         logger.error(f"Error generating quick CSV: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error generating quick CSV")
     
-async def get_articles_csv(session: AsyncSession = Depends(get_session)):
+async def get_contents_csv(session: AsyncSession = Depends(get_session)):
     try:
         async with session.begin():
-            query = select(Article)
+            query = select(Content)
             result = await session.execute(query)
-            articles = result.scalars().all()
+            contents = result.scalars().all()
 
-        # Convert articles to a list of dictionaries
-        articles_data = [article.dict() for article in articles]
+        # Convert contents to a list of dictionaries
+        contents_data = [content.dict() for content in contents]
 
         # Create a DataFrame
-        df = pd.DataFrame(articles_data)
+        df = pd.DataFrame(contents_data)
 
         # Convert DataFrame to CSV
         csv_buffer = StringIO()
         df.to_csv(csv_buffer, index=False)
         csv_buffer.seek(0)
 
-        return StreamingResponse(csv_buffer, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=articles.csv"})
+        return StreamingResponse(csv_buffer, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=contents.csv"})
 
     except Exception as e:
         logger.error(f"Error generating CSV: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error generating CSV")
 
-@router.get("/articles_csv_full")
-async def get_articles_csv(session: AsyncSession = Depends(get_session)):
+@router.get("/contents_csv_full")
+async def get_contents_csv(session: AsyncSession = Depends(get_session)):
     try:
         async with session.begin():
-            query = select(Article).options(
-                selectinload(Article.entities).selectinload(Entity.locations),
-                selectinload(Article.tags),
-                selectinload(Article.classification)
+            query = select(Content).options(
+                selectinload(Content.entities).selectinload(Entity.locations),
+                selectinload(Content.tags),
+                selectinload(Content.classification)
             )
             result = await session.execute(query)
-            articles = result.scalars().all()
+            contents = result.scalars().all()
 
-        # Convert articles to a list of dictionaries
-        articles_data = []
-        for article in articles:
-            article_dict = {
-                "id": str(article.id),
-                "url": article.url,
-                "headline": article.headline,
-                "source": article.source,
-                "insertion_date": article.insertion_date.isoformat() if article.insertion_date else None,
-                "paragraphs": article.paragraphs,
-                "embeddings": article.embeddings.tolist() if article.embeddings is not None else None,
+        # Convert contents to a list of dictionaries
+        contents_data = []
+        for content in contents:
+            content_dict = {
+                "id": str(content.id),
+                "url": content.url,
+                "title": content.title,
+                "source": content.source,
+                "insertion_date": content.insertion_date.isoformat() if content.insertion_date else None,
+                "text_content": content.text_content,
+                "embeddings": content.embeddings.tolist() if content.embeddings is not None else None,
                 "entities": [
                     {
                         "id": str(e.id),
@@ -168,32 +166,32 @@ async def get_articles_csv(session: AsyncSession = Depends(get_session)):
                                 "coordinates": loc.coordinates.tolist() if loc.coordinates is not None else None
                             } for loc in e.locations
                         ] if e.locations else []
-                    } for e in article.entities
-                ] if article.entities else [],
+                    } for e in content.entities
+                ] if content.entities else [],
                 "tags": [
                     {
                         "id": str(t.id),
                         "name": t.name
-                    } for t in (article.tags or [])
+                    } for t in (content.tags or [])
                 ],
-                "classification": article.classification.dict() if article.classification else None
+                "classification": content.classification.dict() if content.classification else None
             }
-            articles_data.append(article_dict)
+            contents_data.append(content_dict)
 
         # Flatten the data for CSV
         flattened_data = []
-        for article in articles_data:
+        for content in contents_data:
             base_data = {
-                "id": article["id"],
-                "url": article["url"],
-                "headline": article["headline"],
-                "source": article["source"],
-                "insertion_date": article["insertion_date"],
-                "paragraphs": article["paragraphs"],
-                "embeddings": article["embeddings"],
+                "id": content["id"],
+                "url": content["url"],
+                "title": content["title"],
+                "source": content["source"],
+                "insertion_date": content["insertion_date"],
+                "text_content": content["text_content"],
+                "embeddings": content["embeddings"],
             }
-            if article["entities"]:
-                for entity in article["entities"]:
+            if content["entities"]:
+                for entity in content["entities"]:
                     entity_data = {
                         "entity_id": entity["id"],
                         "entity_name": entity["name"],
@@ -212,8 +210,42 @@ async def get_articles_csv(session: AsyncSession = Depends(get_session)):
         df.to_csv(csv_buffer, index=False)
         csv_buffer.seek(0)
 
-        return StreamingResponse(csv_buffer, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=articles.csv"})
+        return StreamingResponse(csv_buffer, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=contents.csv"})
 
     except Exception as e:
         logger.error(f"Error generating CSV: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error generating CSV")
+
+@router.get("/contents_with_chunks")
+async def get_contents_with_chunks(session: AsyncSession = Depends(get_session)):
+    try:
+        async with session.begin():
+            # Query contents and eagerly load chunks
+            query = select(Content).options(selectinload(Content.chunks))
+            result = await session.execute(query)
+            contents = result.scalars().all()
+
+        contents_with_chunks = []
+        for content in contents:
+            if content.chunks:
+                content_data = {
+                    "id": str(content.id),
+                    "url": content.url,
+                    "title": content.title,
+                    "source": content.source,
+                    "insertion_date": content.insertion_date if content.insertion_date else None,
+                    "chunks": [
+                        {
+                            "chunk_number": chunk.chunk_number,
+                            "text": chunk.text,
+                            "embeddings": chunk.embeddings
+                        } for chunk in content.chunks
+                    ]
+                }
+                contents_with_chunks.append(content_data)
+
+        return contents_with_chunks
+
+    except Exception as e:
+        logger.error(f"Error retrieving contents with chunks: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error retrieving contents with chunks")

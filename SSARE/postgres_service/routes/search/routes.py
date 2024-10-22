@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from core.adb import get_session
-from core.models import Article, Entity, Location, NewsArticleClassification, ArticleEntity, EntityLocation  # Ensure all models are imported
+from core.models import Content, Entity, Location, ContentClassification, ContentEntity, ContentChunk, EntityLocation
 from core.service_mapping import config
 from .models import SearchType
 from core.utils import logger
@@ -28,8 +28,8 @@ import uuid
 router = APIRouter()
 
 ##### Regular Articles Search
-@router.get("/articles")
-async def get_articles(
+@router.get("/contents")
+async def get_contents(
     url: Optional[str] = None,
     search_query: Optional[str] = None,
     search_type: SearchType = SearchType.TEXT,
@@ -69,23 +69,23 @@ async def get_articles(
 
         async with session.begin():
             # First, let's check if there are any articles in the database
-            count_query = select(func.count()).select_from(Article)
+            count_query = select(func.count()).select_from(Content)
             total_count = await session.execute(count_query)
             total_count = total_count.scalar()
             logger.info(f"Total number of articles in the database: {total_count}")
 
-            # Modify the initial query to include a join with NewsArticleClassification
-            query = select(Article).options(
-                selectinload(Article.entities).selectinload(Entity.locations),
-                selectinload(Article.tags),
-                selectinload(Article.classification)
-            ).join(NewsArticleClassification, isouter=True)  # Use outer join in case some articles don't have classification
+            # Modify the initial query to include a join with ContentChunk
+            query = select(Content).options(
+                selectinload(Content.entities).selectinload(Entity.locations),
+                selectinload(Content.tags),
+                selectinload(Content.classification)
+            ).join(ContentChunk, Content.id == ContentChunk.content_id, isouter=True)
             
             logger.info(f"Initial query: {query}")
 
             # Apply basic filters
             if url:
-                query = query.where(Article.url == url)
+                query = query.where(Content.url == url)
             
 
             logger.info(f"Query after basic filters: {query}")
@@ -93,11 +93,11 @@ async def get_articles(
             if news_category or secondary_category or keyword:
                 category_conditions = []
                 if news_category:
-                    category_conditions.append(NewsArticleClassification.news_category == news_category)
+                    category_conditions.append(ContentClassification.news_category == news_category)
                 if secondary_category:
-                    category_conditions.append(NewsArticleClassification.secondary_categories.any(secondary_category))
+                    category_conditions.append(ContentClassification.secondary_categories.any(secondary_category))
                 if keyword:
-                    category_conditions.append(NewsArticleClassification.keywords.any(keyword))
+                    category_conditions.append(ContentClassification.keywords.any(keyword))
                 
                 if category_conditions:
                     query = query.where(or_(*category_conditions))
@@ -106,14 +106,14 @@ async def get_articles(
             if search_query:
                 if search_type == SearchType.TEXT:
                     search_condition = or_(
-                        Article.headline.ilike(f'%{search_query}%'), 
-                        Article.paragraphs.ilike(f'%{search_query}%')
+                        Content.title.ilike(f'%{search_query}%'), 
+                        Content.text_content.ilike(f'%{search_query}%')
                     )
                     query = query.where(search_condition)
                     logger.info(f"Applied text search condition: {search_condition}")
                     
                     # Log the count of articles that match the search condition
-                    count_query = select(func.count()).select_from(Article).where(search_condition)
+                    count_query = select(func.count()).select_from(Content).where(search_condition)
                     search_count = await session.execute(count_query)
                     search_count = search_count.scalar()
                     logger.info(f"Number of articles matching the search query: {search_count}")
@@ -127,11 +127,8 @@ async def get_articles(
 
                         embedding_array = query_embeddings
 
-
-                        ## The actual vector search
-
-                        ## Let's get some stuff moving here
-                        query = query.order_by(Article.embeddings.l2_distance(embedding_array)).limit(limit)
+                        # Use ContentChunk embeddings for initial retrieval
+                        query = query.order_by(ContentChunk.embeddings.l2_distance(embedding_array)).limit(limit)
                     except httpx.HTTPError as e:
                         logger.error(f"Error calling NLP service: {e}")
                         raise HTTPException(status_code=500, detail="Failed to generate query embedding")
@@ -143,23 +140,23 @@ async def get_articles(
 
             # Apply entity filters
             if entity_list:
-                query = query.join(Article.entities).where(Entity.name.in_(entity_list))
+                query = query.join(Content.entities).where(Entity.name.in_(entity_list))
 
             # Apply location filters
             if location_list:
-                query = query.join(Article.entities).join(Entity.locations).where(Location.name.in_(location_list))
+                query = query.join(Content.entities).join(Entity.locations).where(Location.name.in_(location_list))
 
             # Apply topic filters
             if topic_list:
-                query = query.where(NewsArticleClassification.secondary_categories.any(topic_list))
+                query = query.where(ContentClassification.secondary_categories.any(topic_list))
 
             # Apply classification score filters
             for score_type, score_range in score_filters.items():
                 min_score, max_score = score_range
                 query = query.where(
                     and_(
-                        getattr(NewsArticleClassification, score_type) >= min_score,
-                        getattr(NewsArticleClassification, score_type) <= max_score
+                        getattr(ContentClassification, score_type) >= min_score,
+                        getattr(ContentClassification, score_type) <= max_score
                     )
                 )
 
@@ -168,8 +165,8 @@ async def get_articles(
                 for keyword, weight in keyword_weights_dict.items():
                     query = query.where(
                         or_(
-                            Article.headline.ilike(f'%{keyword}%') * weight,
-                            Article.paragraphs.ilike(f'%{keyword}%') * weight
+                            Content.title.ilike(f'%{keyword}%') * weight,
+                            Content.text_content.ilike(f'%{keyword}%') * weight
                         )
                     )
 
@@ -178,27 +175,27 @@ async def get_articles(
                 for keyword in exclude_keywords_list:
                     query = query.where(
                         and_(
-                            ~Article.headline.ilike(f'%{keyword}%'),
-                            ~Article.paragraphs.ilike(f'%{keyword}%')
+                            ~Content.title.ilike(f'%{keyword}%'),
+                            ~Content.text_content.ilike(f'%{keyword}%')
                         )
                     )
 
-            # Dynamically apply filters based on NewsArticleClassification fields
+            # Dynamically apply filters based on ContentClassification fields
             if filter_dict:
-                classification_fields = inspect(NewsArticleClassification).c.keys()
+                classification_fields = inspect(ContentClassification).c.keys()
                 for field, value in filter_dict.items():
                     if field in classification_fields:
                         if isinstance(value, dict) and 'min' in value and 'max' in value:
                             query = query.where(and_(
-                                getattr(NewsArticleClassification, field) >= value['min'],
-                                getattr(NewsArticleClassification, field) <= value['max']
+                                getattr(ContentClassification, field) >= value['min'],
+                                getattr(ContentClassification, field) <= value['max']
                             ))
                         else:
-                            query = query.where(getattr(NewsArticleClassification, field) == value)
+                            query = query.where(getattr(ContentClassification, field) == value)
 
             # Apply sorting
             if sort_by:
-                sort_column = getattr(NewsArticleClassification, sort_by, None)
+                sort_column = getattr(ContentClassification, sort_by, None)
                 if sort_column:
                     query = query.order_by(desc(sort_column) if sort_order == "desc" else sort_column)
 
@@ -213,21 +210,24 @@ async def get_articles(
 
             # Execute query
             result = await session.execute(query.offset(skip).limit(limit))
-            articles = result.unique().all()
+            contents = result.unique().all()
 
-            logger.info(f"Number of articles returned: {len(articles)}")
+            # Rerank articles based on some criteria if necessary
+            # For example, you could rerank based on the average similarity of chunks
 
-            articles_data = []
-            for article_tuple in articles:
-                article = article_tuple[0]  # The Article object is the first item in the tuple
-                article_dict = {
-                    "id": str(article.id),
-                    "url": article.url,
-                    "headline": article.headline,
-                    "source": article.source,
-                    "insertion_date": article.insertion_date.isoformat() if article.insertion_date else None,
-                    "paragraphs": article.paragraphs,
-                    "embeddings": article.embeddings.tolist() if article.embeddings is not None else None,
+            logger.info(f"Number of contents returned: {len(contents)}")
+
+            contents_data = []
+            for content_tuple in contents:
+                content = content_tuple[0]  # The Content object is the first item in the tuple
+                content_dict = {
+                    "id": str(content.id),
+                    "url": content.url,
+                    "title": content.title,
+                    "source": content.source,
+                    "insertion_date": content.insertion_date if content.insertion_date else None,
+                    "text_content": content.text_content,
+                    "embeddings": content.embeddings.tolist() if content.embeddings is not None else None,
                     "entities": [
                         {
                             "id": str(e.id),
@@ -236,31 +236,31 @@ async def get_articles(
                             "locations": [
                                 {
                                     "name": loc.name,
-                                    "type": loc.type,
+                                    "location_type": loc.location_type,
                                     "coordinates": loc.coordinates.tolist() if loc.coordinates is not None else None
                                 } for loc in e.locations
                             ] if e.locations else []
-                        } for e in article.entities
-                    ] if article.entities else [],
+                        } for e in content.entities
+                    ] if content.entities else [],
                     "tags": [
                         {
                             "id": str(t.id),
                             "name": t.name
-                        } for t in (article.tags or [])
+                        } for t in (content.tags or [])
                     ],
-                    "classification": article.classification.dict() if article.classification else None
+                    "classification": content.classification.dict() if content.classification else None
                 }
-                articles_data.append(article_dict)
+                contents_data.append(content_dict)
 
-            logger.info(f"Returning {len(articles_data)} articles")
-            return articles_data
+            logger.info(f"Returning {len(contents_data)} contents")
+            return contents_data
 
     except ValueError as e:
         logger.error(f"Invalid value for skip or limit: {e}")
         raise HTTPException(status_code=400, detail="Invalid value for skip or limit")
     except Exception as e:
-        logger.error(f"Error retrieving articles: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Error retrieving articles")
+        logger.error(f"Error retrieving contents: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error retrieving contents")
 
 ###### Entities for Location
 @router.get("/location_entities/{location_name}")
@@ -274,9 +274,9 @@ async def get_location_entities(
     try:
         # Subquery to find articles related to the given location
         subquery = (
-            select(Article.id)
-            .join(ArticleEntity, Article.id == ArticleEntity.article_id)
-            .join(Entity, ArticleEntity.entity_id == Entity.id)
+            select(Content.id)
+            .join(ContentEntity, Content.id == ContentEntity.content_id)
+            .join(Entity, ContentEntity.entity_id == Entity.id)
             .join(EntityLocation, Entity.id == EntityLocation.entity_id)
             .join(Location, EntityLocation.location_id == Location.id)
             .where(Location.name == location_name)
@@ -288,12 +288,12 @@ async def get_location_entities(
             select(
                 Entity.name,
                 Entity.entity_type,
-                func.count(distinct(Article.id)).label('article_count'),
-                func.sum(ArticleEntity.frequency).label('total_frequency')
+                func.count(distinct(Content.id)).label('article_count'),
+                func.sum(ContentEntity.frequency).label('total_frequency')
             )
-            .join(ArticleEntity, Entity.id == ArticleEntity.entity_id)
-            .join(Article, ArticleEntity.article_id == Article.id)
-            .where(Article.id.in_(select(subquery)))  # Explicitly convert subquery to select()
+            .join(ContentEntity, Entity.id == ContentEntity.entity_id)
+            .join(Content, ContentEntity.content_id == Content.id)
+            .where(Content.id.in_(select(subquery)))  # Explicitly convert subquery to select()
             .group_by(Entity.id, Entity.name, Entity.entity_type)
         )
 
@@ -379,12 +379,12 @@ async def get_most_relevant_entities(
             select(
                 Entity.name,
                 Entity.entity_type,
-                func.count(distinct(Article.id)).label('article_count'),
-                func.sum(ArticleEntity.frequency).label('total_frequency')
+                func.count(distinct(Content.id)).label('article_count'),
+                func.sum(ContentEntity.frequency).label('total_frequency')
             )
-            .join(ArticleEntity, Entity.id == ArticleEntity.entity_id)
-            .join(Article, ArticleEntity.article_id == Article.id)
-            .where(Article.id.in_(article_uuids))
+            .join(ContentEntity, Entity.id == ContentEntity.entity_id)
+            .join(Content, ContentEntity.content_id == Content.id)
+            .where(Content.id.in_(article_uuids))
             .group_by(Entity.id, Entity.name, Entity.entity_type)
         )
 
@@ -437,7 +437,7 @@ async def get_most_relevant_entities(
     
 
 #### Articles By Entitiy
-@router.get("/articles_by_entity/{entity_name}")
+@router.get("/contents_by_entity/{entity_name}")
 async def get_articles_by_entity(
     entity_name: str,
     skip: int = 0,
@@ -447,9 +447,9 @@ async def get_articles_by_entity(
     try:
         # Subquery to find articles related to the given entity
         subquery = (
-            select(Article.id)
-            .join(ArticleEntity, Article.id == ArticleEntity.article_id)
-            .join(Entity, ArticleEntity.entity_id == Entity.id)
+            select(Content.id)
+            .join(ContentEntity, Content.id == ContentEntity.content_id)
+            .join(Entity, ContentEntity.entity_id == Entity.id)
             .where(Entity.name == entity_name)
             .distinct()
             .subquery()
@@ -457,25 +457,25 @@ async def get_articles_by_entity(
 
         # Main query to get articles related to the entity
         query = (
-            select(Article)
-            .where(Article.id.in_(subquery))
+            select(Content)
+            .where(Content.id.in_(subquery))
             .offset(skip)
             .limit(limit)
         )
 
         result = await session.execute(query)
-        articles = result.scalars().all()
+        contents = result.scalars().all()
 
-        articles_data = []
-        for article in articles:
-            article_dict = {
-                "id": str(article.id),
-                "url": article.url,
-                "headline": article.headline,
-                "source": article.source,
-                "insertion_date": article.insertion_date.isoformat() if article.insertion_date else None,
-                "paragraphs": article.paragraphs,
-                "embeddings": article.embeddings.tolist() if article.embeddings is not None else None,
+        contents_data = []
+        for content in contents:
+            content_dict = {
+                "id": str(content.id),
+                "url": content.url,
+                "title": content.title,
+                "source": content.source,
+                "insertion_date": content.insertion_date.isoformat() if content.insertion_date else None,
+                "text_content": content.text_content,
+                "embeddings": content.embeddings.tolist() if content.embeddings is not None else None,
                 "entities": [
                     {
                         "id": str(e.id),
@@ -484,26 +484,28 @@ async def get_articles_by_entity(
                         "locations": [
                             {
                                 "name": loc.name,
-                                "type": loc.type,
+                                "location_type": loc.location_type,
                                 "coordinates": loc.coordinates.tolist() if loc.coordinates is not None else None
                             } for loc in e.locations
                         ] if e.locations else []
-                    } for e in article.entities
-                ] if article.entities else [],
+                    } for e in content.entities
+                ] if content.entities else [],
                 "tags": [
                     {
                         "id": str(t.id),
                         "name": t.name
-                    } for t in (article.tags or [])
+                    } for t in (content.tags or [])
                 ],
-                "classification": article.classification.dict() if article.classification else None
+                "classification": content.classification.dict() if content.classification else None
             }
-            articles_data.append(article_dict)
+            contents_data.append(content_dict)
 
-        logger.info(f"Returning {len(articles_data)} articles for entity '{entity_name}'")
-        return articles_data
+        logger.info(f"Returning {len(contents_data)} articles for entity '{entity_name}'")
+        return contents_data
 
     except Exception as e:
         logger.error(f"Error retrieving articles for entity '{entity_name}': {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error retrieving articles")
+
+
 

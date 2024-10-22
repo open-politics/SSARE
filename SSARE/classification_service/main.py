@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from openai import OpenAI
 import instructor
-from core.models import Article, ArticleTags, Tag, Entity, Location
+from core.models import Content, ContentClassification
 from core.utils import UUIDEncoder, logger
 from core.service_mapping import ServiceConfig
 from pydantic import BaseModel, Field
@@ -37,7 +37,7 @@ else:
     client = instructor.from_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
 
 # Extraction Data Model
-class NewsArticleClassification(BaseModel):
+class ContentClassification(BaseModel):
     title: str
     news_category: str
     secondary_categories: List[str]
@@ -58,6 +58,8 @@ class NewsArticleClassification(BaseModel):
                      'general_interest_score', 'spam_score', 'clickbait_score', 
                      'fake_news_score', 'satire_score', mode='before')
     def ensure_int_range(cls, v):
+        if isinstance(v, str) and v.isdigit():
+            v = int(v)  # Convert string to integer if it's a digit
         if not isinstance(v, int):
             raise ValueError(f"Value {v} is not an integer")
         if not (0 <= v <= 10):
@@ -76,11 +78,11 @@ class NewsArticleClassification(BaseModel):
 
 # Functions for LLM tasks
 @task(retries=1)
-def classify_article(article: Article) -> NewsArticleClassification:
-    """Classify the article using LLM."""
+def classify_content(content: Content) -> ContentClassification:
+    """Classify the content using LLM."""
     return client.chat.completions.create(
         model="llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4o-2024-08-06",
-        response_model=NewsArticleClassification,
+        response_model=ContentClassification,
         messages=[
             {
                 "role": "system",
@@ -88,90 +90,90 @@ def classify_article(article: Article) -> NewsArticleClassification:
             },
             {
                 "role": "user",
-                "content": f"Analyze this article and provide tags and metrics:\n\nHeadline: {article.headline}\n\nContent: {article.paragraphs if os.getenv('LOCAL_LLM') == 'False' else article.paragraphs[:350]}, be very critical.",
+                "content": f"Analyze this article and provide tags and metrics:\n\nHeadline: {content.title}\n\nContent: {content.text_content if os.getenv('LOCAL_LLM') == 'False' else content.text_content[:320]}, be very critical.",
             },
         ],
     )   
 
 @task
-def retrieve_articles_from_redis(batch_size: int = 50) -> List[Article]:
-    """Retrieve articles from Redis queue."""
+def retrieve_contents_from_redis(batch_size: int = 50) -> List[Content]:
+    """Retrieve contents from Redis queue."""
     redis_conn = Redis(host='redis', port=6379, db=4)
-    _articles = redis_conn.lrange('articles_without_classification_queue', 0, batch_size - 1)
-    redis_conn.ltrim('articles_without_classification_queue', batch_size, -1)
-    
-    if not _articles:
-        logger.warning("No articles retrieved from Redis.")
+    _contents = redis_conn.lrange('contents_without_classification_queue', 0, batch_size - 1)
+    redis_conn.ltrim('contents_without_classification_queue', batch_size, -1)
+
+    if not _contents:
+        logger.warning("No contents retrieved from Redis.")
         return []
-    
-    articles = []
-    for article_data in _articles:
+
+    contents = []
+    for content_data in _contents:
         try:
-            article_dict = json.loads(article_data)
-            article = Article(**article_dict)
-            articles.append(article)
+            content_dict = json.loads(content_data)
+            content = Content(**content_dict)
+            contents.append(content)
         except Exception as e:
-            logger.error(f"Invalid article: {article_data}")
+            logger.error(f"Invalid content: {content_data}")
             logger.error(f"Error: {e}")
-    
-    return articles
+
+    return contents
 
 @flow
-def process_articles(batch_size: int = 50):
-    """Process a batch of articles: retrieve, classify, and serialize them."""
-    articles = retrieve_articles_from_redis(batch_size=batch_size)
-    
-    if not articles:
-        logger.warning("No articles to process.")
+def process_contents(batch_size: int = 50):
+    """Process a batch of contents: retrieve, classify, and serialize them."""
+    contents = retrieve_contents_from_redis(batch_size=batch_size)
+
+    if not contents:
+        logger.warning("No contents to process.")
         return []
-    
-    logger.info(f"processing: {len(articles)} articles")
-    
-    processed_articles = []
-    for article in articles:
+
+    logger.info(f"Processing: {len(contents)} contents")
+
+    processed_contents = []
+    for content in contents:
         try:
-            classification = classify_article(article)
-            
-            # Combine article and classification data
-            article_dict = article.dict()
-            article_dict['classification'] = classification.dict()
-            
-            processed_articles.append(json.dumps(article_dict, cls=UUIDEncoder))
+            classification = classify_content(content)
+
+            # Combine content and classification data
+            content_dict = content.dict()
+            content_dict['classification'] = classification.dict()
+
+            processed_contents.append(json.dumps(content_dict, cls=UUIDEncoder))
             print(classification)
-            
+
             if os.getenv("LOCAL_LLM") == "True":
                 time.sleep(2)
         except Exception as e:
-            logger.error(f"Error processing article: {article}")
+            logger.error(f"Error processing content: {content}")
             logger.error(f"Error: {e}")
-    
-    if processed_articles:
-        write_articles_to_redis(processed_articles)
-    return processed_articles
+
+    if processed_contents:
+        write_contents_to_redis(processed_contents)
+    return processed_contents
 
 # @task
-def write_articles_to_redis(serialized_articles):
-    """Write serialized articles to Redis."""
-    if not serialized_articles:
-        logger.info("No articles to write to Redis")
+def write_contents_to_redis(serialized_contents):
+    """Write serialized contents to Redis."""
+    if not serialized_contents:
+        logger.info("No contents to write to Redis")
         return
 
     redis_conn_processed = Redis(host='redis', port=6379, db=4)
-    redis_conn_processed.lpush('articles_with_classification_queue', *serialized_articles)
-    logger.info(f"Wrote {len(serialized_articles)} articles with classification to Redis")
+    redis_conn_processed.lpush('contents_with_classification_queue', *serialized_contents)
+    logger.info(f"Wrote {len(serialized_contents)} contents with classification to Redis")
 
-@app.post("/classify_articles")
-def classify_articles_endpoint(batch_size: int = 50):
-    logger.debug("Processing articles")
-    processed_articles = process_articles(batch_size)
+@app.post("/classify_contents")
+def classify_contents_endpoint(batch_size: int = 50):
+    logger.debug("Processing contents")
+    processed_contents = process_contents(batch_size)
     
-    if not processed_articles:
-        return {"message": "No articles processed."}
+    if not processed_contents:
+        return {"message": "No contents processed."}
     
     return {
-        "message": "Articles processed successfully",
-        "processed_count": len(processed_articles),
-        "processed_articles": processed_articles
+        "message": "Contents processed successfully",
+        "processed_count": len(processed_contents),
+        "processed_contents": processed_contents
     }
 
 # Health endpoint
@@ -211,8 +213,6 @@ def split_query(query: str):
         Entity_Related = "Entity Related"
         Location_Related = "Location Related"
         Topic = "Topic"
-
-
         General = "General"
 
     class GeoDistribution(BaseModel):
