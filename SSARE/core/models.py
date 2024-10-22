@@ -26,7 +26,7 @@ class EntityLocation(SQLModel, table=True):
 class Content(BaseModel, table=True):
     url: str = Field(unique=True, index=True)
     title: Optional[str] = Field(default=None, index=True)
-    content_type: str = Field(index=True)  # e.g., 'article', 'video', 'audio', 'image'
+    content_type: Optional[str] = Field(default='fragment') # e.g., 'article', 'video', 'audio', 'image'
     source: Optional[str] = Field(default=None, index=True)
     insertion_date: str = Field(default_factory=lambda: datetime.utcnow().isoformat(), index=True)
     content_language: Optional[str] = Field(default=None, index=True)

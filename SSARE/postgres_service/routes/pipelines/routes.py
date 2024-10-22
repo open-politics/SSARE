@@ -62,11 +62,12 @@ async def store_raw_contents(session: AsyncSession = Depends(get_session)):
         contents = [json.loads(content) for content in raw_contents]
         contents = [Content(**content) for content in contents]
         logger.info("Retrieved raw contents from Redis")
-        logger.info(f"First 3 contents: {[{k: v for k, v in content.dict().items() if k in ['url', 'title']} for content in contents[:3]]}")
+        logger.info(f"First 1 content: {[{k: v for k, v in content.dict().items() if k in ['url', 'title']} for content in contents[:1]]}")
 
         async with session.begin():
             for content in contents:
                 try:
+                    # Check if content already exists
                     existing_content = await session.execute(select(Content).where(Content.url == content.url))
                     if existing_content.scalar_one_or_none() is not None:
                         logger.info(f"Updating existing content: {content.url}")
@@ -77,7 +78,7 @@ async def store_raw_contents(session: AsyncSession = Depends(get_session)):
                     await session.flush()
                 except Exception as e:
                     logger.error(f"Error processing content {content.url}: {str(e)}")
-                    # Continue processing other contents
+                   
 
         await session.commit()
 
@@ -100,7 +101,12 @@ async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
     logger.info("Trying to create embedding jobs.")
     try:
         async with session.begin():
-            query = select(Content).where(Content.embeddings == None)
+            query = select(Content).where(
+                and_(
+                    Content.embeddings == None,
+                    ~Content.chunks.any(ContentChunk.embeddings == None)
+                )
+            )
             result = await session.execute(query)
             contents_without_embeddings = result.scalars().all()
             logger.info(f"Found {len(contents_without_embeddings)} contents without embeddings.")
@@ -141,56 +147,42 @@ async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
 @router.post("/store_contents_with_embeddings")
 async def store_contents_with_embeddings(session: AsyncSession = Depends(get_session)):
     try:
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=6)
+        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=6, decode_responses=True)
         contents_with_embeddings = await redis_conn.lrange('contents_with_embeddings', 0, -1)
 
         async with session.begin():
-            for content_json in contents_with_embeddings:
+            for index, content_json in enumerate(contents_with_embeddings, 1):
                 try:
                     content_data = json.loads(content_json)
-                    logger.info(f"Processing content: {content_data.get('url')}")
+                    logger.info(f"Processing content {index}/{len(contents_with_embeddings)}: {content_data.get('url')}")
 
-                    # Handle content ID
-                    content_id = content_data.get('id')
-                    if content_id:
-                        content_data['id'] = UUID(content_id)
+                    # Find the content by URL and eagerly load the chunks
+                    result = await session.execute(
+                        select(Content).options(selectinload(Content.chunks)).where(Content.url == content_data['url'])
+                    )
+                    content = result.scalar_one_or_none()
 
-                    # Remove chunks from content data for Content model
-                    chunks_data = content_data.pop('chunks', [])
-
-                    # Upsert content
-                    existing_content = await session.get(Content, content_data['id'])
-                    if existing_content:
-                        for key, value in content_data.items():
-                            setattr(existing_content, key, value)
-                        content = existing_content
-                        logger.info(f"Updated existing content: {content.url}")
-                    else:
-                        content = Content(**content_data)
-                        session.add(content)
-                        logger.info(f"Added new content: {content.url}")
-                    await session.flush()  # To ensure content.id is available
-
-                    # Handle chunks
-                    for chunk_data in chunks_data:
-                        chunk_data['content_id'] = content.id  # Associate with the content
-                        chunk_number = chunk_data['chunk_number']
-                        # Check if chunk exists
-                        existing_chunk = await session.execute(
-                            select(ContentChunk).where(
-                                ContentChunk.content_id == content.id,
-                                ContentChunk.chunk_number == chunk_number
+                    if content:
+                        # Handle chunks
+                        for chunk_data in content_data.get('chunks', []):
+                            chunk_data['content_id'] = content.id  # Associate with the content
+                            chunk_number = chunk_data['chunk_number']
+                            # Check if chunk exists
+                            existing_chunk = await session.execute(
+                                select(ContentChunk).where(
+                                    ContentChunk.content_id == content.id,
+                                    ContentChunk.chunk_number == chunk_number
+                                )
                             )
-                        )
-                        existing_chunk = existing_chunk.scalar_one_or_none()
-                        if existing_chunk:
-                            for key, value in chunk_data.items():
-                                setattr(existing_chunk, key, value)
-                            logger.info(f"Updated existing chunk number {chunk_number} for content {content.url}")
-                        else:
-                            chunk = ContentChunk(**chunk_data)
-                            session.add(chunk)
-                            logger.info(f"Added new chunk number {chunk_number} for content {content.url}")
+                            existing_chunk = existing_chunk.scalar_one_or_none()
+                            if existing_chunk:
+                                for key, value in chunk_data.items():
+                                    setattr(existing_chunk, key, value)
+                                logger.info(f"Updated existing chunk number {chunk_number} for content {content.url}")
+                            else:
+                                chunk = ContentChunk(**chunk_data)
+                                session.add(chunk)
+                                logger.info(f"Added new chunk number {chunk_number} for content {content.url}")
 
                 except ValidationError as e:
                     logger.error(f"Validation error for content: {e}")
@@ -205,11 +197,12 @@ async def store_contents_with_embeddings(session: AsyncSession = Depends(get_ses
         # Clear the processed contents from Redis
         await redis_conn.ltrim('contents_with_embeddings', len(contents_with_embeddings), -1)
         await redis_conn.close()
-
-        return {"message": "Contents with embeddings stored successfully in PostgreSQL."}
     except Exception as e:
         logger.error(f"Error storing contents with embeddings: {e}", exc_info=True)
+        await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        await session.close()
 
 ########################################################################################
 ## 3. ENTITY PIPELINE
@@ -607,6 +600,13 @@ async def store_contents_with_classification(session: AsyncSession = Depends(get
     except Exception as e:
         logger.error(f"Error storing classified contents: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
+
+
+
+
+
+
+
 
 
 

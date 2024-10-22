@@ -249,3 +249,44 @@ async def get_contents_with_chunks(session: AsyncSession = Depends(get_session))
     except Exception as e:
         logger.error(f"Error retrieving contents with chunks: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error retrieving contents with chunks")
+
+@router.post("/fix_and_purge_null_content_type")
+async def fix_and_purge_null_content_type(session: AsyncSession = Depends(get_session)):
+    """
+    Fixes entries with NULL content_type by setting a default value and purges any remaining NULL entries.
+    """
+    try:
+        async with session.begin():
+            # Fix entries where content_type is NULL by setting a default value
+            fix_stmt = (
+                update(Content)
+                .where(Content.content_type == None)
+                .values(content_type='default_type')  # Replace 'default_type' with an appropriate value
+            )
+            result = await session.execute(fix_stmt)
+            fixed_count = result.rowcount
+            logger.info(f"Fixed {fixed_count} entries with NULL content_type by setting a default value.")
+
+            # Purge any remaining entries with NULL content_type, if any
+            purge_stmt = select(Content).where(Content.content_type == None)
+            result = await session.execute(purge_stmt)
+            contents_to_purge = result.scalars().all()
+            purge_count = len(contents_to_purge)
+
+            for content in contents_to_purge:
+                await session.delete(content)
+
+            if purge_count > 0:
+                logger.info(f"Purged {purge_count} additional articles with NULL content_type.")
+                purge_message = f"Purged {purge_count} articles with NULL content_type successfully."
+            else:
+                purge_message = "No additional articles found with NULL content_type to purge."
+
+        await session.commit()
+        return {
+            "message": f"Fixed {fixed_count} entries with NULL content_type and {purge_message}"
+        }
+    except Exception as e:
+        logger.error(f"Error fixing and purging articles: {e}", exc_info=True)
+        await session.rollback()
+        raise HTTPException(status_code=500, detail="Failed to fix and purge articles with NULL content_type.")
