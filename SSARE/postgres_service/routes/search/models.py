@@ -7,3 +7,4 @@ class SearchType(str, Enum):
     TEXT = "text"
     SEMANTIC = "semantic"
     STRUCTURED = "structured" 
+    LOCATION = "location"

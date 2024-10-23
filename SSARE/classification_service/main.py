@@ -38,8 +38,7 @@ else:
 
 # Extraction Data Model
 class ContentClassification(BaseModel):
-    title: str
-    news_category: str
+    news_category: str = Field(alias="category")  
     secondary_categories: List[str]
     keywords: List[str]
     geopolitical_relevance: int

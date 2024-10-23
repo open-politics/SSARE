@@ -120,10 +120,14 @@ async def scrape_sources_flow(flags):
                 redis_conn = Redis(host='redis', port=6379, db=1, decode_responses=True)
                 await redis_conn.set('scrapers_running', '1')
                 contents = await scrape_source_by_script_for_flag(flag)
+                logger.warning(f"Scraped {len(contents)} contents for {flag}")
                 if contents is None:
                     continue
                 processed_contents = await process_contents_to_model(contents, flag)
+                logger.warning(f"Processed {len(processed_contents)} contents for {flag}")
                 await save_contents_to_redis(processed_contents, flag)
+                # Example with initial first characters of the first content
+                logger.warning(f"First content: {processed_contents[0].title[:10]}")
                 await redis_conn.set('scrapers_running', '0')
                 await redis_conn.aclose()
             except Exception as e:

@@ -349,10 +349,6 @@ async def search_contents(
     request: Request,
     search_query: str = Query(None),
     search_type: str = Query("text"),
-    has_embedding: bool = Query(False),
-    has_geocoding: bool = Query(False),
-    has_entities: bool = Query(False),
-    has_classification: bool = Query(False),
     skip: int = 0,
     limit: int = 10
 ):
@@ -363,10 +359,6 @@ async def search_contents(
             params={
                 "search_query": search_query,
                 "search_type": search_type,
-                "has_embedding": has_embedding,
-                "has_geocoding": has_geocoding,
-                "has_entities": has_entities,
-                "has_classification": has_classification,  
                 "skip": skip,
                 "limit": limit
             }

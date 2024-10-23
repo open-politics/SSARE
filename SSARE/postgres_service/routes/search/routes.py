@@ -10,7 +10,7 @@ import httpx
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import and_, func, or_, desc, distinct
+from sqlalchemy import and_, func, or_, desc, distinct, exists
 from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -23,6 +23,7 @@ from core.utils import logger
 
 from pydantic import BaseModel
 import uuid
+from datetime import datetime
 
 
 router = APIRouter()
@@ -48,14 +49,9 @@ async def get_contents(
     classification_scores: Optional[str] = Query(None, description="JSON string of classification score ranges"),
     keyword_weights: Optional[str] = Query(None, description="JSON string of keyword weights"),
     exclude_keywords: Optional[str] = Query(None, description="Comma-separated list of exclude keywords"),
-    ):
-    logger.info(f"Received parameters: url={url}, search_query={search_query}, search_type={search_type}, "
-                f"skip={skip}, limit={limit}, sort_by={sort_by}, sort_order={sort_order}, filters={filters}, "
-                f"entities={entities}, locations={locations}, topics={topics}, classification_scores={classification_scores}, "
-                f"keyword_weights={keyword_weights}, exclude_keywords={exclude_keywords}")
-
+):
     try:
-        # Parse filters
+        # Parse filters and parameters
         filter_dict = json.loads(filters) if filters else {}
         entity_list = entities.split(",") if entities else []
         location_list = locations.split(",") if locations else []
@@ -64,32 +60,90 @@ async def get_contents(
         keyword_weights_dict = json.loads(keyword_weights) if keyword_weights else {}
         exclude_keywords_list = exclude_keywords.split(",") if exclude_keywords else []
 
-        # Ensure skip is an integer
-        skip = int(skip) if skip is not None else 0
-
         async with session.begin():
-            # First, let's check if there are any articles in the database
-            count_query = select(func.count()).select_from(Content)
-            total_count = await session.execute(count_query)
-            total_count = total_count.scalar()
-            logger.info(f"Total number of articles in the database: {total_count}")
-
-            # Modify the initial query to include a join with ContentChunk
+            # Base query with eager loading
             query = select(Content).options(
                 selectinload(Content.entities).selectinload(Entity.locations),
                 selectinload(Content.tags),
                 selectinload(Content.classification)
-            ).join(ContentChunk, Content.id == ContentChunk.content_id, isouter=True)
-            
-            logger.info(f"Initial query: {query}")
+            )
+
+            # Handle location-based filtering
+            if location_list:
+                # Create a subquery to get all content IDs related to the locations
+                location_subquery = (
+                    select(distinct(Content.id))
+                    .select_from(Content)
+                    .join(ContentEntity)
+                    .join(Entity)
+                    .join(EntityLocation)
+                    .join(Location)
+                    .where(Location.name.in_(location_list))
+                )
+
+                # Apply the subquery filter using EXISTS
+                query = (
+                    select(Content)
+                    .options(
+                        selectinload(Content.entities).selectinload(Entity.locations),
+                        selectinload(Content.tags),
+                        selectinload(Content.classification)
+                    )
+                    .join(ContentEntity, Content.id == ContentEntity.content_id)
+                    .join(Entity, ContentEntity.entity_id == Entity.id)
+                    .join(EntityLocation, Entity.id == EntityLocation.entity_id)
+                    .join(Location, EntityLocation.location_id == Location.id)
+                    .where(Location.name.in_(location_list))
+                    .distinct()
+                )
+
+                # Add logging to help debug
+                logger.info(f"Location subquery: {location_subquery}")
+                subquery_count = await session.execute(
+                    select(func.count()).select_from(location_subquery.subquery())
+                )
+                matching_count = subquery_count.scalar()
+                logger.info(f"Number of matching content IDs: {matching_count}")
+
+            # Apply search based on search_type
+            if search_query:
+                if search_type == SearchType.TEXT:
+                    search_condition = or_(
+                        func.lower(Content.title).contains(func.lower(search_query)),
+                        func.lower(Content.text_content).contains(func.lower(search_query)),
+                        exists().where(
+                            and_(
+                                ContentEntity.content_id == Content.id,
+                                Entity.id == ContentEntity.entity_id,
+                                func.lower(Entity.name).contains(func.lower(search_query))
+                            )
+                        )
+                    )
+                    query = query.where(search_condition)
+                elif search_type == SearchType.SEMANTIC:
+                    try:
+                        async with httpx.AsyncClient() as client:
+                            response = await client.get(
+                                f"{config.service_urls['embedding_service']}/generate_query_embeddings",
+                                params={"query": search_query}
+                            )
+                            response.raise_for_status()
+                            query_embeddings = response.json()["embeddings"]
+                            
+                        # Join with ContentChunk for semantic search
+                        query = (
+                            query.join(ContentChunk, Content.id == ContentChunk.content_id)
+                            .order_by(ContentChunk.embeddings.l2_distance(query_embeddings))
+                        )
+                    except Exception as e:
+                        logger.error(f"Semantic search error: {e}")
+                        raise HTTPException(status_code=500, detail="Semantic search failed")
 
             # Apply basic filters
             if url:
                 query = query.where(Content.url == url)
-            
 
-            logger.info(f"Query after basic filters: {query}")
-
+            # Apply category filters
             if news_category or secondary_category or keyword:
                 category_conditions = []
                 if news_category:
@@ -98,53 +152,12 @@ async def get_contents(
                     category_conditions.append(ContentClassification.secondary_categories.any(secondary_category))
                 if keyword:
                     category_conditions.append(ContentClassification.keywords.any(keyword))
-                
                 if category_conditions:
                     query = query.where(or_(*category_conditions))
 
-            # Apply search based on search_type
-            if search_query:
-                if search_type == SearchType.TEXT:
-                    search_condition = or_(
-                        Content.title.ilike(f'%{search_query}%'), 
-                        Content.text_content.ilike(f'%{search_query}%')
-                    )
-                    query = query.where(search_condition)
-                    logger.info(f"Applied text search condition: {search_condition}")
-                    
-                    # Log the count of articles that match the search condition
-                    count_query = select(func.count()).select_from(Content).where(search_condition)
-                    search_count = await session.execute(count_query)
-                    search_count = search_count.scalar()
-                    logger.info(f"Number of articles matching the search query: {search_count}")
-                elif search_type == SearchType.SEMANTIC:
-                    try:
-                        # Get query embedding from NLP service
-                        async with httpx.AsyncClient() as client:
-                            response = await client.get(f"{config.service_urls['embedding_service']}/generate_query_embeddings", params={"query": search_query})
-                            response.raise_for_status()
-                            query_embeddings = response.json()["embeddings"]
-
-                        embedding_array = query_embeddings
-
-                        # Use ContentChunk embeddings for initial retrieval
-                        query = query.order_by(ContentChunk.embeddings.l2_distance(embedding_array)).limit(limit)
-                    except httpx.HTTPError as e:
-                        logger.error(f"Error calling NLP service: {e}")
-                        raise HTTPException(status_code=500, detail="Failed to generate query embedding")
-                    except Exception as e:
-                        logger.error(f"Unexpected error in semantic search: {e}")
-                        raise HTTPException(status_code=500, detail="Unexpected error in semantic search")
-
-            logger.info(f"Query after search: {query}")
-
             # Apply entity filters
             if entity_list:
-                query = query.join(Content.entities).where(Entity.name.in_(entity_list))
-
-            # Apply location filters
-            if location_list:
-                query = query.join(Content.entities).join(Entity.locations).where(Location.name.in_(location_list))
+                query = query.where(Entity.name.in_(entity_list))
 
             # Apply topic filters
             if topic_list:
@@ -180,46 +193,20 @@ async def get_contents(
                         )
                     )
 
-            # Dynamically apply filters based on ContentClassification fields
-            if filter_dict:
-                classification_fields = inspect(ContentClassification).c.keys()
-                for field, value in filter_dict.items():
-                    if field in classification_fields:
-                        if isinstance(value, dict) and 'min' in value and 'max' in value:
-                            query = query.where(and_(
-                                getattr(ContentClassification, field) >= value['min'],
-                                getattr(ContentClassification, field) <= value['max']
-                            ))
-                        else:
-                            query = query.where(getattr(ContentClassification, field) == value)
-
             # Apply sorting
             if sort_by:
                 sort_column = getattr(ContentClassification, sort_by, None)
                 if sort_column:
                     query = query.order_by(desc(sort_column) if sort_order == "desc" else sort_column)
 
-            # After applying all filters
-            count_query = select(func.count()).select_from(query.subquery())
-            filtered_count = await session.execute(count_query)
-            filtered_count = filtered_count.scalar()
-            logger.info(f"Number of articles after applying all filters: {filtered_count}")
-
-            # Log the final SQL query
-            logger.info(f"Final SQL query: {query.compile(compile_kwargs={'literal_binds': True})}")
-
-            # Execute query
+            # Execute query with pagination
             result = await session.execute(query.offset(skip).limit(limit))
             contents = result.unique().all()
 
-            # Rerank articles based on some criteria if necessary
-            # For example, you could rerank based on the average similarity of chunks
-
-            logger.info(f"Number of contents returned: {len(contents)}")
-
+            # Format response
             contents_data = []
             for content_tuple in contents:
-                content = content_tuple[0]  # The Content object is the first item in the tuple
+                content = content_tuple[0] if isinstance(content_tuple, tuple) else content_tuple
                 content_dict = {
                     "id": str(content.id),
                     "url": content.url,
@@ -252,12 +239,11 @@ async def get_contents(
                 }
                 contents_data.append(content_dict)
 
-            logger.info(f"Returning {len(contents_data)} contents")
             return contents_data
 
     except ValueError as e:
-        logger.error(f"Invalid value for skip or limit: {e}")
-        raise HTTPException(status_code=400, detail="Invalid value for skip or limit")
+        logger.error(f"Invalid value error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error retrieving contents: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error retrieving contents")
@@ -445,26 +431,24 @@ async def get_articles_by_entity(
     session: AsyncSession = Depends(get_session)
     ):
     try:
-        # Subquery to find articles related to the given entity
-        subquery = (
-            select(Content.id)
+        # Main query to get articles related to the entity with eager loading
+        query = (
+            select(Content)
+            .options(
+                selectinload(Content.entities).selectinload(Entity.locations),
+                selectinload(Content.tags),
+                selectinload(Content.classification)
+            )
             .join(ContentEntity, Content.id == ContentEntity.content_id)
             .join(Entity, ContentEntity.entity_id == Entity.id)
             .where(Entity.name == entity_name)
             .distinct()
-            .subquery()
-        )
-
-        # Main query to get articles related to the entity
-        query = (
-            select(Content)
-            .where(Content.id.in_(subquery))
             .offset(skip)
             .limit(limit)
         )
 
         result = await session.execute(query)
-        contents = result.scalars().all()
+        contents = result.unique().scalars().all()
 
         contents_data = []
         for content in contents:
@@ -473,7 +457,7 @@ async def get_articles_by_entity(
                 "url": content.url,
                 "title": content.title,
                 "source": content.source,
-                "insertion_date": content.insertion_date.isoformat() if content.insertion_date else None,
+                "insertion_date": content.insertion_date if content.insertion_date else None,
                 "text_content": content.text_content,
                 "embeddings": content.embeddings.tolist() if content.embeddings is not None else None,
                 "entities": [
@@ -506,6 +490,81 @@ async def get_articles_by_entity(
     except Exception as e:
         logger.error(f"Error retrieving articles for entity '{entity_name}': {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error retrieving articles")
+
+
+#### Articles By Location
+@router.get("/contents_by_location/{location}")
+async def get_articles_by_location(
+    location: str,
+    skip: int,
+    limit: int,
+    session: AsyncSession = Depends(get_session)
+):
+    try:
+        async with session.begin():
+            # Query to get contents and their associated locations
+            query = (
+                select(Content)
+                .options(
+                    selectinload(Content.entities).selectinload(Entity.locations),
+                    selectinload(Content.tags),
+                    selectinload(Content.classification)
+                )
+                .join(ContentEntity, Content.id == ContentEntity.content_id)
+                .join(Entity, ContentEntity.entity_id == Entity.id)
+                .join(EntityLocation, Entity.id == EntityLocation.entity_id)
+                .join(Location, EntityLocation.location_id == Location.id)
+                .where(Location.name == location)
+                .distinct()
+                .offset(skip)
+                .limit(limit)
+            )
+
+            result = await session.execute(query)
+            contents = result.unique().scalars().all()
+            logger.info(f"Retrieved {len(contents)} contents for location '{location}'")
+
+            # Format response within the async context
+            contents_data = []
+            for content in contents:
+                content_dict = {
+                    "id": str(content.id),
+                    "url": content.url,
+                    "title": content.title,
+                    "source": content.source,
+                    "insertion_date": content.insertion_date if content.insertion_date else None,
+                    "text_content": content.text_content,
+                    "embeddings": content.embeddings.tolist() if content.embeddings is not None else None,
+                    "entities": [
+                        {
+                            "id": str(e.id),
+                            "name": e.name,
+                            "entity_type": e.entity_type,
+                            "locations": [
+                                {
+                                    "name": loc.name,
+                                    "location_type": loc.location_type,
+                                    "coordinates": loc.coordinates.tolist() if loc.coordinates is not None else None
+                                } for loc in e.locations
+                            ] if e.locations else []
+                        } for e in content.entities
+                    ] if content.entities else [],
+                    "tags": [
+                        {
+                            "id": str(t.id),
+                            "name": t.name
+                        } for t in (content.tags or [])
+                    ],
+                    "classification": content.classification.dict() if content.classification else None
+                }
+                contents_data.append(content_dict)
+
+            return contents_data
+
+    except Exception as e:
+        logger.error(f"Error retrieving articles for location '{location}': {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving articles")
+
 
 
 
