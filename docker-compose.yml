@@ -7,10 +7,13 @@ services:
       - POSTGRES_USER=${ARTICLES_DB_USER}
       - POSTGRES_PASSWORD=${ARTICLES_DB_PASSWORD}
       - POSTGRES_DB=${ARTICLES_DB_NAME}
+      - POSTGRES_CONFIG_FILE=/etc/postgresql.conf
     volumes:
+      - ./SSARE/articles_db/postgres.conf:/etc/postgresql.conf
       - ./data/articles_db_data:/var/lib/postgresql/data
+    command: -c shared_preload_libraries='pg_stat_statements' -c pg_stat_statements.max=10000 -c pg_stat_statements.track=all
     ports:
-      - "${ARTICLES_DB_PORT}:5432"
+      - "${ARTICLES_DB_PORT}:5473"
     networks:
       - default
       - ssare-network
@@ -245,70 +248,70 @@ services:
       - default
       - ssare-network
 
-  r2r:
-    build: 
-      context: ./SSARE
-      dockerfile: ./r2r_server/Dockerfile
-    ports:
-      - "${R2R_PORT}:8000"
-    environment:
-      - POSTGRES_USER=${R2R_DB_USER}
-      - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
-      - POSTGRES_HOST=r2r_database
-      - POSTGRES_PORT=5432
-      - POSTGRES_DBNAME=${R2R_DB_NAME}
-      - POSTGRES_VECS_COLLECTION=r2r_vecs_3
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - CONFIG_OPTION=${CONFIG_OPTION:-default}
-      - HATCHET_CLIENT_TOKEN=${HATCHET_CLIENT_TOKEN}
-    depends_on:
-      - r2r_database
-    networks:
-      - default
-      - ssare-network
+  # r2r:
+  #   build: 
+  #     context: ./SSARE
+  #     dockerfile: ./r2r_server/Dockerfile
+  #   ports:
+  #     - "${R2R_PORT}:8000"
+  #   environment:
+  #     - POSTGRES_USER=${R2R_DB_USER}
+  #     - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
+  #     - POSTGRES_HOST=r2r_database
+  #     - POSTGRES_PORT=5432
+  #     - POSTGRES_DBNAME=${R2R_DB_NAME}
+  #     - POSTGRES_VECS_COLLECTION=r2r_vecs_3
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #     - CONFIG_OPTION=${CONFIG_OPTION:-default}
+  #     - HATCHET_CLIENT_TOKEN=${HATCHET_CLIENT_TOKEN}
+  #   depends_on:
+  #     - r2r_database
+  #   networks:
+  #     - default
+  #     - ssare-network
 
-  r2r_database:
-    image: pgvector/pgvector:pg16
-    restart: always
-    environment:
-      - POSTGRES_USER=${R2R_DB_USER}
-      - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
-      - POSTGRES_DB=${R2R_DB_NAME}
-    volumes:
-      - r2r_db_data:/var/lib/postgresql/data
-    ports:
-      - "${R2R_DB_PORT}:5432"
-    networks:
-      - default
-      - ssare-network
+  # r2r_database:
+  #   image: pgvector/pgvector:pg16
+  #   restart: always
+  #   environment:
+  #     - POSTGRES_USER=${R2R_DB_USER}
+  #     - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
+  #     - POSTGRES_DB=${R2R_DB_NAME}
+  #   volumes:
+  #     - r2r_db_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "${R2R_DB_PORT}:5432"
+  #   networks:
+  #     - default
+  #     - ssare-network
 
-  rag_service:
-    build: 
-      context: ./SSARE
-      dockerfile: ./rag_service/Dockerfile
-    restart: no
-    ports:
-      - "${RAG_SERVICE_PORT}:4312"
-    depends_on:
-      - redis
-      - r2r_database
-    networks:
-      - default
-      - ssare-network
-    environment:
-      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
-      - POSTGRES_HOST=r2r_database
-      - POSTGRES_USER=${R2R_DB_USER}
-      - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
-      - POSTGRES_DBNAME=${R2R_DB_NAME}
-      - POSTGRES_PORT=5432
-      - POSTGRES_VECS_COLLECTION=ssare-vec
-      - INIT_DB=true
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - R2R_SERVER_URL=http://r2r:${R2R_PORT}
-      - HATCHET_CLIENT_TOKEN=${HATCHET_CLIENT_TOKEN}
-    env_file:
-      - .env
+  # rag_service:
+  #   build: 
+  #     context: ./SSARE
+  #     dockerfile: ./rag_service/Dockerfile
+  #   restart: no
+  #   ports:
+  #     - "${RAG_SERVICE_PORT}:4312"
+  #   depends_on:
+  #     - redis
+  #     - r2r_database
+  #   networks:
+  #     - default
+  #     - ssare-network
+  #   environment:
+  #     - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+  #     - POSTGRES_HOST=r2r_database
+  #     - POSTGRES_USER=${R2R_DB_USER}
+  #     - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
+  #     - POSTGRES_DBNAME=${R2R_DB_NAME}
+  #     - POSTGRES_PORT=5432
+  #     - POSTGRES_VECS_COLLECTION=ssare-vec
+  #     - INIT_DB=true
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #     - R2R_SERVER_URL=http://r2r:${R2R_PORT}
+  #     - HATCHET_CLIENT_TOKEN=${HATCHET_CLIENT_TOKEN}
+  #   env_file:
+  #     - .env
 
   redis:
     image: redis:latest
@@ -321,17 +324,17 @@ services:
       - default
       - ssare-network
 
-  reranker_service:
-    build: 
-      context: ./SSARE
-      dockerfile: ./reranker_service/Dockerfile
-    ports:
-      - "${RERANKER_SERVICE_PORT}:6930"
-    environment:
-      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
-    networks:
-      - default
-      - ssare-network
+  # reranker_service:
+  #   build: 
+  #     context: ./SSARE
+  #     dockerfile: ./reranker_service/Dockerfile
+  #   ports:
+  #     - "${RERANKER_SERVICE_PORT}:6930"
+  #   environment:
+  #     - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+  #   networks:
+  #     - default
+  #     - ssare-network
 
   scraper_service:
     build: 
@@ -347,15 +350,15 @@ services:
       - default
       - ssare-network
 
-  semantic_router:
-    build: 
-      context: ./SSARE
-      dockerfile: ./semantic_router/Dockerfile
-    ports:
-      - "${SEMANTIC_ROUTER_PORT}:${SEMANTIC_ROUTER_PORT}"
-    networks:
-      - default
-      - ssare-network
+  # semantic_router:
+  #   build: 
+  #     context: ./SSARE
+  #     dockerfile: ./semantic_router/Dockerfile
+  #   ports:
+  #     - "${SEMANTIC_ROUTER_PORT}:${SEMANTIC_ROUTER_PORT}"
+  #   networks:
+  #     - default
+  #     - ssare-network
 
 volumes:
   articles_db_data:

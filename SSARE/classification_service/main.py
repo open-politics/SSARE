@@ -17,6 +17,9 @@ import time
 from uuid import UUID
 from pydantic import BaseModel, field_validator
 from typing import List
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Depends
 
 app = FastAPI()
 config = ServiceConfig()
@@ -281,7 +284,6 @@ def split_query(query: str):
     #     """
     #     primary_query: str
     #     combined_queries: List[str]
-
 
 
 

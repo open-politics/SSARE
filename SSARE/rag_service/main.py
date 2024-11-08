@@ -5,7 +5,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Query, Body
 from fastapi.responses import JSONResponse
 from core.service_mapping import ServiceConfig
-from core.models import Article, NewsArticleClassification
+from core.models import Content, ContentClassification
 import numpy as np
 import logging
 from core.adb import get_session
@@ -26,27 +26,27 @@ async def healthcheck():
 @app.get("/articles/", response_model=List[dict])
 async def read_articles(skip: int = 0, limit: int = 10, db: AsyncSession = Depends(get_session)):
     logger.info(f"Fetching articles with skip={skip} and limit={limit}")
-    statement = select(Article).options(
-        selectinload(Article.classification)
+    statement = select(Content).options(
+        selectinload(Content.classification)
     ).offset(skip).limit(limit)
     result = await db.execute(statement)
-    articles = result.scalars().all()
+    contents = result.scalars().all()
 
     article_data = []
-    for index, article in enumerate(articles, start=1):
+    for index, content in enumerate(contents, start=1):
         article_info = {
             "index": index,
-            "headline": article.headline,
-            "url": article.url,
-            "source": article.source,
-            "insertion_date": article.insertion_date,
+            "headline": content.title,
+            "url": content.url,
+            "source": content.source,
+            "insertion_date": content.insertion_date,
         }
-        if article.classification:
+        if content.classification:
             article_info.update({
                 "news_category": article.classification.news_category,
-                "secondary_categories": article.classification.secondary_categories,
-                "keywords": article.classification.keywords,
-                "event_type": article.classification.event_type,
+                "secondary_categories": content.classification.secondary_categories,
+                "keywords": content.classification.keywords,
+                "event_type": content.classification.event_type,
             })
         article_data.append(article_info)
 

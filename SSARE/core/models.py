@@ -1,9 +1,11 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 from datetime import datetime
 from sqlmodel import Field, SQLModel, Relationship
 from sqlalchemy import Column, Text, ARRAY
 from pgvector.sqlalchemy import Vector
 import uuid
+from enum import Enum
+from sqlalchemy.dialects.postgresql import JSONB
 
 class BaseModel(SQLModel):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -21,6 +23,10 @@ class ContentTag(SQLModel, table=True):
 class EntityLocation(SQLModel, table=True):
     entity_id: uuid.UUID = Field(foreign_key="entity.id", primary_key=True)
     location_id: uuid.UUID = Field(foreign_key="location.id", primary_key=True)
+
+class ContentTopic(SQLModel, table=True):
+    content_id: uuid.UUID = Field(foreign_key="content.id", primary_key=True)
+    topic_id: uuid.UUID = Field(foreign_key="topic.id", primary_key=True)
 
 # Core Models
 class Content(BaseModel, table=True):
@@ -51,6 +57,11 @@ class Content(BaseModel, table=True):
     )
     tags: List["Tag"] = Relationship(back_populates="contents", link_model=ContentTag)
     chunks: List["ContentChunk"] = Relationship(back_populates="content")
+
+    topics: List["Topic"] = Relationship(back_populates="contents", link_model=ContentTopic)
+
+    xclassifications: List["XClassification"] = Relationship(back_populates="content")
+
 
 class MediaDetails(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -131,3 +142,40 @@ class ContentClassification(SQLModel, table=True):
     event_type: str  # e.g., 'Protests', 'Elections', etc.
 
     content: Content = Relationship(back_populates="classification")
+
+
+class ClassificationType(str, Enum):
+    STRING = 'str'
+    INTEGER = 'int'
+    LIST_STRING = 'List[str]'
+    FLOAT = 'float'
+    BOOLEAN = 'bool'
+
+class ClassificationDimension(BaseModel, table=True):
+    name: str = Field(index=True, unique=True)
+    type: ClassificationType = Field(index=True)
+    description: Optional[str] = Field(default=None, sa_column=Column(Text))
+
+    # Relationships
+    xclassifications: List["XClassification"] = Relationship(back_populates="dimension")
+
+class XClassification(SQLModel, table=True):
+    content_id: uuid.UUID = Field(foreign_key="content.id", primary_key=True)
+    dimension_id: uuid.UUID = Field(foreign_key="classificationdimension.id", primary_key=True)
+    value: Union[str, int, List[str]] = Field(sa_column=Column(JSONB))
+
+    # Relationships
+    content: "Content" = Relationship(back_populates="xclassifications")
+    dimension: "ClassificationDimension" = Relationship(back_populates="xclassifications")
+
+class Topic(BaseModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    name: str = Field(index=True)
+    description: Optional[str] = Field(default=None, sa_column=Column(Text))
+    keywords: Optional[List[str]] = Field(default_factory=list, sa_column=Column(ARRAY(Text)))
+    top_entities: Optional[List[str]] = Field(default_factory=list, sa_column=Column(ARRAY(Text)))
+    geo_reach: Optional[List[str]] = Field(default_factory=list, sa_column=Column(ARRAY(Text)))
+    content_count: int = Field(default=0, index=True)
+
+    # Relationships
+    contents: List["Content"] = Relationship(back_populates="topics", link_model=ContentTopic)

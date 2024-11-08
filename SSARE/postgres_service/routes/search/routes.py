@@ -25,6 +25,10 @@ from pydantic import BaseModel
 import uuid
 from datetime import datetime
 
+from sqlalchemy.types import DateTime
+
+from pydantic import BaseModel, validator
+
 
 router = APIRouter()
 
@@ -130,11 +134,21 @@ async def get_contents(
                             response.raise_for_status()
                             query_embeddings = response.json()["embeddings"]
                             
-                        # Join with ContentChunk for semantic search
-                        query = (
-                            query.join(ContentChunk, Content.id == ContentChunk.content_id)
-                            .order_by(ContentChunk.embeddings.l2_distance(query_embeddings))
-                        )
+                            # Modified query to include the distance in the SELECT list
+                            query = (
+                                select(
+                                    Content,
+                                    ContentChunk.embeddings.l2_distance(query_embeddings).label('distance')
+                                )
+                                .options(
+                                    selectinload(Content.entities).selectinload(Entity.locations),
+                                    selectinload(Content.tags),
+                                    selectinload(Content.classification)
+                                )
+                                .join(ContentChunk, Content.id == ContentChunk.content_id)
+                                .order_by('distance')  # Order by the labeled distance
+                                .distinct()
+                            )
                     except Exception as e:
                         logger.error(f"Semantic search error: {e}")
                         raise HTTPException(status_code=500, detail="Semantic search failed")
@@ -201,12 +215,16 @@ async def get_contents(
 
             # Execute query with pagination
             result = await session.execute(query.offset(skip).limit(limit))
-            contents = result.unique().all()
+            
+            # Handle results differently based on search type
+            if search_type == SearchType.SEMANTIC:
+                contents = [row[0] for row in result.unique().all()]  # Get Content objects from tuples
+            else:
+                contents = result.unique().scalars().all()
 
             # Format response
             contents_data = []
-            for content_tuple in contents:
-                content = content_tuple[0] if isinstance(content_tuple, tuple) else content_tuple
+            for content in contents:
                 content_dict = {
                     "id": str(content.id),
                     "url": content.url,
@@ -289,7 +307,11 @@ async def get_location_entities(
         # Filter and calculate relevance score
         filtered_entities = []
         for e in entities:
-            if e.name.lower() != location_name.lower():
+            # Clean the name by removing possessives but maintain capitalization
+            cleaned_name = e.name.replace("'s", "").replace("'ss", "")
+            comparison_name = cleaned_name.lower()
+            
+            if comparison_name != location_name.lower():
                 # Adjust relevance score calculation
                 relevance_score = (e.total_frequency * math.log(e.article_count + 1))
                 
@@ -298,7 +320,7 @@ async def get_location_entities(
                     relevance_score *= 1.75
                 
                 filtered_entities.append({
-                    "name": e.name,
+                    "name": cleaned_name,  # Store cleaned name with original capitalization
                     "type": e.entity_type,
                     "article_count": e.article_count,
                     "total_frequency": e.total_frequency,
@@ -308,21 +330,21 @@ async def get_location_entities(
         # Merge similar entities
         merged_entities = {}
         for entity in filtered_entities:
-            name = entity['name'].lower()
+            name_key = entity['name'].lower()  # Already cleaned of possessives
             found = False
             for key in merged_entities:
-                if name in key or key in name:
+                if name_key in key or key in name_key:
                     # Merge the entities
                     merged_entities[key]['article_count'] += entity['article_count']
                     merged_entities[key]['total_frequency'] += entity['total_frequency']
                     merged_entities[key]['relevance_score'] += entity['relevance_score']
-                    # Keep the longer name
+                    # Keep the longer cleaned name with proper capitalization
                     if len(entity['name']) > len(merged_entities[key]['name']):
                         merged_entities[key]['name'] = entity['name']
                     found = True
                     break
             if not found:
-                merged_entities[name] = entity
+                merged_entities[name_key] = entity
 
         # Convert back to list and sort
         sorted_entities = sorted(merged_entities.values(), key=lambda x: x['relevance_score'], reverse=True)
@@ -380,12 +402,14 @@ async def get_most_relevant_entities(
         # Calculate relevance score and filter entities
         filtered_entities = []
         for e in entities:
+            # Clean the name but maintain capitalization
+            cleaned_name = e.name.replace("'s", "").replace("'ss", "")
             relevance_score = (e.total_frequency * math.log(e.article_count + 1))
             if e.entity_type == 'PERSON':
                 relevance_score *= 1.75
 
             filtered_entities.append({
-                "name": e.name,
+                "name": cleaned_name,
                 "type": e.entity_type,
                 "article_count": e.article_count,
                 "total_frequency": e.total_frequency,
@@ -395,10 +419,10 @@ async def get_most_relevant_entities(
         # Merge similar entities
         merged_entities = {}
         for entity in filtered_entities:
-            name = entity['name'].lower()
+            name_key = entity['name'].lower()  # Use lowercase for comparison
             found = False
             for key in merged_entities:
-                if name in key or key in name:
+                if name_key in key or key in name_key:
                     merged_entities[key]['article_count'] += entity['article_count']
                     merged_entities[key]['total_frequency'] += entity['total_frequency']
                     merged_entities[key]['relevance_score'] += entity['relevance_score']
@@ -407,7 +431,7 @@ async def get_most_relevant_entities(
                     found = True
                     break
             if not found:
-                merged_entities[name] = entity
+                merged_entities[name_key] = entity
 
         # Convert back to list and sort
         sorted_entities = sorted(merged_entities.values(), key=lambda x: x['relevance_score'], reverse=True)
@@ -420,7 +444,7 @@ async def get_most_relevant_entities(
     except Exception as e:
         logger.error(f"Error in get_most_relevant_entities: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
-    
+
 
 #### Articles By Entitiy
 @router.get("/contents_by_entity/{entity_name}")
@@ -559,6 +583,8 @@ async def get_articles_by_location(
                 }
                 contents_data.append(content_dict)
 
+            # Reverse the list before returning
+            contents_data.reverse()
             return contents_data
 
     except Exception as e:
@@ -568,3 +594,271 @@ async def get_articles_by_location(
 
 
 
+
+
+
+
+
+from typing import List, Dict, Any
+from datetime import datetime
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+from core.models import Content, ContentEntity, Entity, ContentClassification
+
+@router.get("/time_series_entity_in_dimensions", response_model=None)
+async def get_entity_time_relevance(
+    entity: str,
+    timeframe_from: str,
+    timeframe_to: str,
+    session: AsyncSession = Depends(get_session)
+) -> List[Dict[str, Any]]:
+    try:
+        # Query to get articles mentioning the entity within the timeframe
+        query = (
+            select(
+                Content.insertion_date,
+                func.sum(ContentEntity.frequency).label('total_weight'),
+                func.array_agg(ContentClassification.topics).label('topics')
+            )
+            .join(ContentEntity, Content.id == ContentEntity.content_id)
+            .join(Entity, ContentEntity.entity_id == Entity.id)
+            .join(ContentClassification, Content.id == ContentClassification.content_id)
+            .where(
+                Entity.name == entity,
+                Content.insertion_date.between(timeframe_from, timeframe_to)
+            )
+            .group_by(Content.insertion_date)
+            .order_by(Content.insertion_date)
+        )
+
+        result = await session.execute(query)
+        time_series_data = result.all()
+
+        # Format the result as a list of dictionaries
+        formatted_data = [
+            {
+                "date": row.insertion_date,
+                "total_weight": row.total_weight,
+                "topics": row.topics
+            }
+            for row in time_series_data
+        ]
+
+        return formatted_data
+
+    except Exception as e:
+        logger.error(f"Error in get_entity_time_relevance: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+class EntityScoreRequest(BaseModel):
+    entity: str
+    score_type: str
+    timeframe_from: str
+    timeframe_to: str
+
+    @validator('timeframe_from', 'timeframe_to')
+    def validate_date_format(cls, v):
+        try:
+            datetime.strptime(v, '%Y-%m-%d')
+            return v
+        except ValueError:
+            raise ValueError('Date must be in YYYY-MM-DD format')
+
+@router.post("/entity_score_over_time")
+async def entity_score_over_time(
+    request: EntityScoreRequest,
+    session: AsyncSession = Depends(get_session)
+) -> List[Dict[str, Any]]:
+    try:
+        # Convert string dates to datetime objects
+        timeframe_from = datetime.strptime(request.timeframe_from, '%Y-%m-%d')
+        timeframe_to = datetime.strptime(request.timeframe_to, '%Y-%m-%d')
+        
+        # Create the truncated date expression
+        truncated_date = func.date_trunc(
+            'day', 
+            func.cast(Content.insertion_date, DateTime)
+        ).label('date')
+        
+        query = (
+            select(
+                truncated_date,
+                func.avg(getattr(ContentClassification, request.score_type)).label('average_score'),
+                func.min(getattr(ContentClassification, request.score_type)).label('min_score'),
+                func.max(getattr(ContentClassification, request.score_type)).label('max_score'),
+                func.stddev(getattr(ContentClassification, request.score_type)).label('std_dev'),
+                func.count(Content.id).label('article_count'),
+                func.sum(ContentEntity.frequency).label('total_frequency'),
+                func.avg(ContentClassification.general_interest_score).label('avg_interest'),
+                func.avg(ContentClassification.spam_score).label('avg_spam'),
+                func.avg(ContentClassification.fake_news_score).label('avg_fake_news'),
+                func.array_agg(distinct(ContentClassification.category)).label('categories'),
+                func.array_agg(distinct(ContentClassification.event_type)).label('event_types'),
+                func.array_agg(distinct(Content.source)).label('sources')
+            )
+            .join(ContentClassification, Content.id == ContentClassification.content_id)
+            .join(ContentEntity, Content.id == ContentEntity.content_id)
+            .join(Entity, ContentEntity.entity_id == Entity.id)
+            .where(
+                Entity.name == request.entity,
+                func.cast(Content.insertion_date, DateTime).between(timeframe_from, timeframe_to)
+            )
+            .group_by(truncated_date)
+            .order_by(truncated_date)
+        )
+
+        result = await session.execute(query)
+        scores = result.all()
+
+        # Format results...
+        formatted_data = []
+        for row in scores:
+            entry = {
+                "date": row.date.strftime("%Y-%m-%d"),
+                "metrics": {
+                    "average_score": float(row.average_score) if row.average_score is not None else None,
+                    "min_score": float(row.min_score) if row.min_score is not None else None,
+                    "max_score": float(row.max_score) if row.max_score is not None else None,
+                    "standard_deviation": float(row.std_dev) if row.std_dev is not None else None
+                },
+                "context": {
+                    "article_count": row.article_count,
+                    "total_mentions": row.total_frequency,
+                    "source_diversity": len(row.sources),
+                    "sources": row.sources,
+                    "categories": row.categories,
+                    "event_types": row.event_types,
+                    "general_interest_level": float(row.avg_interest) if row.avg_interest is not None else None
+                },
+                "reliability": {
+                    "confidence_score": calculate_confidence_score(
+                        article_count=row.article_count,
+                        std_dev=row.std_dev,
+                        source_count=len(row.sources)
+                    ),
+                    "avg_spam_score": float(row.avg_spam) if row.avg_spam is not None else None,
+                    "avg_fake_news_score": float(row.avg_fake_news) if row.avg_fake_news is not None else None
+                }
+            }
+            formatted_data.append(entry)
+
+        return formatted_data
+
+    except Exception as e:
+        logger.error(f"Error in entity_score_over_time: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+def calculate_confidence_score(article_count: int, std_dev: float, source_count: int) -> float:
+    """
+    Calculate a confidence score based on article count, standard deviation, and source diversity.
+    Returns a value between 0 and 1.
+    """
+    if std_dev is None:
+        return 0.0
+    
+    # Base confidence on article count
+    count_confidence = min(1.0, article_count / 10)
+    
+    # Standard deviation factor
+    std_confidence = 1.0 / (1.0 + float(std_dev))
+    
+    # Source diversity factor
+    source_confidence = min(1.0, source_count / 5)  # Max confidence at 5+ sources
+    
+    # Combine factors with weights
+    confidence = (count_confidence * 0.4) + (std_confidence * 0.3) + (source_confidence * 0.3)
+    
+    return round(confidence, 2)
+
+def calculate_quality_score(spam_score: float, fake_news_score: float, source_count: int) -> float:
+    """
+    Calculate a content quality score based on spam score, fake news score, and source diversity.
+    Returns a value between 0 and 1.
+    """
+    if spam_score is None or fake_news_score is None:
+        return 0.0
+    
+    # Inverse of spam and fake news scores (lower is better)
+    spam_quality = 1 - (spam_score / 10)
+    fake_news_quality = 1 - (fake_news_score / 10)
+    
+    # Source diversity factor
+    source_quality = min(1.0, source_count / 5)
+    
+    # Combine factors with weights
+    quality = (spam_quality * 0.4) + (fake_news_quality * 0.4) + (source_quality * 0.2)
+    
+    return round(quality, 2)
+
+class TopEntitiesByScoreRequest(BaseModel):
+    score_type: str
+    timeframe_from: str
+    timeframe_to: str
+    limit: int = 10
+
+@router.get("/top_entities_by_score")
+async def top_entities_by_score(
+    request: TopEntitiesByScoreRequest,
+    session: AsyncSession = Depends(get_session)
+) -> List[Dict[str, Any]]:
+    """
+    Retrieves the top entities based on a specific score within a given timeframe.
+    """
+    try:
+        # Validate score_type
+        valid_scores = {
+            'geopolitical_relevance',
+            'legislative_influence_score',
+            'international_relevance_score',
+            'democratic_process_implications_score',
+            'general_interest_score',
+            'spam_score',
+            'clickbait_score',
+            'fake_news_score',
+            'satire_score'
+        }
+        if score_type not in valid_scores:
+            logger.error(f"Invalid score type: {request.score_type}")
+            raise ValueError(f"Invalid score type: {request.score_type}")
+
+        # Construct the query
+        query = (
+            select(
+                Entity.name.label('entity_name'),
+                func.avg(getattr(ContentClassification, request.score_type)).label('average_score'),
+                func.count(Content.id).label('article_count')
+            )
+            .join(ContentEntity, Entity.id == ContentEntity.entity_id)
+            .join(Content, ContentEntity.content_id == Content.id)
+            .join(ContentClassification, Content.id == ContentClassification.content_id)
+            .where(
+                Content.insertion_date.between(timeframe_from, timeframe_to)
+            )
+            .group_by(Entity.id, Entity.name)
+            .order_by(desc('average_score'))
+            .limit(limit)
+        )
+
+        # Execute the query
+        result = await session.execute(query)
+        entities = result.all()
+
+        # Format the result
+        formatted_entities = [
+            {
+                "entity_name": row.entity_name,
+                "average_score": round(row.average_score, 2) if row.average_score is not None else None,
+                "article_count": row.article_count
+            }
+            for row in entities
+        ]
+
+        return formatted_entities
+
+    except ValueError as ve:
+        logger.error(f"ValueError in top_entities_by_score: {ve}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Error in top_entities_by_score: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")

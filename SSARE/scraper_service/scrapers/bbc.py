@@ -67,11 +67,15 @@ def run(playwright: Playwright) -> None:
     # Start URLs
     start_urls = [
         "https://www.bbc.com/news",
-        "https://www.bbc.com/news/politics"
+        "https://www.bbc.com/news/politics",
+        "https://www.bbc.com/news/world/latin_america",
+        "https://www.bbc.com/news/world/middle_east",
+        "https://www.bbc.com/news/world/africa",
+        "https://www.bbc.com/news/world/asia"
     ]
     
     visited_urls = set()
-    max_depth = 1
+    max_depth = 2
     all_data = []
     
     for start_url in start_urls:
