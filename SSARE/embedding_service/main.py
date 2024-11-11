@@ -38,7 +38,7 @@ def retrieve_contents_from_redis(redis_conn_raw, batch_size=50):
     redis_conn_raw.ltrim('contents_without_embedding_queue', batch_size, -1)
     return [Content(**json.loads(content)) for content in batch]
 
-def semantic_chunking(text, max_chunk_size=512, similarity_threshold=0.95):
+def semantic_chunking(text, max_chunk_size=512, similarity_threshold=0.65):
     # Tokenize text into sentences
     sentences = nltk.sent_tokenize(text, language='english')
 

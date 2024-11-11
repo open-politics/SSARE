@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Literal
 from datetime import datetime
 from sqlmodel import Field, SQLModel, Relationship
 from sqlalchemy import Column, Text, ARRAY
@@ -6,6 +6,8 @@ from pgvector.sqlalchemy import Vector
 import uuid
 from enum import Enum
 from sqlalchemy.dialects.postgresql import JSONB
+from pydantic import BaseModel, ValidationError, field_validator
+import json
 
 class BaseModel(SQLModel):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -52,15 +54,16 @@ class Content(BaseModel, table=True):
         back_populates="content", sa_relationship_kwargs={"uselist": False}
     )
     entities: List["Entity"] = Relationship(back_populates="contents", link_model=ContentEntity)
-    classification: Optional["ContentClassification"] = Relationship(
-        back_populates="content", sa_relationship_kwargs={"uselist": False}
-    )
     tags: List["Tag"] = Relationship(back_populates="contents", link_model=ContentTag)
     chunks: List["ContentChunk"] = Relationship(back_populates="content")
 
     topics: List["Topic"] = Relationship(back_populates="contents", link_model=ContentTopic)
 
     xclassifications: List["XClassification"] = Relationship(back_populates="content")
+
+    evaluation: Optional["ContentEvaluation"] = Relationship(
+        back_populates="content", sa_relationship_kwargs={"uselist": False}
+    )
 
 
 class MediaDetails(SQLModel, table=True):
@@ -125,25 +128,6 @@ class Tag(BaseModel, table=True):
     name: str = Field(unique=True, index=True)
     contents: List[Content] = Relationship(back_populates="tags", link_model=ContentTag)
 
-class ContentClassification(SQLModel, table=True):
-    content_id: uuid.UUID = Field(foreign_key="content.id", primary_key=True)
-    category: str
-    secondary_categories: Optional[List[str]] = Field(default=None, sa_column=Column(ARRAY(Text)))
-    keywords: Optional[List[str]] = Field(default=None, sa_column=Column(ARRAY(Text)))
-    geopolitical_relevance: int
-    legislative_influence_score: int
-    international_relevance_score: int
-    democratic_process_implications_score: int
-    general_interest_score: int
-    spam_score: int
-    clickbait_score: int
-    fake_news_score: int
-    satire_score: int
-    event_type: str  # e.g., 'Protests', 'Elections', etc.
-
-    content: Content = Relationship(back_populates="classification")
-
-
 class ClassificationType(str, Enum):
     STRING = 'str'
     INTEGER = 'int'
@@ -179,3 +163,28 @@ class Topic(BaseModel, table=True):
 
     # Relationships
     contents: List["Content"] = Relationship(back_populates="topics", link_model=ContentTopic)
+
+# New Model
+class ContentEvaluation(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    content_id: uuid.UUID = Field(foreign_key="content.id")
+
+    rhetoric: Optional[str] = Field(None)
+    
+    # Impact Analysis
+    sociocultural_interest: Optional[int] = Field(None, ge=0, le=10)
+    global_political_impact: Optional[int] = Field(None, ge=0, le=10)
+    regional_political_impact: Optional[int] = Field(None, ge=0, le=10)
+    global_economic_impact: Optional[int] = Field(None, ge=0, le=10)
+    regional_economic_impact: Optional[int] = Field(None, ge=0, le=10)
+    
+    # Event Classification
+    event_type: Optional[str] = Field(None)
+    event_subtype: Optional[str] = Field(None)
+    
+    # Keywords and Categories
+    keywords: Optional[List[str]] = Field(default=None, sa_column=Column(ARRAY(Text)))
+    categories: Optional[List[str]] = Field(default=None, sa_column=Column(ARRAY(Text)))
+
+    # Relationships
+    content: Content = Relationship(back_populates="evaluation")

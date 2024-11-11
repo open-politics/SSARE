@@ -9,4 +9,4 @@ COPY core ./core
 
 COPY classification_service/ .
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5688"]
+CMD ["uvicorn", "main2:app", "--host", "0.0.0.0", "--port", "5688"]

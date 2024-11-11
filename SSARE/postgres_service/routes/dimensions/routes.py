@@ -11,7 +11,7 @@ import json
 
 from core.adb import get_session
 from core.models import (
-    Content, ContentClassification, XClassification,
+    Content, ContentEvaluation, XClassification,
     Entity, Location, ClassificationDimension
 )
 from core.utils import logger, UUIDEncoder, DimensionRequestEncoder

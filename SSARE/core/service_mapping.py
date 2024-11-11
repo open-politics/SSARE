@@ -81,7 +81,8 @@ class ServiceConfig:
         "contents_without_classification_queue" : {"db": 4, "key": "contents_without_classification_queue"},
         "contents_with_classification_queue" : {"db": 4, "key": "contents_with_classification_queue"},
         "Orchestration in progress": {"db": 1, "key": "Orchestration in progress"},
-        "scrapers_running": {"db": 1, "key": "scrapers_running"}
+        "scrapers_running": {"db": 1, "key": "scrapers_running"},
+        "outward_irrelevant_queue": {"db": 7, "key": "outward_irrelevant_queue"}
     }
 
     # Other configurations/ API Keys

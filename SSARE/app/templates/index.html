@@ -263,6 +263,19 @@
             <h2 class="text-xl font-semibold mb-4">Prefect Dashboard</h2>
             <iframe id="prefect-dashboard" src="http://localhost:4200/dashboard" width="100%" height="600" frameborder="0"></iframe>
         </div>
+
+        <div class="bg-card rounded-lg p-4 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Outward/Irrelevant Articles</h2>
+            <div id="outward-irrelevant-articles" class="overflow-auto max-h-64 bg-gray-800 p-4 rounded-lg">
+                <!-- Raw data will be loaded here -->
+            </div>
+            <button class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-300 mt-4"
+                    hx-get="/outward_irrelevant_articles"
+                    hx-target="#outward-irrelevant-articles"
+                    hx-trigger="click">
+                Load Outward/Irrelevant Articles
+            </button>
+        </div>
     </div>
     <script>
         function refreshPrefectDashboard() {

@@ -31,10 +31,14 @@ from typing import AsyncGenerator
 from core.utils import logger
 from core.adb import engine, get_session, create_db_and_tables
 from core.middleware import add_cors_middleware
-from core.models import Content, ContentEntity, ContentTag, Entity, EntityLocation, Location, Tag, ContentClassification  # Updated imports
-from core.service_mapping import config
+from core.models import Content, ContentEntity, ContentTag, Entity, EntityLocation, Location, Tag, ContentEvaluation  # Updated imports
+from core.service_mapping import ServiceConfig
 
+# App API Router
 router = APIRouter()
+
+# Config
+config = ServiceConfig()
 
 ########################################################################################
 ## HELPER FUNCTIONS
@@ -63,8 +67,8 @@ async def deduplicate_contents(session: AsyncSession = Depends(get_session)):
 async def delete_all_classifications(session: AsyncSession = Depends(get_session)):
     try:
         async with session.begin():
-            # Delete all records from the ContentClassification table
-            await session.execute(delete(ContentClassification))
+            # Delete all records from the ContentEvaluation table
+            await session.execute(delete(ContentEvaluation))
             await session.commit()
             logger.info("All classifications deleted successfully.")
             return {"message": "All classifications deleted successfully."}
@@ -138,7 +142,7 @@ async def get_contents_csv(session: AsyncSession = Depends(get_session)):
             query = select(Content).options(
                 selectinload(Content.entities).selectinload(Entity.locations),
                 selectinload(Content.tags),
-                selectinload(Content.classification)
+                selectinload(Content.evaluation)
             )
             result = await session.execute(query)
             contents = result.scalars().all()
@@ -174,7 +178,7 @@ async def get_contents_csv(session: AsyncSession = Depends(get_session)):
                         "name": t.name
                     } for t in (content.tags or [])
                 ],
-                "classification": content.classification.dict() if content.classification else None
+                "evaluation": content.evaluation.dict() if content.evaluation else None
             }
             contents_data.append(content_dict)
 
@@ -290,3 +294,51 @@ async def fix_and_purge_null_content_type(session: AsyncSession = Depends(get_se
         logger.error(f"Error fixing and purging articles: {e}", exc_info=True)
         await session.rollback()
         raise HTTPException(status_code=500, detail="Failed to fix and purge articles with NULL content_type.")
+
+
+@router.delete("/clear_filtered_out_queue")
+async def clear_filtered_out_queue():
+    try:
+        redis_conn = Redis(host='redis', port=ServiceConfig.REDIS_PORT, db=4)
+        redis_conn.delete('filtered_out_queue')
+        return {"message": "Filtered out queue cleared successfully"}
+    except Exception as e:
+        logger.error(f"Error clearing filtered out queue: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error clearing filtered out queue")
+
+@router.get("/read_filtered_out_queue")
+async def read_filtered_out_queue():
+    try:
+        redis_conn = Redis(host='redis', port=ServiceConfig.REDIS_PORT, db=4)
+        filtered_out_contents = redis_conn.lrange('filtered_out_queue', 0, -1)
+        
+        # Convert bytes to JSON objects
+        contents = [json.loads(content) for content in filtered_out_contents]
+        
+        return {"filtered_out_contents": contents}
+    except Exception as e:
+        logger.error(f"Error reading filtered out queue: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error reading filtered out queue")
+
+@router.get("/dump_contents")
+async def dump_contents(session: AsyncSession = Depends(get_session)) -> List[dict]:
+    """Dump all contents with selected fields."""
+    async with session.begin():
+        query = select(Content)
+        result = await session.execute(query)
+        contents = result.scalars().all()
+
+    # Prepare the dumped data
+    dumped_contents = [
+        {
+            "url": content.url,
+            "title": content.title,
+            "text_content": content.text_content,
+            "source": content.source,
+            "content_type": content.content_type,
+            "insertion_date": content.insertion_date
+        }
+        for content in contents
+    ]
+
+    return dumped_contents

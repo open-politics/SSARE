@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy import and_
 from core.utils import logger
 from core.service_mapping import ServiceConfig
-from core.models import Content, Location, Entity, ContentClassification, EntityLocation, ContentEntity
+from core.models import Content, Location, Entity, ContentEvaluation, EntityLocation, ContentEntity
 from core.adb import get_session
 import uuid
 import pickle
@@ -160,8 +160,8 @@ def call_pelias_api(location, lang=None):
 # Function to process content and geocode locations
 def process_content(content_data):
     entities = content_data.get('entities', [])
-    location_entities = [entity for entity in entities if entity['entity_type'] in ["GPE", "LOC"]]
-    location_counts = Counter(entity['name'] for entity in location_entities)
+    location_entities = [entity for entity in entities if entity['tag'] in ["location", "facility"]]
+    location_counts = Counter(entity['text'] for entity in location_entities)
     total_locations = len(location_entities)
     location_weights = {location: count / total_locations for location, count in location_counts.items()}
 
@@ -172,7 +172,7 @@ def process_content(content_data):
             if weight > 0.03:
                 geocoded_locations.append({
                     'name': location,
-                    'type': "GPE",
+                    'type': "location",
                     'coordinates': coordinates,
                     'weight': weight
                 })
@@ -427,8 +427,8 @@ async def generate_event_geojson(session: AsyncSession, event_type: str) -> dict
         .join(Entity, Entity.id == EntityLocation.entity_id)
         .join(ContentEntity, ContentEntity.entity_id == Entity.id)
         .join(Content, Content.id == ContentEntity.content_id)
-        .join(ContentClassification, ContentClassification.content_id == Content.id)
-        .where(ContentClassification.event_type == event_type)
+        .join(ContentEvaluation, ContentEvaluation.content_id == Content.id)
+        .where(ContentEvaluation.event_type == event_type)
     )
     result = await session.execute(query)
     locations = result.scalars().unique().all()

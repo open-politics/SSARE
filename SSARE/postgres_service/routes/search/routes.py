@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from core.adb import get_session
-from core.models import Content, Entity, Location, ContentClassification, ContentEntity, ContentChunk, EntityLocation
+from core.models import Content, Entity, Location, ContentEvaluation, ContentEntity, ContentChunk, EntityLocation
 from core.service_mapping import config
 from .models import SearchType
 from core.utils import logger
@@ -69,7 +69,7 @@ async def get_contents(
             query = select(Content).options(
                 selectinload(Content.entities).selectinload(Entity.locations),
                 selectinload(Content.tags),
-                selectinload(Content.classification)
+                selectinload(Content.evaluation)
             )
 
             # Handle location-based filtering
@@ -91,7 +91,7 @@ async def get_contents(
                     .options(
                         selectinload(Content.entities).selectinload(Entity.locations),
                         selectinload(Content.tags),
-                        selectinload(Content.classification)
+                        selectinload(Content.evaluation)
                     )
                     .join(ContentEntity, Content.id == ContentEntity.content_id)
                     .join(Entity, ContentEntity.entity_id == Entity.id)
@@ -143,7 +143,7 @@ async def get_contents(
                                 .options(
                                     selectinload(Content.entities).selectinload(Entity.locations),
                                     selectinload(Content.tags),
-                                    selectinload(Content.classification)
+                                    selectinload(Content.evaluation)
                                 )
                                 .join(ContentChunk, Content.id == ContentChunk.content_id)
                                 .order_by('distance')  # Order by the labeled distance
@@ -161,11 +161,11 @@ async def get_contents(
             if news_category or secondary_category or keyword:
                 category_conditions = []
                 if news_category:
-                    category_conditions.append(ContentClassification.news_category == news_category)
+                    category_conditions.append(ContentEvaluation.news_category == news_category)
                 if secondary_category:
-                    category_conditions.append(ContentClassification.secondary_categories.any(secondary_category))
+                    category_conditions.append(ContentEvaluation.secondary_categories.any(secondary_category))
                 if keyword:
-                    category_conditions.append(ContentClassification.keywords.any(keyword))
+                    category_conditions.append(ContentEvaluation.keywords.any(keyword))
                 if category_conditions:
                     query = query.where(or_(*category_conditions))
 
@@ -175,15 +175,15 @@ async def get_contents(
 
             # Apply topic filters
             if topic_list:
-                query = query.where(ContentClassification.secondary_categories.any(topic_list))
+                query = query.where(ContentEvaluation.secondary_categories.any(topic_list))
 
             # Apply classification score filters
             for score_type, score_range in score_filters.items():
                 min_score, max_score = score_range
                 query = query.where(
                     and_(
-                        getattr(ContentClassification, score_type) >= min_score,
-                        getattr(ContentClassification, score_type) <= max_score
+                        getattr(ContentEvaluation, score_type) >= min_score,
+                        getattr(ContentEvaluation, score_type) <= max_score
                     )
                 )
 
@@ -209,7 +209,7 @@ async def get_contents(
 
             # Apply sorting
             if sort_by:
-                sort_column = getattr(ContentClassification, sort_by, None)
+                sort_column = getattr(ContentEvaluation, sort_by, None)
                 if sort_column:
                     query = query.order_by(desc(sort_column) if sort_order == "desc" else sort_column)
 
@@ -253,7 +253,7 @@ async def get_contents(
                             "name": t.name
                         } for t in (content.tags or [])
                     ],
-                    "classification": content.classification.dict() if content.classification else None
+                    "evaluation": content.evaluation.dict() if content.evaluation else None
                 }
                 contents_data.append(content_dict)
 
@@ -461,7 +461,7 @@ async def get_articles_by_entity(
             .options(
                 selectinload(Content.entities).selectinload(Entity.locations),
                 selectinload(Content.tags),
-                selectinload(Content.classification)
+                selectinload(Content.evaluation)
             )
             .join(ContentEntity, Content.id == ContentEntity.content_id)
             .join(Entity, ContentEntity.entity_id == Entity.id)
@@ -532,7 +532,7 @@ async def get_articles_by_location(
                 .options(
                     selectinload(Content.entities).selectinload(Entity.locations),
                     selectinload(Content.tags),
-                    selectinload(Content.classification)
+                    selectinload(Content.evaluation)
                 )
                 .join(ContentEntity, Content.id == ContentEntity.content_id)
                 .join(Entity, ContentEntity.entity_id == Entity.id)
@@ -579,7 +579,7 @@ async def get_articles_by_location(
                             "name": t.name
                         } for t in (content.tags or [])
                     ],
-                    "classification": content.classification.dict() if content.classification else None
+                    "classification": content.evaluation.dict() if content.evaluation else None
                 }
                 contents_data.append(content_dict)
 
@@ -603,7 +603,7 @@ from typing import List, Dict, Any
 from datetime import datetime
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.models import Content, ContentEntity, Entity, ContentClassification
+from core.models import Content, ContentEntity, Entity, ContentEvaluation
 
 @router.get("/time_series_entity_in_dimensions", response_model=None)
 async def get_entity_time_relevance(
@@ -618,11 +618,11 @@ async def get_entity_time_relevance(
             select(
                 Content.insertion_date,
                 func.sum(ContentEntity.frequency).label('total_weight'),
-                func.array_agg(ContentClassification.topics).label('topics')
+                func.array_agg(ContentEvaluation.topics).label('topics')
             )
             .join(ContentEntity, Content.id == ContentEntity.content_id)
             .join(Entity, ContentEntity.entity_id == Entity.id)
-            .join(ContentClassification, Content.id == ContentClassification.content_id)
+            .join(ContentEvaluation, Content.id == ContentEvaluation.content_id)
             .where(
                 Entity.name == entity,
                 Content.insertion_date.between(timeframe_from, timeframe_to)
@@ -684,20 +684,20 @@ async def entity_score_over_time(
         query = (
             select(
                 truncated_date,
-                func.avg(getattr(ContentClassification, request.score_type)).label('average_score'),
-                func.min(getattr(ContentClassification, request.score_type)).label('min_score'),
-                func.max(getattr(ContentClassification, request.score_type)).label('max_score'),
-                func.stddev(getattr(ContentClassification, request.score_type)).label('std_dev'),
+                func.avg(getattr(ContentEvaluation, request.score_type)).label('average_score'),
+                func.min(getattr(ContentEvaluation, request.score_type)).label('min_score'),
+                func.max(getattr(ContentEvaluation, request.score_type)).label('max_score'),
+                func.stddev(getattr(ContentEvaluation, request.score_type)).label('std_dev'),
                 func.count(Content.id).label('article_count'),
                 func.sum(ContentEntity.frequency).label('total_frequency'),
-                func.avg(ContentClassification.general_interest_score).label('avg_interest'),
-                func.avg(ContentClassification.spam_score).label('avg_spam'),
-                func.avg(ContentClassification.fake_news_score).label('avg_fake_news'),
-                func.array_agg(distinct(ContentClassification.category)).label('categories'),
-                func.array_agg(distinct(ContentClassification.event_type)).label('event_types'),
+                func.avg(ContentEvaluation.general_interest_score).label('avg_interest'),
+                func.avg(ContentEvaluation.spam_score).label('avg_spam'),
+                func.avg(ContentEvaluation.fake_news_score).label('avg_fake_news'),
+                func.array_agg(distinct(ContentEvaluation.category)).label('categories'),
+                func.array_agg(distinct(ContentEvaluation.event_type)).label('event_types'),
                 func.array_agg(distinct(Content.source)).label('sources')
             )
-            .join(ContentClassification, Content.id == ContentClassification.content_id)
+            .join(ContentEvaluation, Content.id == ContentEvaluation.content_id)
             .join(ContentEntity, Content.id == ContentEntity.content_id)
             .join(Entity, ContentEntity.entity_id == Entity.id)
             .where(
@@ -826,12 +826,12 @@ async def top_entities_by_score(
         query = (
             select(
                 Entity.name.label('entity_name'),
-                func.avg(getattr(ContentClassification, request.score_type)).label('average_score'),
+                func.avg(getattr(ContentEvaluation, request.score_type)).label('average_score'),
                 func.count(Content.id).label('article_count')
             )
             .join(ContentEntity, Entity.id == ContentEntity.entity_id)
             .join(Content, ContentEntity.content_id == Content.id)
-            .join(ContentClassification, Content.id == ContentClassification.content_id)
+            .join(ContentEvaluation, Content.id == ContentEvaluation.content_id)
             .where(
                 Content.insertion_date.between(timeframe_from, timeframe_to)
             )

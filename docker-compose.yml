@@ -109,28 +109,28 @@ services:
       - default
       - ssare-network
 
-  neo4j:
-    image: neo4j:latest
-    ports:
-      - "${NEO4J_HTTP_PORT}:7474"
-      - "${NEO4J_BOLT_PORT}:7687"
-    environment:
-      - NEO4J_AUTH=neo4j/'king kong'
-      - NEO4J_apoc_export_file_enabled=true
-      - NEO4J_apoc_import_file_enabled=true
-      - NEO4J_apoc_import_file_use__neo4j__config=true
-      - NEO4J_PLUGINS=["apoc", "graph-data-science"]
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-    volumes:
-      - neo4j_data:/data
-      - neo4j_logs:/logs
-      - neo4j_import:/var/lib/neo4j/import
-      - neo4j_plugins:/plugins
-    networks:
-      - default
-      - ssare-network
+  # neo4j:
+  #   image: neo4j:latest
+  #   ports:
+  #     - "${NEO4J_HTTP_PORT}:7474"
+  #     - "${NEO4J_BOLT_PORT}:7687"
+  #   environment:
+  #     - NEO4J_AUTH=neo4j/'king kong'
+  #     - NEO4J_apoc_export_file_enabled=true
+  #     - NEO4J_apoc_import_file_enabled=true
+  #     - NEO4J_apoc_import_file_use__neo4j__config=true
+  #     - NEO4J_PLUGINS=["apoc", "graph-data-science"]
+  #     - POSTGRES_USER=${POSTGRES_USER}
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+  #     - POSTGRES_DB=${POSTGRES_DB}
+  #   volumes:
+  #     - neo4j_data:/data
+  #     - neo4j_logs:/logs
+  #     - neo4j_import:/var/lib/neo4j/import
+  #     - neo4j_plugins:/plugins
+  #   networks:
+  #     - default
+  #     - ssare-network
 
   ollama:
     build: 

@@ -9,6 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 import sqlmodel.sql.sqltypes
 import pgvector  
+from pgvector.sqlalchemy import Vector
 
 ${imports if imports else ""}
 

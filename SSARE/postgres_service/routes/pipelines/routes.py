@@ -31,7 +31,7 @@ from typing import AsyncGenerator
 
 from core.adb import engine, get_session, create_db_and_tables
 from core.middleware import add_cors_middleware
-from core.models import Content, ContentEntity, Entity, Location, Tag, ContentClassification, EntityLocation, ContentTag, ContentChunk
+from core.models import Content, ContentEntity, Entity, Location, Tag, ContentEvaluation, EntityLocation, ContentTag, ContentChunk
 from core.service_mapping import config
 from core.utils import logger
 
@@ -101,10 +101,11 @@ async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
     logger.info("Trying to create embedding jobs.")
     try:
         async with session.begin():
+            # Modified query to select contents that have neither embeddings nor chunks
             query = select(Content).where(
                 and_(
                     Content.embeddings == None,
-                    ~Content.chunks.any(ContentChunk.embeddings == None)
+                    ~Content.chunks.any()  # to check if there are no chunks at all
                 )
             )
             result = await session.execute(query)
@@ -335,11 +336,16 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
             ).where(
                 Content.entities.any(
                     and_(
-                        or_(Entity.entity_type == 'GPE', Entity.entity_type == 'LOC'),
-                        ~Entity.locations.any(Location.coordinates != None)
+                        or_(
+                            Entity.entity_type == 'GPE',
+                            Entity.entity_type == 'LOC'
+                        ),
+                        ~Entity.locations.any()  # Check if the entity has no locations
                     )
                 )
             )
+            
+            
             result = await session.execute(query)
             contents = result.scalars().all()
             logger.info(f"Found {len(contents)} contents with entities that need geocoding.")
@@ -354,17 +360,17 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
             not_pushed_count = 0
             for content in contents:
                 if content.url not in existing_urls:
-                    gpe_entities = [entity for entity in content.entities if entity.entity_type in ('GPE', 'LOC') and not entity.locations]
+                    location_entities = [entity for entity in content.entities if entity.entity_type in ('GPE', 'LOC') and not entity.locations]
                     
-                    if gpe_entities:
+                    if location_entities:
                         content_dict = {
                             'url': content.url,
                             'title': content.title,
                             'text_content': content.text_content,
-                            'entities': [{'name': entity.name, 'entity_type': entity.entity_type} for entity in gpe_entities]
+                            'entities': [{'text': entity.name, 'tag': entity.entity_type} for entity in location_entities]
                         }
                         contents_list.append(json.dumps(content_dict, ensure_ascii=False))
-                        logger.info(f"Content {content.url} has {len(gpe_entities)} GPE or LOC entities that need geocoding.")
+                        logger.info(f"Content {content.url} has {len(location_entities)} location entities that need geocoding.")
                 else:
                     not_pushed_count += 1
 
@@ -405,12 +411,12 @@ async def store_contents_with_geocoding(session: AsyncSession = Depends(get_sess
                     if content:
                         for location_data in geocoded_data['geocoded_locations']:
                             entity = await session.execute(
-                                select(Entity).where(Entity.name == location_data['name'], Entity.entity_type == "GPE")
+                                select(Entity).where(Entity.name == location_data['name'], Entity.entity_type == "location")
                             )
                             entity = entity.scalar_one_or_none()
                             
                             if not entity:
-                                entity = Entity(name=location_data['name'], entity_type="GPE")
+                                entity = Entity(name=location_data['name'], entity_type="location")
                                 session.add(entity)
                                 await session.flush()  # Flush to get the entity ID
                             
@@ -511,7 +517,7 @@ async def create_classification_jobs(session: AsyncSession = Depends(get_session
     try:
         async with session.begin():
             # Select contents with no tags
-            query = select(Content).where(Content.classification == None)
+            query = select(Content).where(Content.evaluation == None)
             result = await session.execute(query)
             _contents = result.scalars().all()
             logger.info(f"Found {len(_contents)} contents with no classification.")
@@ -549,56 +555,75 @@ async def store_contents_with_classification(session: AsyncSession = Depends(get
     try:
         logger.info("Starting store_contents_with_classification function")
         redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4, decode_responses=True)
-        logger.info(f"Connected to Redis on port {config.REDIS_PORT}, db 4")
         classified_contents = await redis_conn.lrange('contents_with_classification_queue', 0, -1)
         logger.info(f"Retrieved {len(classified_contents)} classified contents from Redis queue")
         
-        async with session.begin():
-            logger.info("Starting database session")
-            for index, classified_content in enumerate(classified_contents, 1):
-                try:
-                    content_data = json.loads(classified_content)
-                    logger.info(f"Processing content {index}/{len(classified_contents)}: {content_data['url']}")
+        for index, classified_content in enumerate(classified_contents, 1):
+            try:
+                content_data = json.loads(classified_content)
+                logger.info(f"Processing content {index}/{len(classified_contents)}: {content_data['url']}")
+                logger.debug(f"Content evaluation data: {content_data.get('evaluations', {})}")
+                
+                # Find the content by URL
+                stmt = select(Content).where(Content.url == content_data['url'])
+                result = await session.execute(stmt)
+                content = result.scalar_one_or_none()
+
+                if content:
+                    evaluation_data = content_data.get('evaluations', {})
+                    evaluation_data = {
+                        'content_id': content.id,
+                        'rhetoric': evaluation_data.get('rhetoric', 'neutral'),
+                        'sociocultural_interest': evaluation_data.get('sociocultural_interest', 0),
+                        'global_political_impact': evaluation_data.get('global_political_impact', 0),
+                        'regional_political_impact': evaluation_data.get('regional_political_impact', 0),
+                        'global_economic_impact': evaluation_data.get('global_economic_impact', 0),
+                        'regional_economic_impact': evaluation_data.get('regional_economic_impact', 0),
+                        'event_type': evaluation_data.get('event_type', 'other'),
+                        'event_subtype': evaluation_data.get('event_subtype', 'other'),
+                        'keywords': evaluation_data.get('keywords', []),
+                        'categories': evaluation_data.get('categories', [])
+                    }
                     
-                    # Find the content by URL and eagerly load the classification
-                    result = await session.execute(
-                        select(Content).options(selectinload(Content.classification)).where(Content.url == content_data['url'])
-                    )
-                    content = result.scalar_one_or_none()
-
-                    if content:
-                        classification_data = content_data['classification']
-                        
-                        # Ensure category is not None
-                        classification_data['category'] = classification_data.get('category', 'X')  # Otherwise X
-
-                        if content.classification:
-                            # Update existing classification
-                            for key, value in classification_data.items():
-                                setattr(content.classification, key, value)
-                        else:
-                            # Create new classification
-                            content.classification = ContentClassification(**classification_data)
-                        
-                        session.add(content)
-                        logger.info(f"Updated content and classification: {content_data['url']}")
+                    # Check if evaluation exists
+                    stmt = select(ContentEvaluation).where(ContentEvaluation.content_id == content.id)
+                    result = await session.execute(stmt)
+                    existing_eval = result.scalar_one_or_none()
+                    
+                    if existing_eval:
+                        # Update existing evaluation
+                        stmt = (
+                            update(ContentEvaluation)
+                            .where(ContentEvaluation.content_id == content.id)
+                            .values(**evaluation_data)
+                        )
+                        await session.execute(stmt)
                     else:
-                        logger.warning(f"Content not found in database: {content_data['url']}")
+                        # Create new evaluation
+                        evaluation = ContentEvaluation(**evaluation_data)
+                        session.add(evaluation)
+                    
+                    await session.flush()
+                    logger.info(f"Updated content and evaluation: {content_data['url']}")
+                else:
+                    logger.warning(f"Content not found in database: {content_data['url']}")
 
-                except ValidationError as e:
-                    logger.error(f"Validation error for content {content_data['url']}: {e}")
-                except json.JSONDecodeError as e:
-                    logger.error(f"JSON decoding error for content: {e}")
+            except Exception as e:
+                logger.error(f"Error processing content {content_data.get('url', 'unknown')}: {str(e)}")
+                continue
 
         await session.commit()
         logger.info("Changes committed to database")
+        
+        # Clear processed contents from Redis
         await redis_conn.ltrim('contents_with_classification_queue', len(classified_contents), -1)
         logger.info("Redis queue trimmed")
         await redis_conn.close()
-        logger.info("Classified contents stored successfully")
+        
         return {"message": "Classified contents stored successfully in PostgreSQL."}
     except Exception as e:
         logger.error(f"Error storing classified contents: {e}", exc_info=True)
+        await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 
