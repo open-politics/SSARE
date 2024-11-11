@@ -337,8 +337,9 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
                 Content.entities.any(
                     and_(
                         or_(
-                            Entity.entity_type == 'GPE',
-                            Entity.entity_type == 'LOC'
+                            Entity.entity_type == 'location',
+                            Entity.entity_type == 'state',
+                            Entity.entity_type == 'region'
                         ),
                         ~Entity.locations.any()  # Check if the entity has no locations
                     )
@@ -360,7 +361,7 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
             not_pushed_count = 0
             for content in contents:
                 if content.url not in existing_urls:
-                    location_entities = [entity for entity in content.entities if entity.entity_type in ('GPE', 'LOC') and not entity.locations]
+                    location_entities = [entity for entity in content.entities if entity.entity_type in ('location', 'state', 'region') and not entity.locations]
                     
                     if location_entities:
                         content_dict = {

@@ -4,20 +4,22 @@ from typing import List, Tuple
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
-from flair.data import Sentence
-from flair.models import SequenceTagger
 from redis import Redis
 from core.service_mapping import ServiceConfig
 from core.utils import logger, UUIDEncoder
-from core.models import Content, Entity  # Updated imports
+from core.models import Content, Entity 
 from prefect import task, flow
 import uuid
-
+from gliner import GLiNER  
+from prefect_ray.task_runners import RayTaskRunner
 app = FastAPI()
 config = ServiceConfig()
 
-# Load the NER model
-ner_tagger = SequenceTagger.load("flair/ner-english-ontonotes-large")
+# Load the GLiNER model
+ner_tagger = GLiNER.from_pretrained("EmergentMethods/gliner_medium_news-v2.1")
+
+# Define the labels for GLiNER
+labels = ["person", "location", "topic",  "date", "event", "state", "number", "organization", "region", "alliance"]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,11 +33,32 @@ def retrieve_contents_from_redis(redis_conn, batch_size=50) -> List[Content]:
     redis_conn.ltrim('contents_without_entities_queue', batch_size, -1)
     return [Content(**json.loads(content)) for content in batch]
 
+def split_text_into_chunks(text: str, max_length: int, overlap: int = 50) -> List[str]:
+    words = text.split()
+    chunks = []
+    start = 0
+
+    while start < len(words):
+        end = min(start + max_length, len(words))
+        chunk = ' '.join(words[start:end])
+        chunks.append(chunk)
+        start += max_length - overlap  # Move the window forward with overlap
+
+    return chunks
+
 @task
 def predict_ner_tags(text: str) -> List[Tuple[str, str]]:
-    sentence = Sentence(text)
-    ner_tagger.predict(sentence)
-    return [(entity.text, entity.tag) for entity in sentence.get_spans('ner')]
+    # Split text into manageable chunks
+    max_length = 50  # Adjusting this based on the model's max token length
+    text_chunks = split_text_into_chunks(text, max_length)
+    
+    entities = []
+    for chunk in text_chunks:
+        # Using GLiNER to predict entities for each chunk
+        chunk_entities = ner_tagger.predict_entities(chunk, labels)
+        entities.extend([(entity["text"], entity["label"]) for entity in chunk_entities])
+    
+    return entities
 
 @task
 def process_content(content: Content) -> Tuple[Content, List[Tuple[str, str]]]:
@@ -59,7 +82,7 @@ def push_contents_with_entities(redis_conn, contents_with_entities: List[Tuple[C
     except Exception as e:
         logger.error(f"Error pushing contents with entities to queue: {str(e)}")
 
-@flow
+@flow(task_runner=RayTaskRunner())
 def extract_entities_flow(batch_size: int = 50):
     logger.info("Starting entity extraction process")
     redis_conn = Redis(host='redis', port=6379, db=2, decode_responses=True)

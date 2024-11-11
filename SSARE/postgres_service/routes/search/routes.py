@@ -253,7 +253,7 @@ async def get_contents(
                             "name": t.name
                         } for t in (content.tags or [])
                     ],
-                    "classification": content.classification.dict() if content.classification else None
+                    "evaluation": content.evaluation.dict() if content.evaluation else None
                 }
                 contents_data.append(content_dict)
 
@@ -504,7 +504,7 @@ async def get_articles_by_entity(
                         "name": t.name
                     } for t in (content.tags or [])
                 ],
-                "classification": content.classification.dict() if content.classification else None
+                "evaluation": content.evaluation.dict() if content.evaluation else None
             }
             contents_data.append(content_dict)
 
@@ -690,10 +690,7 @@ async def entity_score_over_time(
                 func.stddev(getattr(ContentEvaluation, request.score_type)).label('std_dev'),
                 func.count(Content.id).label('article_count'),
                 func.sum(ContentEntity.frequency).label('total_frequency'),
-                func.avg(ContentEvaluation.general_interest_score).label('avg_interest'),
-                func.avg(ContentEvaluation.spam_score).label('avg_spam'),
-                func.avg(ContentEvaluation.fake_news_score).label('avg_fake_news'),
-                func.array_agg(distinct(ContentEvaluation.category)).label('categories'),
+                func.avg(ContentEvaluation.sociocultural_interest).label('avg_interest'),
                 func.array_agg(distinct(ContentEvaluation.event_type)).label('event_types'),
                 func.array_agg(distinct(Content.source)).label('sources')
             )
@@ -727,18 +724,15 @@ async def entity_score_over_time(
                     "total_mentions": row.total_frequency,
                     "source_diversity": len(row.sources),
                     "sources": row.sources,
-                    "categories": row.categories,
                     "event_types": row.event_types,
-                    "general_interest_level": float(row.avg_interest) if row.avg_interest is not None else None
+                    "sociocultural_interest": float(row.avg_interest) if row.avg_interest is not None else None
                 },
                 "reliability": {
                     "confidence_score": calculate_confidence_score(
                         article_count=row.article_count,
                         std_dev=row.std_dev,
                         source_count=len(row.sources)
-                    ),
-                    "avg_spam_score": float(row.avg_spam) if row.avg_spam is not None else None,
-                    "avg_fake_news_score": float(row.avg_fake_news) if row.avg_fake_news is not None else None
+                    )
                 }
             }
             formatted_data.append(entry)
@@ -808,15 +802,11 @@ async def top_entities_by_score(
     try:
         # Validate score_type
         valid_scores = {
-            'geopolitical_relevance',
-            'legislative_influence_score',
-            'international_relevance_score',
-            'democratic_process_implications_score',
-            'general_interest_score',
-            'spam_score',
-            'clickbait_score',
-            'fake_news_score',
-            'satire_score'
+            'sociocultural_interest',
+            'global_political_impact',
+            'regional_political_impact',
+            'global_economic_impact',
+            'regional_economic_impact'
         }
         if score_type not in valid_scores:
             logger.error(f"Invalid score type: {request.score_type}")

@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-flair
+gliner
 redis
 asyncpg
 sqlmodel

@@ -14,6 +14,9 @@ echo "*/10 * * * * root curl -s -X POST http://localhost:8089/trigger_step/creat
 echo "*/10 * * * * root curl -s -X POST http://localhost:8089/trigger_step/create_geocoding_jobs >> /var/log/cron.log 2>&1" >> /etc/crontab
 echo "*/20 * * * * root curl -s -X POST http://localhost:8089/trigger_step/create_classification_jobs >> /var/log/cron.log 2>&1" >> /etc/crontab
 
+# Helper functions (less frequent)
+echo "*/10 * * * * root curl -s -X POST http://localhost:8089/trigger_step/deduplicate_contents >> /var/log/cron.log 2>&1" >> /etc/crontab
+
 # Processing Steps (more frequent)
 echo "*/2 * * * * root curl -s -X POST http://localhost:8089/trigger_step/store_raw_contents >> /var/log/cron.log 2>&1" >> /etc/crontab
 echo "*/2 * * * * root curl -s -X POST 'http://localhost:8089/trigger_step/generate_embeddings?batch_size=50' >> /var/log/cron.log 2>&1" >> /etc/crontab
