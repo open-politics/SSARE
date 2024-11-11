@@ -253,7 +253,7 @@ async def get_contents(
                             "name": t.name
                         } for t in (content.tags or [])
                     ],
-                    "evaluation": content.evaluation.dict() if content.evaluation else None
+                    "classification": content.classification.dict() if content.classification else None
                 }
                 contents_data.append(content_dict)
 
@@ -579,7 +579,7 @@ async def get_articles_by_location(
                             "name": t.name
                         } for t in (content.tags or [])
                     ],
-                    "classification": content.evaluation.dict() if content.evaluation else None
+                    "evaluation": content.evaluation.dict() if content.evaluation else None
                 }
                 contents_data.append(content_dict)
 

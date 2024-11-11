@@ -573,7 +573,7 @@ async def store_contents_with_classification(session: AsyncSession = Depends(get
                     evaluation_data = content_data.get('evaluations', {})
                     evaluation_data = {
                         'content_id': content.id,
-                        'rhetoric': evaluation_data.get('rhetoric', 'neutral'),
+                        'rhetoric': evaluation_data.get('rhetoric', 'neutral'), 
                         'sociocultural_interest': evaluation_data.get('sociocultural_interest', 0),
                         'global_political_impact': evaluation_data.get('global_political_impact', 0),
                         'regional_political_impact': evaluation_data.get('regional_political_impact', 0),

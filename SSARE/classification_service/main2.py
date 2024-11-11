@@ -131,7 +131,7 @@ def convert_llm_to_db_evaluation(llm_eval: LLMContentEvaluation, content_id: UUI
 def process_contents(batch_size: int = 10):
     """Process a batch of contents: retrieve, classify, and print them."""
     logger = get_run_logger()
-    contents = retrieve_contents_from_redis(batch_size=batch_size)
+    contents = retrieve_contents_from_redis(batch_size=5)
 
     if not contents:
         logger.warning("No contents to process.")

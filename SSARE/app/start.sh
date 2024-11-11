@@ -18,14 +18,14 @@ echo "*/20 * * * * root curl -s -X POST http://localhost:8089/trigger_step/creat
 echo "*/2 * * * * root curl -s -X POST http://localhost:8089/trigger_step/store_raw_contents >> /var/log/cron.log 2>&1" >> /etc/crontab
 echo "*/2 * * * * root curl -s -X POST 'http://localhost:8089/trigger_step/generate_embeddings?batch_size=50' >> /var/log/cron.log 2>&1" >> /etc/crontab
 echo "*/2 * * * * root curl -s -X POST 'http://localhost:8089/trigger_step/extract_entities?batch_size=50' >> /var/log/cron.log 2>&1" >> /etc/crontab
-echo "*/2 * * * * root curl -s -X POST 'http://localhost:8089/trigger_step/geocode_contents?batch_size=50' >> /var/log/cron.log 2>&1" >> /etc/crontab
-echo "*/2 * * * * root curl -s -X POST 'http://localhost:8089/trigger_step/classify_contents?batch_size=50' >> /var/log/cron.log 2>&1" >> /etc/crontab
+echo "*/10 * * * * root curl -s -X POST 'http://localhost:8089/trigger_step/geocode_contents?batch_size=50' >> /var/log/cron.log 2>&1" >> /etc/crontab
+echo "*/3 * * * * root curl -s -X POST 'http://localhost:8089/trigger_step/classify_contents?batch_size=50' >> /var/log/cron.log 2>&1" >> /etc/crontab
 
 # Storage Steps (frequent)
 echo "*/5 * * * * root curl -s -X POST http://localhost:8089/trigger_step/store_contents_with_embeddings >> /var/log/cron.log 2>&1" >> /etc/crontab
-echo "*/7 * * * * root curl -s -X POST http://localhost:8089/trigger_step/store_contents_with_entities >> /var/log/cron.log 2>&1" >> /etc/crontab
-echo "*/30 * * * * root curl -s -X POST http://localhost:8089/trigger_step/store_contents_with_geocoding >> /var/log/cron.log 2>&1" >> /etc/crontab
-echo "*/25 * * * * root curl -s -X POST http://localhost:8089/trigger_step/store_contents_with_classification >> /var/log/cron.log 2>&1" >> /etc/crontab7
+echo "*/4 * * * * root curl -s -X POST http://localhost:8089/trigger_step/store_contents_with_entities >> /var/log/cron.log 2>&1" >> /etc/crontab
+echo "*/3 * * * * root curl -s -X POST http://localhost:8089/trigger_step/store_contents_with_geocoding >> /var/log/cron.log 2>&1" >> /etc/crontab
+echo "*/5 * * * * root curl -s -X POST http://localhost:8089/trigger_step/store_contents_with_classification >> /var/log/cron.log 2>&1" >> /etc/crontab
 # Start cron service
 service cron start
 

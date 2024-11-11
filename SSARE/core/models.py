@@ -169,7 +169,7 @@ class ContentEvaluation(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     content_id: uuid.UUID = Field(foreign_key="content.id")
 
-    rhetoric: Optional[str] = Field(None)
+    rhetoric: Optional[str] = Field(default="neutral")
     
     # Impact Analysis
     sociocultural_interest: Optional[int] = Field(None, ge=0, le=10)
@@ -179,8 +179,8 @@ class ContentEvaluation(SQLModel, table=True):
     regional_economic_impact: Optional[int] = Field(None, ge=0, le=10)
     
     # Event Classification
-    event_type: Optional[str] = Field(None)
-    event_subtype: Optional[str] = Field(None)
+    event_type: Optional[str] = Field(default=None)
+    event_subtype: Optional[str] = Field(default=None)
     
     # Keywords and Categories
     keywords: Optional[List[str]] = Field(default=None, sa_column=Column(ARRAY(Text)))
