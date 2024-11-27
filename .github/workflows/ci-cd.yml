@@ -42,13 +42,13 @@ jobs:
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:latest
 
-      - name: Build and Push NLP Service
+      - name: Build and Push Embedding Service
         run: |
           cd SSARE
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/nlp_service:${{ github.sha }} -f ./nlp_service/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/nlp_service:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/nlp_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/nlp_service:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/nlp_service:latest
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/embedding_service:${{ github.sha }} -f ./embedding_service/Dockerfile .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/embedding_service:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/embedding_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/embedding_service:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/embedding_service:latest
 
       - name: Build and Push Postgres Service
         run: |
@@ -58,13 +58,6 @@ jobs:
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:latest
 
-      - name: Build and Push RAG Service
-        run: |
-          cd SSARE
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/rag_service:${{ github.sha }} -f ./rag_service/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/rag_service:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/rag_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/rag_service:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/rag_service:latest
 
       - name: Build and Push Scraper Service
         run: |
