@@ -37,7 +37,7 @@ jobs:
       - name: Build and Push Main Core App
         run: |
           cd SSARE
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }} -f ./main_core_app/Dockerfile .
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }} -f ./app/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:latest
