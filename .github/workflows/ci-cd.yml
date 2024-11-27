@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  build-and-deploy:
+  login:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -18,6 +18,10 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
+  build-and-push-custom-litellm:
+    runs-on: ubuntu-latest
+    needs: login
+    steps:
       - name: Build and Push Custom LiteLLM
         run: |
           cd SSARE
@@ -26,6 +30,10 @@ jobs:
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/custom_litellm:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/custom_litellm:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/custom_litellm:latest
 
+  build-and-push-entity-service:
+    runs-on: ubuntu-latest
+    needs: login
+    steps:
       - name: Build and Push Entity Service
         run: |
           cd SSARE
@@ -34,6 +42,10 @@ jobs:
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/entity_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/entity_service:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/entity_service:latest
 
+  build-and-push-geo-service:
+    runs-on: ubuntu-latest
+    needs: login
+    steps:
       - name: Build and Push Geo Service
         run: |
           cd SSARE
@@ -42,6 +54,10 @@ jobs:
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/geo_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/geo_service:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/geo_service:latest
 
+  build-and-push-main-core-app:
+    runs-on: ubuntu-latest
+    needs: login
+    steps:
       - name: Build and Push Main Core App
         run: |
           cd SSARE
@@ -50,6 +66,10 @@ jobs:
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/main_core_app:latest
 
+  build-and-push-embedding-service:
+    runs-on: ubuntu-latest
+    needs: login
+    steps:
       - name: Build and Push Embedding Service
         run: |
           cd SSARE
@@ -58,6 +78,10 @@ jobs:
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/embedding_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/embedding_service:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/embedding_service:latest
 
+  build-and-push-postgres-service:
+    runs-on: ubuntu-latest
+    needs: login
+    steps:
       - name: Build and Push Postgres Service
         run: |
           cd SSARE
@@ -66,7 +90,10 @@ jobs:
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/postgres_service:latest
 
-
+  build-and-push-scraper-service:
+    runs-on: ubuntu-latest
+    needs: login
+    steps:
       - name: Build and Push Scraper Service
         run: |
           cd SSARE
@@ -75,6 +102,10 @@ jobs:
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/scraper_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/scraper_service:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper_service:latest
 
+  build-and-push-classification-service:
+    runs-on: ubuntu-latest
+    needs: login
+    steps:
       - name: Build and Push Classification Service
         run: |
           cd SSARE
@@ -83,7 +114,10 @@ jobs:
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/classification_service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/classification_service:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/classification_service:latest
 
-
+  build-and-push-embedding-flow:
+    runs-on: ubuntu-latest
+    needs: login
+    steps:
       - name: Build and Push Embedding Flow
         run: |
           cd SSARE
@@ -92,6 +126,10 @@ jobs:
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/embedding_flow:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/embedding_flow:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/embedding_flow:latest
 
+  build-and-push-scraper-flow:
+    runs-on: ubuntu-latest
+    needs: login
+    steps:
       - name: Build and Push Scraper Flow
         run: |
           cd SSARE
@@ -100,10 +138,14 @@ jobs:
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/scraper_flow:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/scraper_flow:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper_flow:latest
 
+  build-and-push-entities-flow:
+    runs-on: ubuntu-latest
+    needs: login
+    steps:
       - name: Build and Push Entities Flow
         run: |
           cd SSARE
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/entities_flow:${{ github.sha }} -f ./entities_service/Dockerfile --target flow .
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/entities_flow:${{ github.sha }} -f ./entity_service/Dockerfile --target flow .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/entities_flow:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/entities_flow:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/entities_flow:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/entities_flow:latest
