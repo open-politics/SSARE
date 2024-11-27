@@ -19,20 +19,20 @@ replicaCount:
   redis: 1
 
 image:
-  classificationService: your-docker-repo/classification_service:latest
-  embeddingService: your-docker-repo/embedding_service:latest
-  entityService: your-docker-repo/entity_service:latest
-  geoService: your-docker-repo/geo_service:latest
+  classificationService: open-politics-project/classification_service:latest
+  embeddingService: open-politics-project/embedding_service:latest
+  entityService: open-politics-project/entity_service:latest
+  geoService: open-politics-project/geo_service:latest
   litellm: ghcr.io/berriai/litellm:main-latest
-  mainCoreApp: your-docker-repo/main_core_app:latest
-  ollama: your-docker-repo/ollama:latest
+  mainCoreApp: open-politics-project/main_core_app:latest
+  ollama: open-politics-project/ollama:latest
   peliasPlaceholder: pelias/placeholder:latest
-  postgresService: postgres:15
+  postgresService: open-politics-project/postgres_service:latest
   cloudSqlProxy: gcr.io/cloud-sql-connectors/cloud-sql-proxy
   prefectDatabase: postgres:15
-  scraperService: your-docker-repo/scraper_service:latest
-  rayHead: your-docker-repo/ray:latest
-  rayWorker: your-docker-repo/ray:latest
+  scraperService: open-politics-project/scraper_service:latest
+  rayHead: open-politics-project/ray:latest
+  rayWorker: open-politics-project/ray:latest
   traefik: traefik:v2.5
   redis: redis:latest
 
