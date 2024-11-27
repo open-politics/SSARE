@@ -71,7 +71,9 @@ services:
       - PREFECT_API_KEY=${PREFECT_API_KEY}
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-latest
+    build: 
+      context: ./SSARE
+      dockerfile: ./litellm/Dockerfile
     volumes:
       - ./SSARE/litellm/config.yaml:/app/config.yaml
     ports:
