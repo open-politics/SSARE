@@ -1,5 +1,23 @@
 services:
 
+  # articles_database:
+  #   image: pgvector/pgvector:pg16
+  #   restart: always
+  #   environment:
+  #     - POSTGRES_USER=${ARTICLES_DB_USER}
+  #     - POSTGRES_PASSWORD=${ARTICLES_DB_PASSWORD}
+  #     - POSTGRES_DB=${ARTICLES_DB_NAME}
+  #     - POSTGRES_CONFIG_FILE=/etc/postgresql.conf
+  #   volumes:
+  #     - ./SSARE/articles_db/postgres.conf:/etc/postgresql.conf
+  #     - ./data/articles_db_data:/var/lib/postgresql/data
+  #   command: -c shared_preload_libraries='pg_stat_statements' -c pg_stat_statements.max=10000 -c pg_stat_statements.track=all
+  #   ports:
+  #     - "${ARTICLES_DB_PORT}:5473"
+  #   networks:
+  #     - default
+  #     - ssare-network
+
   classification_service:
     build: 
       context: ./SSARE
@@ -9,8 +27,19 @@ services:
     environment:
       - LOCAL_LLM=${LOCAL_LLM}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+    networks:
+      - default
+      - ssare-network
+
+  embedding_flow:
+    build: 
+      context: ./SSARE
+      dockerfile: ./embedding_service/Dockerfile
+      target: flow
+    restart: always
+    environment:
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
     env_file:
       - .env
     networks:
@@ -28,8 +57,7 @@ services:
     depends_on:
       - postgres_service
     environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
     env_file:
       - .env
     networks:
@@ -46,8 +74,7 @@ services:
     depends_on:
       - postgres_service
     environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
     networks:
       - default
       - ssare-network
@@ -67,8 +94,7 @@ services:
     env_file:
       - .env
     environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
 
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
@@ -92,15 +118,35 @@ services:
       - ./backups:/app/backups
     env_file:
       - .env
-    environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
     depends_on:
       - scraper_service
       - postgres_service
     networks:
       - default
       - ssare-network
+
+  # neo4j:
+  #   image: neo4j:latest
+  #   ports:
+  #     - "${NEO4J_HTTP_PORT}:7474"
+  #     - "${NEO4J_BOLT_PORT}:7687"
+  #   environment:
+  #     - NEO4J_AUTH=neo4j/'king kong'
+  #     - NEO4J_apoc_export_file_enabled=true
+  #     - NEO4J_apoc_import_file_enabled=true
+  #     - NEO4J_apoc_import_file_use__neo4j__config=true
+  #     - NEO4J_PLUGINS=["apoc", "graph-data-science"]
+  #     - POSTGRES_USER=${POSTGRES_USER}
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+  #     - POSTGRES_DB=${POSTGRES_DB}
+  #   volumes:
+  #     - neo4j_data:/data
+  #     - neo4j_logs:/logs
+  #     - neo4j_import:/var/lib/neo4j/import
+  #     - neo4j_plugins:/plugins
+  #   networks:
+  #     - default
+  #     - ssare-network
 
   ollama:
     build: 
@@ -176,6 +222,30 @@ services:
       - ./credentials/postgres-service-key.json:/credentials/postgres-service-key.json:ro
       - cloudsql:/cloudsql
 
+  # prefect_worker:
+  #   image: prefecthq/prefect:3.1-python3.10-conda
+  #   restart: on-failure:5
+  #   command: >
+  #     sh -c "pip install --upgrade setuptools && prefect work-pool create --type docker my-docker-pool"
+  #   depends_on:
+  #     - prefect_server
+  #   environment:
+  #     - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+  #   networks:
+  #     - default
+  #     - ssare-network
+
+  # prefect_cli:
+  #   image: prefecthq/prefect:3.1-python3.10-conda
+  #   restart: no
+  #   command: >
+  #     sh -c "pip install --upgrade setuptools"
+  #   environment:
+  #     - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+  #   depends_on:
+  #     - prefect_server
+  #     - prefect_worker
+
   prefect_database:
     image: postgres:15
     restart: always
@@ -196,6 +266,88 @@ services:
       - default
       - ssare-network
 
+  prefect_server:
+    image: prefecthq/prefect:3.1.2.dev1-python3.11-conda
+    restart: always
+    volumes:
+      - ./data/prefect_data:/root/.prefect
+    command: >
+      sh -c "pip install --upgrade setuptools && prefect server start"
+    environment:
+      - PREFECT_UI_URL=http://0.0.0.0:${PREFECT_SERVER_PORT}
+      - PREFECT_API_URL=http://0.0.0.0:${PREFECT_SERVER_PORT}/api
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+    ports:
+      - "${PREFECT_SERVER_PORT}:${PREFECT_SERVER_PORT}"
+    networks:
+      - default
+      - ssare-network
+
+  # r2r:
+  #   build: 
+  #     context: ./SSARE
+  #     dockerfile: ./r2r_server/Dockerfile
+  #   ports:
+  #     - "${R2R_PORT}:8000"
+  #   environment:
+  #     - POSTGRES_USER=${R2R_DB_USER}
+  #     - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
+  #     - POSTGRES_HOST=r2r_database
+  #     - POSTGRES_PORT=5432
+  #     - POSTGRES_DBNAME=${R2R_DB_NAME}
+  #     - POSTGRES_VECS_COLLECTION=r2r_vecs_3
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #     - CONFIG_OPTION=${CONFIG_OPTION:-default}
+  #     - HATCHET_CLIENT_TOKEN=${HATCHET_CLIENT_TOKEN}
+  #   depends_on:
+  #     - r2r_database
+  #   networks:
+  #     - default
+  #     - ssare-network
+
+  # r2r_database:
+  #   image: pgvector/pgvector:pg16
+  #   restart: always
+  #   environment:
+  #     - POSTGRES_USER=${R2R_DB_USER}
+  #     - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
+  #     - POSTGRES_DB=${R2R_DB_NAME}
+  #   volumes:
+  #     - r2r_db_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "${R2R_DB_PORT}:5432"
+  #   networks:
+  #     - default
+  #     - ssare-network
+
+  # rag_service:
+  #   build: 
+  #     context: ./SSARE
+  #     dockerfile: ./rag_service/Dockerfile
+  #   restart: no
+  #   ports:
+  #     - "${RAG_SERVICE_PORT}:4312"
+  #   depends_on:
+  #     - redis
+  #     - r2r_database
+  #   networks:
+  #     - default
+  #     - ssare-network
+  #   environment:
+  #     - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+  #     - POSTGRES_HOST=r2r_database
+  #     - POSTGRES_USER=${R2R_DB_USER}
+  #     - POSTGRES_PASSWORD=${R2R_DB_PASSWORD}
+  #     - POSTGRES_DBNAME=${R2R_DB_NAME}
+  #     - POSTGRES_PORT=5432
+  #     - POSTGRES_VECS_COLLECTION=ssare-vec
+  #     - INIT_DB=true
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #     - R2R_SERVER_URL=http://r2r:${R2R_PORT}
+  #     - HATCHET_CLIENT_TOKEN=${HATCHET_CLIENT_TOKEN}
+  #   env_file:
+  #     - .env
+
   ray_head:
     build: 
       context: ./SSARE
@@ -214,7 +366,8 @@ services:
     environment:
       - RAY_HEAD_SERVICE_HOST=ray_head
       - RAY_HEAD_SERVICE_PORT=6380
-    shm_size: 10.24gb
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+    shm_size: 8gb
 
   
   ray_worker:
@@ -228,8 +381,9 @@ services:
       - ssare-network
     depends_on:
       - ray_head
-    shm_size: 10.24gb
-    
+    shm_size: 8gb
+  
+
 
   redis:
     image: redis:latest
@@ -243,6 +397,18 @@ services:
       - default
       - ssare-network
 
+  # reranker_service:
+  #   build: 
+  #     context: ./SSARE
+  #     dockerfile: ./reranker_service/Dockerfile
+  #   ports:
+  #     - "${RERANKER_SERVICE_PORT}:6930"
+  #   environment:
+  #     - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
+  #   networks:
+  #     - default
+  #     - ssare-network
+
   scraper_service:
     build: 
       context: ./SSARE
@@ -250,58 +416,20 @@ services:
     ports:
       - "${SCRAPER_SERVICE_PORT}:8081"
     environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/bb0713a4-8ee0-466d-a215-02f392396cb8/workspaces/befbba42-c4cb-4bce-b539-ab6bb67a99c0
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
+      - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
     networks:
       - default
       - ssare-network
 
-## FLOWS
-
-  embedding_flow:
-      build: 
-        context: ./SSARE
-        dockerfile: ./embedding_service/Dockerfile
-        target: flow
-      restart: always
-      environment:
-        - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/bb0713a4-8ee0-466d-a215-02f392396cb8/workspaces/befbba42-c4cb-4bce-b539-ab6bb67a99c0
-        - PREFECT_API_KEY=${PREFECT_API_KEY}
-      env_file:
-        - .env
-      networks:
-        - default
-        - ssare-network
-
-  scraper_flow:
-    build: 
-      context: ./SSARE
-      dockerfile: ./scraper_service/Dockerfile
-      target: flow
-    restart: always
-    environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
-    env_file:
-      - .env
-    networks:
-      - default
-      - ssare-network
-
-  entities_flow:
-    build: 
-      context: ./SSARE
-      dockerfile: ./entity_service/Dockerfile
-      target: flow
-    restart: always
-    environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
-    env_file:
-      - .env
-    networks:
-      - default
-      - ssare-network
+  # semantic_router:
+  #   build: 
+  #     context: ./SSARE
+  #     dockerfile: ./semantic_router/Dockerfile
+  #   ports:
+  #     - "${SEMANTIC_ROUTER_PORT}:${SEMANTIC_ROUTER_PORT}"
+  #   networks:
+  #     - default
+  #     - ssare-network
 
 volumes:
   articles_db_data:
