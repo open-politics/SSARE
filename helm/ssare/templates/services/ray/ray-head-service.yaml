@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ray-head
+  namespace: {{ .Values.namespace }}
+spec:
+  type: {{ .Values.service.rayHead.type }}
+  ports:
+    - name: ray-redis
+      port: {{ index .Values.service.rayHead.ports 0 "port" }}
+      targetPort: {{ index .Values.service.rayHead.ports 0 "targetPort" }}
+    - name: ray-dashboard
+      port: {{ index .Values.service.rayHead.ports 1 "port" }}
+      targetPort: {{ index .Values.service.rayHead.ports 1 "targetPort" }}
+    - name: ray-gcs
+      port: {{ index .Values.service.rayHead.ports 2 "port" }}
+      targetPort: {{ index .Values.service.rayHead.ports 2 "targetPort" }}
+  selector:
+    app: ray-head

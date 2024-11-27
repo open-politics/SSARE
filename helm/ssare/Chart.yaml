@@ -1,0 +1,7 @@
+apiVersion: v2
+name: ssare
+description: A Helm chart for deploying the SSARE stack
+type: application
+version: 0.1.0
+appVersion: "1.0"
+icon: https://avatars.githubusercontent.com/u/175727877?s=200&v=4

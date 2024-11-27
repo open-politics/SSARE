@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: entity-service
+  namespace: {{ .Values.namespace }}
+spec:
+  type: {{ .Values.service.entityService.type }}
+  ports:
+    - port: {{ .Values.service.entityService.port }}
+      targetPort: {{ .Values.service.entityService.targetPort }}
+  selector:
+    app: entity-service

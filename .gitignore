@@ -24,3 +24,6 @@ package.json
 skaffold.yaml
 z_dev_scripts/logs
 SSARE/textgrad
+.env
+backups/
+credentials/

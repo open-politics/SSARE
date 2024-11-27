@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: main-core-app
+  namespace: {{ .Values.namespace }}
+spec:
+  type: {{ .Values.service.mainCoreApp.type }}
+  ports:
+    - port: {{ .Values.service.mainCoreApp.port }}
+      targetPort: {{ .Values.service.mainCoreApp.targetPort }}
+  selector:
+    app: main-core-app

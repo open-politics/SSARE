@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: classification-service
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicaCount.classificationService }}
+  selector:
+    matchLabels:
+      app: classification-service
+  template:
+    metadata:
+      labels:
+        app: classification-service
+    spec:
+      containers:
+        - name: classification-service
+          image: {{ .Values.image.classificationService }}
+          ports:
+            - containerPort: 5688
+          envFrom:
+            - configMapRef:
+                name: ssare-config
+            - secretRef:
+                name: ssare-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          env:
+            - name: LOCAL_LLM
+              value: "{{ .Values.env.secrets.LOCAL_LLM }}"
+            # Add other environment variables as needed

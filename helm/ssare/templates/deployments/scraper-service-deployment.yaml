@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scraper-service
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicaCount.scraperService }}
+  selector:
+    matchLabels:
+      app: scraper-service
+  template:
+    metadata:
+      labels:
+        app: scraper-service
+    spec:
+      containers:
+        - name: scraper-service
+          image: {{ .Values.image.scraperService }}
+          ports:
+            - containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: ssare-config
+            - secretRef:
+                name: ssare-secrets
+          env:
+            - name: PREFECT_API_URL
+              value: "{{ .Values.env.config.PREFECT_API_URL }}"
+            - name: PREFECT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ssare-secrets
+                  key: PREFECT_API_KEY
+            - name: PREFECT_WORKSPACE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: ssare-secrets
+                  key: PREFECT_WORKSPACE_ID
+            - name: PREFECT_WORKSPACE
+              valueFrom:
+                secretKeyRef:
+                  name: ssare-secrets
+                  key: PREFECT_WORKSPACE
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

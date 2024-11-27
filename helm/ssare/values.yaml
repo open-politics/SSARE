@@ -1,0 +1,187 @@
+namespace: ssare
+
+replicaCount:
+  classificationService: 2
+  embeddingService: 2
+  entityService: 2
+  geoService: 2
+  litellm: 1
+  mainCoreApp: 2
+  ollama: 1
+  peliasPlaceholder: 1
+  postgresService: 1
+  cloudSqlProxy: 1
+  prefectDatabase: 1
+  scraperService: 2
+  rayHead: 1
+  rayWorker: 3
+  traefik: 1
+  redis: 1
+
+image:
+  classificationService: your-docker-repo/classification_service:latest
+  embeddingService: your-docker-repo/embedding_service:latest
+  entityService: your-docker-repo/entity_service:latest
+  geoService: your-docker-repo/geo_service:latest
+  litellm: ghcr.io/berriai/litellm:main-latest
+  mainCoreApp: your-docker-repo/main_core_app:latest
+  ollama: your-docker-repo/ollama:latest
+  peliasPlaceholder: pelias/placeholder:latest
+  postgresService: postgres:15
+  cloudSqlProxy: gcr.io/cloud-sql-connectors/cloud-sql-proxy
+  prefectDatabase: postgres:15
+  scraperService: your-docker-repo/scraper_service:latest
+  rayHead: your-docker-repo/ray:latest
+  rayWorker: your-docker-repo/ray:latest
+  traefik: traefik:v2.5
+  redis: redis:latest
+
+service:
+  classificationService:
+    type: ClusterIP
+    port: 5688
+    targetPort: 5688
+  embeddingService:
+    type: ClusterIP
+    port: 420
+    targetPort: 420
+  entityService:
+    type: ClusterIP
+    port: 1290
+    targetPort: 1290
+  geoService:
+    type: ClusterIP
+    port: 3690
+    targetPort: 3690
+  litellm:
+    type: ClusterIP
+    port: 4000
+    targetPort: 4000
+  mainCoreApp:
+    type: ClusterIP
+    port: 8089
+    targetPort: 8089
+  ollama:
+    type: ClusterIP
+    port: 11434
+    targetPort: 11434
+  peliasPlaceholder:
+    type: ClusterIP
+    port: 4434
+    targetPort: 4434
+  postgresService:
+    type: ClusterIP
+    port: 5434
+    targetPort: 5432
+  cloudSqlProxy:
+    type: ClusterIP
+    port: 5432
+    targetPort: 5432
+  prefectDatabase:
+    type: ClusterIP
+    port: 5432
+    targetPort: 5432
+  scraperService:
+    type: ClusterIP
+    port: 8081
+    targetPort: 8081
+  rayHead:
+    type: ClusterIP
+    ports:
+      - name: ray-redis
+        port: 6379
+        targetPort: 6379
+      - name: ray-dashboard
+        port: 8265
+        targetPort: 8265
+      - name: ray-gcs
+        port: 10001
+        targetPort: 10001
+  rayWorker:
+    type: ClusterIP
+  traefik:
+    type: LoadBalancer
+    port: 80
+    targetPort: 80
+    securePort: 443
+    targetSecurePort: 443
+  redis:
+    type: ClusterIP
+    port: 6379
+    targetPort: 6379
+
+env:
+  config:
+    PREFECT_API_URL: "https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}"
+  secrets:
+    OPENAI_API_KEY: ""
+    PREFECT_API_KEY: ""
+    POSTGRES_USER: ""
+    POSTGRES_PASSWORD: ""
+    PREFECT_WORKSPACE_ID: ""
+    PREFECT_WORKSPACE: ""
+
+persistence:
+  postgresService:
+    storage: 20Gi
+  cloudSqlProxy:
+    storage: 5Gi
+  prefectDatabase:
+    storage: 10Gi
+  scraperService:
+    storage: 10Gi
+  peliasPlaceholder:
+    storage: 5Gi
+  redis:
+    storage: 5Gi
+
+ingress:
+  enabled: true
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  hosts:
+    - host: opol.io
+      paths:
+        - path: /classification-service
+          pathType: Prefix
+          appName: classification-service
+          servicePort: 5688
+        - path: /embedding-service
+          pathType: Prefix
+          appName: embedding-service
+          servicePort: 420
+        - path: /entity-service
+          pathType: Prefix
+          appName: entity-service
+          servicePort: 1290
+        - path: /geo-service
+          pathType: Prefix
+          appName: geo-service
+          servicePort: 3690
+        - path: /litellm
+          pathType: Prefix
+          appName: litellm
+          servicePort: 4000
+        - path: /main-core-app
+          pathType: Prefix
+          appName: main-core-app
+          servicePort: 8089
+        - path: /ollama
+          pathType: Prefix
+          appName: ollama
+          servicePort: 11434
+        - path: /pelias-placeholder
+          pathType: Prefix
+          appName: pelias-placeholder
+          servicePort: 4434
+        - path: /scraper-service
+          pathType: Prefix
+          appName: scraper-service
+          servicePort: 8081
+  tls:
+    - hosts:
+        - opol.io
+      secretName: ssare-tls
+
+cloudSqlProxy:
+  connectionName: open-politics-proje:us-central1:opp-production-1

@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicaCount.litellm }}
+  selector:
+    matchLabels:
+      app: litellm
+  template:
+    metadata:
+      labels:
+        app: litellm
+    spec:
+      containers:
+        - name: litellm
+          image: {{ .Values.image.litellm }}
+          ports:
+            - containerPort: 4000
+          volumeMounts:
+            - name: litellm-config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+            - name: litellm-data
+              mountPath: /app/data
+          command: ["litellm"]
+          args: ["--config", "/app/config.yaml", "--debug", "--host", "0.0.0.0", "--port", "4000", "--num_workers", "8"]
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: litellm-config
+          configMap:
+            name: ssare-config
+            items:
+              - key: litellm-config.yaml
+                path: config.yaml
+        - name: litellm-data
+          emptyDir: {}

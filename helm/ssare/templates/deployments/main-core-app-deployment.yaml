@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: main-core-app
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicaCount.mainCoreApp }}
+  selector:
+    matchLabels:
+      app: main-core-app
+  template:
+    metadata:
+      labels:
+        app: main-core-app
+    spec:
+      containers:
+        - name: main-core-app
+          image: {{ .Values.image.mainCoreApp }}
+          ports:
+            - containerPort: 8089
+          envFrom:
+            - configMapRef:
+                name: ssare-config
+            - secretRef:
+                name: ssare-secrets
+          volumeMounts:
+            - name: backups
+              mountPath: /app/backups
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: backups
+          persistentVolumeClaim:
+            claimName: backups-pvc

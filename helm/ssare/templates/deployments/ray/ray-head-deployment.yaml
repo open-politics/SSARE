@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ray-head
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicaCount.rayHead }}
+  selector:
+    matchLabels:
+      app: ray-head
+  template:
+    metadata:
+      labels:
+        app: ray-head
+    spec:
+      containers:
+        - name: ray-head
+          image: {{ .Values.image.rayHead }}
+          ports:
+            - containerPort: {{ index .Values.service.rayHead.ports 0 "targetPort" }}
+            - containerPort: {{ index .Values.service.rayHead.ports 1 "targetPort" }}
+            - containerPort: {{ index .Values.service.rayHead.ports 2 "targetPort" }}
+          command: ["ray", "start", "--head", "--port=6380", "--dashboard-host=0.0.0.0", "--block"]
+          env:
+            - name: RAY_HEAD_SERVICE_HOST
+              value: "ray-head.{{ .Values.namespace }}.svc.cluster.local"
+            - name: RAY_HEAD_SERVICE_PORT
+              value: "6380"
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1"

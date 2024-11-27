@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embedding-service
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicaCount.embeddingService }}
+  selector:
+    matchLabels:
+      app: embedding-service
+  template:
+    metadata:
+      labels:
+        app: embedding-service
+    spec:
+      containers:
+        - name: embedding-service
+          image: {{ .Values.image.embeddingService }}
+          ports:
+            - containerPort: 420
+          envFrom:
+            - configMapRef:
+                name: ssare-config
+            - secretRef:
+                name: ssare-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          env:
+            - name: PREFECT_API_URL
+              value: "{{ .Values.env.config.PREFECT_API_URL }}"
+            # Add other environment variables as needed
+          dependsOn:
+            - postgres-service

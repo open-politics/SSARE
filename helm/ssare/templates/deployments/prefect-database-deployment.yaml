@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefect-database
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicaCount.prefectDatabase }}
+  selector:
+    matchLabels:
+      app: prefect-database
+  template:
+    metadata:
+      labels:
+        app: prefect-database
+    spec:
+      containers:
+        - name: prefect-database
+          image: {{ .Values.image.prefectDatabase }}
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ssare-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ssare-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              value: "prefect_db"
+          volumeMounts:
+            - name: prefect-database-storage
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+      volumes:
+        - name: prefect-database-storage
+          persistentVolumeClaim:
+            claimName: prefect-database-pvc

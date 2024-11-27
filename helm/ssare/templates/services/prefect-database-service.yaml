@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: prefect-database
+  namespace: {{ .Values.namespace }}
+spec:
+  type: {{ .Values.service.prefectDatabase.type }}
+  ports:
+    - port: {{ .Values.service.prefectDatabase.port }}
+      targetPort: {{ .Values.service.prefectDatabase.targetPort }}
+  selector:
+    app: prefect-database

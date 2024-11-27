@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloud-sql-proxy
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicaCount.cloudSqlProxy }}
+  selector:
+    matchLabels:
+      app: cloud-sql-proxy
+  template:
+    metadata:
+      labels:
+        app: cloud-sql-proxy
+    spec:
+      containers:
+        - name: cloud-sql-proxy
+          image: {{ .Values.image.cloudSqlProxy }}
+          ports:
+            - containerPort: 5432
+          args:
+            - "--credentials-file=/credentials/postgres-service-key.json"
+            - "{{ .Values.cloudSqlProxy.connectionName }}"
+          volumeMounts:
+            - name: cloud-sql-proxy-credentials
+              mountPath: /credentials
+              readOnly: true
+      volumes:
+        - name: cloud-sql-proxy-credentials
+          secret:
+            secretName: cloud-sql-proxy-secret

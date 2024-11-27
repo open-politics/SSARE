@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ray-worker
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicaCount.rayWorker }}
+  selector:
+    matchLabels:
+      app: ray-worker
+  template:
+    metadata:
+      labels:
+        app: ray-worker
+    spec:
+      containers:
+        - name: ray-worker
+          image: {{ .Values.image.rayWorker }}
+          command: ["ray", "start", "--address=ray-head.{{ .Values.namespace }}.svc.cluster.local:6380", "--block"]
+          resources:
+            requests:
+              memory: "500Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"

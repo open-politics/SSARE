@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ssare-config
+  namespace: {{ .Values.namespace }}
+data:
+  PREFECT_API_URL: "{{ .Values.env.config.PREFECT_API_URL }}"

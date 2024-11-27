@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloud-sql-proxy
+  namespace: {{ .Values.namespace }}
+spec:
+  type: {{ .Values.service.cloudSqlProxy.type }}
+  ports:
+    - port: {{ .Values.service.cloudSqlProxy.port }}
+      targetPort: {{ .Values.service.cloudSqlProxy.targetPort }}
+  selector:
+    app: cloud-sql-proxy

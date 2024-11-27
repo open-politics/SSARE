@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: classification-service
+  namespace: {{ .Values.namespace }}
+spec:
+  type: {{ .Values.service.classificationService.type }}
+  ports:
+    - port: {{ .Values.service.classificationService.port }}
+      targetPort: {{ .Values.service.classificationService.targetPort }}
+  selector:
+    app: classification-service

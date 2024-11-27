@@ -1,0 +1,77 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-service-pvc
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.persistence.postgresService.storage }}
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cloud-sql-proxy-pvc
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.persistence.cloudSqlProxy.storage }}
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prefect-database-pvc
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.persistence.prefectDatabase.storage }}
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: scraper-service-pvc
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.persistence.scraperService.storage }}
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pelias-placeholder-pvc
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.persistence.peliasPlaceholder.storage }}
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.persistence.redis.storage }}

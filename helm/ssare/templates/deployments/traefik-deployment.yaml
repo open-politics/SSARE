@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicaCount.traefik }}
+  selector:
+    matchLabels:
+      app: traefik
+  template:
+    metadata:
+      labels:
+        app: traefik
+    spec:
+      containers:
+        - name: traefik
+          image: {{ .Values.image.traefik }}
+          ports:
+            - containerPort: 80
+            - containerPort: 443
+          args:
+            - "--api.insecure=true"
+            - "--providers.kubernetescrd=true"
+            - "--providers.kubernetesingress=true"
+            - "--entrypoints.web.address=:80"
+            - "--entrypoints.websecure.address=:443"
+            - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+            - "--certificatesresolvers.myresolver.acme.email=engage@open-politics.org"
+            - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+          volumeMounts:
+            - name: letsencrypt
+              mountPath: /letsencrypt
+      volumes:
+        - name: letsencrypt
+          persistentVolumeClaim:
+            claimName: backups-pvc
