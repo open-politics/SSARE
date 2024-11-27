@@ -2,12 +2,12 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [x]
+    branches: [main]
   pull_request:
-    branches: [x]
+    branches: [main]
 
 jobs:
-  build-and-push:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -38,3 +38,4 @@ jobs:
             docker tag ${{ secrets.DOCKERHUB_USERNAME }}/${service}:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/${service}:latest
             docker push ${{ secrets.DOCKERHUB_USERNAME }}/${service}:latest
           done
+
