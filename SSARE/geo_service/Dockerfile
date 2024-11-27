@@ -11,6 +11,7 @@ COPY core ./core
 
 # Copy the main.py and other files from postgres_service
 COPY geo_service/main.py .
+COPY geo_service/flows ./flows
 
 COPY geo_service/start.sh .
 RUN chmod +x start.sh

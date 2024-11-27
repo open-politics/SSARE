@@ -1,0 +1,19 @@
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    {% for queue_name, info in queues.items() %}
+    <div class="bg-gray-700 p-3 rounded-lg">
+        <div class="flex justify-between items-center mb-2">
+            <span class="font-semibold">{{ queue_name }}</span>
+            <span class="text-sm bg-gray-600 px-2 py-1 rounded">DB: {{ info.db }}</span>
+        </div>
+        <div class="flex items-center">
+            <div class="w-full bg-gray-600 rounded-full h-2 mr-2">
+                <div class="bg-blue-500 h-2 rounded-full" 
+                     style="width: {{ (info.length / 100) * 100 if info.length < 100 else 100 }}%">
+                </div>
+            </div>
+            <span class="text-sm">{{ info.length }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+

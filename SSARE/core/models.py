@@ -42,7 +42,8 @@ class Content(BaseModel, table=True):
     publication_date: Optional[str] = Field(default=None, index=True)
     version: int = Field(default=1)
     is_active: bool = Field(default=True)
-
+    summary: Optional[str] = Field(default=None, sa_column=Column(Text))
+    meta_summary: Optional[str] = Field(default=None, sa_column=Column(Text))
     # Primary text content for articles and text-based content
     text_content: Optional[str] = Field(default=None, sa_column=Column(Text))
 
@@ -72,6 +73,7 @@ class MediaDetails(SQLModel, table=True):
     duration: Optional[float] = Field(default=None)  # For audio and video
     transcribed_text: Optional[str] = Field(default=None, sa_column=Column(Text))  # For audio and video
     captions: Optional[str] = Field(default=None, sa_column=Column(Text))  # For videos
+    top_image: Optional[str] = Field(default=None, sa_column=Column(Text))
 
     # Relationships
     content: Content = Relationship(back_populates="media_details")
@@ -169,6 +171,10 @@ class ContentEvaluation(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     content_id: uuid.UUID = Field(foreign_key="content.id")
 
+    # Thematic Locations
+    thematic_locations: Optional[List[str]] = Field(default=None, sa_column=Column(ARRAY(Text)))
+
+    # Rhetoric
     rhetoric: Optional[str] = Field(default="neutral")
     
     # Impact Analysis
@@ -183,7 +189,6 @@ class ContentEvaluation(SQLModel, table=True):
     event_subtype: Optional[str] = Field(default=None)
     
     # Keywords and Categories
-    keywords: Optional[List[str]] = Field(default=None, sa_column=Column(ARRAY(Text)))
     categories: Optional[List[str]] = Field(default=None, sa_column=Column(ARRAY(Text)))
 
     # Relationships

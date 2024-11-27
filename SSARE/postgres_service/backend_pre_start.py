@@ -1,18 +1,20 @@
 import logging
 import asyncio
+import os
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import select
 from tenacity import after_log, before_log, retry, stop_after_attempt, wait_fixed
-from core.service_mapping import ServiceConfig
+from core.service_mapping import config, get_db_url
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
+from core.utils import logger
 
-config = ServiceConfig()
 
-DATABASE_URL = (
-    f"postgresql+asyncpg://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
-    f"@articles_database:5432/{config.ARTICLES_DB_NAME}"
-)
+DATABASE_URL = get_db_url()
+
+logger.info(f"DATABASE_URL: {DATABASE_URL}")
+logger.info(f"DB_MODE: {os.getenv('DB_MODE')}")
 
 engine = create_async_engine(DATABASE_URL, echo=False)
 
@@ -20,8 +22,7 @@ async_session = sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False
 )
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+
 
 max_tries = 60 * 5  # 5 minutes
 wait_seconds = 1
@@ -36,6 +37,10 @@ wait_seconds = 1
 async def init() -> None:
     try:
         async with async_session() as session:
+            # Create vector extension first
+            await session.execute(text('CREATE EXTENSION IF NOT EXISTS vector'))
+            await session.commit()
+            # Then check connection
             await session.execute(select(1))
     except Exception as e:
         logger.error(e)

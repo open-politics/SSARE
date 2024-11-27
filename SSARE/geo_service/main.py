@@ -15,7 +15,7 @@ from sqlalchemy import and_
 from core.utils import logger
 from core.service_mapping import ServiceConfig
 from core.models import Content, Location, Entity, ContentEvaluation, EntityLocation, ContentEntity
-from core.adb import get_session
+from core.adb import get_session, get_redis_url
 import uuid
 import pickle
 from datetime import timedelta
@@ -24,25 +24,14 @@ from datetime import datetime
 
 config = ServiceConfig()
 
-import sys
-
 # Constants for Redis cache configuration
-REDIS_CACHE_HOST = 'redis'
-REDIS_CACHE_PORT = 6379
-REDIS_CACHE_DB = 5  # Using a different DB for caching
 CACHE_EXPIRY = timedelta(minutes=15)  # Cache for 15 minutes
-
-# Add these constants
-CACHE_WARM_INTERVAL = timedelta(minutes=14)  # Slightly less than cache expiry
+CACHE_WARM_INTERVAL = timedelta(minutes=14)
 LAST_WARM_KEY = "geojson_last_warm"
 
 # Helper function to get Redis cache connection
 def get_redis_cache():
-    return Redis(
-        host=REDIS_CACHE_HOST,
-        port=REDIS_CACHE_PORT,
-        db=REDIS_CACHE_DB
-    )
+    return Redis.from_url(get_redis_url(), db=5)  # Using db 5 for caching
 
 # Add cache warming function
 async def warm_cache(session: AsyncSession):
@@ -160,7 +149,8 @@ def call_pelias_api(location, lang=None):
 # Function to process content and geocode locations
 def process_content(content_data):
     entities = content_data.get('entities', [])
-    location_entities = [entity for entity in entities if entity['tag'] in ["location", "facility"]]
+    location_entities = [entity for entity in entities if entity['tag'] in ["LOC"]]
+    logger.info(f"Location entities: {location_entities[:3]}")
     location_counts = Counter(entity['text'] for entity in location_entities)
     total_locations = len(location_entities)
     location_weights = {location: count / total_locations for location, count in location_counts.items()}
@@ -195,8 +185,8 @@ def push_geocoded_contents(redis_conn, geocoded_contents):
 @flow
 def geocode_contents_flow(batch_size: int):
     logger.info("Starting geocoding process")
-    redis_conn_raw = Redis(host='redis', port=6379, db=3, decode_responses=True)
-    redis_conn_processed = Redis(host='redis', port=6379, db=4, decode_responses=True)
+    redis_conn_raw = Redis.from_url(get_redis_url(), db=3, decode_responses=True)
+    redis_conn_processed = Redis.from_url(get_redis_url(), db=4, decode_responses=True)
 
     try:
         raw_contents = retrieve_contents_from_redis(redis_conn_raw, batch_size)

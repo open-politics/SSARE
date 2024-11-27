@@ -1,47 +1,58 @@
-import asyncio
-import pandas as pd
+from .base_scraper import BaseScraper
+from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
-import aiohttp
-import os
+from newspaper import Article
+import asyncio
 
-async def scrape_dw_articles(session, base_url):
-    async with session.get(base_url) as response:
-        data = await response.text()
-        soup = BeautifulSoup(data, features="html.parser")
+
+
+class DWScraper(BaseScraper):
+    source_name = "DW"
+    start_url = "https://www.dw.com/en/"
+
+    async def parse(self, html: str) -> list:
+        soup = BeautifulSoup(html, features="html.parser")
         all_urls = [a['href'] for a in soup.find_all('a', href=True) if a['href'].startswith('/en/')]
-        full_urls = [url if url.startswith('http') else base_url + url for url in all_urls]
-        article_urls = set(full_urls)  # Use set to avoid duplicate URLs
+        full_urls = [url if url.startswith('http') else urljoin(self.start_url, url) for url in all_urls]
+        article_urls = list(set(full_urls))  # Remove duplicates
+        self.logger.info(f"Found {len(article_urls)} unique DW article URLs.")
+        return article_urls
 
-    tasks = [process_article_url(session, url, base_url) for url in article_urls]
-    articles = await asyncio.gather(*tasks)
-    return pd.DataFrame(articles, columns=['url', 'headline', 'paragraphs', 'source'])
+    def url_is_article(self, url: str) -> bool:
+        parsed_url = urlparse(url)
+        path_segments = parsed_url.path.strip("/").split("/")
+        # DW article URLs typically have '/en/category/article-name'
+        return len(path_segments) > 2
 
-# Async function to process each article URL
-async def process_article_url(session, url, base_url):
-    try:
-        async with session.get(url) as response:
-            article_data = await response.text()
-            article_soup = BeautifulSoup(article_data, features="html.parser")
-            headline = article_soup.find('h1')  # Adjust this according to the specific site structure
-            headline_text = headline.text.strip() if headline else 'N/A'
-            article_paragraphs = article_soup.find_all('p')  # Adjust this according to the specific site structure
-            cleaned_paragraphs = ' '.join([p.text.strip() for p in article_paragraphs])
-            source = base_url
-            print(f"Processed {url}")
-            
-            return url, headline_text, cleaned_paragraphs, source
-    except Exception as e:
-        print(f"Failed to scrape {url}: {str(e)}")
-        return url, 'N/A', '', base_url
+    async def process_article(self, session, url: str) -> dict:
+        try:
+            self.logger.debug(f"Starting to process article at {url}")
+            article = Article(url)
+            await asyncio.to_thread(article.download)
+            await asyncio.to_thread(article.parse)
 
-async def main():
-    base_url = 'https://www.dw.com/en/'
-    async with aiohttp.ClientSession() as session:
-        df = await scrape_dw_articles(session, base_url)
-        os.makedirs('/app/scrapers/data/dataframes', exist_ok=True)
+            if len(article.text) < 100:
+                self.logger.warning(f"Skipping short article at {url}")
+                return None
 
-        df.to_csv('/app/scrapers/data/dataframes/dw_articles.csv', index=False)
-        print(df.head(3))
+            headline = article.title or article.text[:30] + "..."
+            top_image = article.top_image if "placeholder" not in article.top_image else None
+            images = [img for img in article.images if "placeholder" not in img]
+            publish_date = article.publish_date.isoformat() if article.publish_date else None
 
-if __name__ == "__main__":
-    asyncio.run(main())
+            self.logger.info(f"Processed article at {url}")
+
+            return {
+                "url": url,
+                "title": headline,
+                "text_content": article.text,
+                "top_image": top_image,
+                "images": images,
+                "publication_date": publish_date,
+                "summary": article.summary,
+                "meta_summary": article.meta_description,
+                "source": self.source_name
+            }
+        except Exception as e:
+            self.logger.error(f"Error processing article at {url}: {e}")
+            return None

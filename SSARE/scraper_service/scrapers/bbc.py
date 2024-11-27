@@ -1,102 +1,89 @@
-from playwright.sync_api import Playwright, sync_playwright, expect
-from urllib.parse import urljoin
-import pandas as pd
-import os
+from .base_scraper import BaseScraper
+from urllib.parse import urljoin, urlparse
+from bs4 import BeautifulSoup
+import asyncio
 from newspaper import Article
 
-def scrape_articles(page, base_url, visited_urls, max_depth, current_depth=0):
-    if current_depth >= max_depth:
-        return []
-    
-    links = page.query_selector_all('a')
-    article_urls = []
-    
-    for link in links:
-        href = link.get_attribute('href')
-        if href and (
-            "/news" in href or 
-            "/articles" in href or
-            "/topics" in href or
-            any(region in href for region in [
-                "/africa", "/asia", "/australia", 
-                "/europe", "/latin_america", "/middle_east"
-            ])
-        ) and "/sport" not in href:  # Exclude sport articles
-            absolute_url = urljoin(base_url, href)
-            if absolute_url not in visited_urls:
-                visited_urls.add(absolute_url)
+class BBCScraper(BaseScraper):
+    source_name = "BBC News"
+    start_url = "https://www.bbc.com/news"
+
+    async def parse(self, html: str) -> list:
+        soup = BeautifulSoup(html, features="html.parser")
+        links = soup.find_all('a', href=True)
+        article_urls = []
+
+        for link in links:
+            href = link['href']
+            if href and (
+                "/news" in href or 
+                "/articles" in href or
+                "/topics" in href or
+                "/in_pictures" in href or
+                any(region in href for region in [
+                    "/africa", "/asia", "/australia", 
+                    "/europe", "/latin_america", "/middle_east",
+                    "/us-canada", "/uk"
+                ])
+            ) and not any(excluded in href for excluded in [
+                "/sport", 
+                "/weather",
+                "/radio",
+                "/sounds",
+                "/worklife",
+                "/future",
+                "/culture",
+                "/travel",
+                "/tv",
+                "/iplayer",
+                "/bitesize",
+                "/food",
+                "/live",
+                "/bbcindepth",
+                "/reality_check"
+            ]):
+                absolute_url = urljoin(self.start_url, href)
                 article_urls.append(absolute_url)
-    
-    data = []
-    for url in article_urls:
-        print(url)
-        article = Article(url)
-        article.download()
-        article.parse()
-        
-        paragraphs = article.text if article.text else ""
-        headline = article.title
-        
-        # Skip articles that start with Copyright
-        if paragraphs.startswith("Copyright"):
-            continue
-            
-        # Use first 30 chars of paragraphs if headline is "BBC News"
-        if headline == "BBC News":
-            headline = paragraphs[:30] + "..." if len(paragraphs) > 30 else paragraphs
-        # Use first 20 chars of paragraphs if headline is "Latest News & Updates"
-        elif headline == "Latest News & Updates":
-            headline = paragraphs[:20] + "..." if len(paragraphs) > 20 else paragraphs
-            
-        data.append({
-            "url": url,
-            "headline": headline,
-            "paragraphs": paragraphs,
-            "source": "BBC News"
-        })
-        
-        data += scrape_articles(page, url, visited_urls, max_depth, current_depth + 1)
-    
-    return data
 
-def run(playwright: Playwright) -> None:
-    browser = playwright.chromium.launch(headless=True)
-    context = browser.new_context()
-    page = context.new_page()
-    
-    # Start URLs
-    start_urls = [
-        "https://www.bbc.com/news",
-        "https://www.bbc.com/news/politics",
-        "https://www.bbc.com/news/world/latin_america",
-        "https://www.bbc.com/news/world/middle_east",
-        "https://www.bbc.com/news/world/africa",
-        "https://www.bbc.com/news/world/asia"
-    ]
-    
-    visited_urls = set()
-    max_depth = 2
-    all_data = []
-    
-    for start_url in start_urls:
-        page.goto(start_url)
-        data = scrape_articles(page, "https://www.bbc.com", visited_urls, max_depth)
-        all_data.extend(data)
-    
-    context.close()
-    browser.close()
-    
-    # Create a DataFrame from the scraped data
-    df = pd.DataFrame(all_data)
-    
-    # Print the DataFrame
-    print(df)
-    
-    # Create the directory if it doesn't exist
-    os.makedirs('/app/scrapers/data/dataframes', exist_ok=True)
+        article_urls = list(set(article_urls))  # Remove duplicates
+        self.logger.info(f"Found {len(article_urls)} BBC article URLs.")
+        return article_urls
 
-    file_path = '/app/scrapers/data/dataframes/bbc_articles.csv'
-    df.to_csv(file_path, index=False)
+    async def process_article(self, session, url: str) -> dict:
+        try:
+            self.logger.debug(f"Starting to process article at {url}")
+            article = Article(url)
+            await asyncio.to_thread(article.download)
+            await asyncio.to_thread(article.parse)
 
-with sync_playwright() as playwright:
-    run(playwright)
+            if article.text.startswith("Copyright") or len(article.text) < 100:
+                self.logger.warning(f"Skipping article at {url} due to copyright or short length")
+                return None
+
+            headline = article.title
+            if headline == "BBC News":
+                headline = article.text[:30] + "..." if len(article.text) > 30 else article.text
+            elif headline == "Latest News & Updates":
+                headline = article.text[:20] + "..." if len(article.text) > 20 else article.text
+
+            top_image = article.top_image if "placeholder" not in article.top_image else None
+            images = [img for img in article.images if "placeholder" not in img]
+            publish_date = article.publish_date.isoformat() if article.publish_date else None
+
+            self.logger.info(f"Processed article at {url}")
+
+            return {
+                "url": url,
+                "title": headline,
+                "text_content": article.text,
+                "top_image": top_image,
+                "images": images,
+                "authors": article.authors,
+                "publish_date": publish_date,
+                "summary": article.summary,
+                "meta_summary": article.meta_description,
+                "source": self.source_name
+            }
+        except Exception as e:
+            self.logger.error(f"Error processing article at {url}: {e}")
+            return None

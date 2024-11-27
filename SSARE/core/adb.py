@@ -1,13 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
-from .service_mapping import config
+from .service_mapping import config, get_db_url
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
 
-DATABASE_URL = (
-    f"postgresql+asyncpg://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
-    f"@articles_database:5432/{config.ARTICLES_DB_NAME}"
-)
+
+DATABASE_URL = get_db_url()
 
 engine = create_async_engine(DATABASE_URL, echo=False)
 
@@ -23,3 +21,10 @@ async def create_db_and_tables():
 async def get_session() -> AsyncSession:
     async with async_session() as session:
         yield session
+
+    
+def get_redis_url():
+    if config.REDIS_MODE == "managed":
+        return f"redis://{config.MANAGED_REDIS_HOST}:{config.MANAGED_REDIS_PORT}"
+    else:
+        return f"redis://redis:{config.REDIS_PORT}"

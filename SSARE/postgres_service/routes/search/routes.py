@@ -69,7 +69,8 @@ async def get_contents(
             query = select(Content).options(
                 selectinload(Content.entities).selectinload(Entity.locations),
                 selectinload(Content.tags),
-                selectinload(Content.evaluation)
+                selectinload(Content.evaluation),
+                selectinload(Content.media_details)
             )
 
             # Handle location-based filtering
@@ -91,7 +92,8 @@ async def get_contents(
                     .options(
                         selectinload(Content.entities).selectinload(Entity.locations),
                         selectinload(Content.tags),
-                        selectinload(Content.evaluation)
+                        selectinload(Content.evaluation),
+                        selectinload(Content.media_details)
                     )
                     .join(ContentEntity, Content.id == ContentEntity.content_id)
                     .join(Entity, ContentEntity.entity_id == Entity.id)
@@ -143,7 +145,8 @@ async def get_contents(
                                 .options(
                                     selectinload(Content.entities).selectinload(Entity.locations),
                                     selectinload(Content.tags),
-                                    selectinload(Content.evaluation)
+                                    selectinload(Content.evaluation),
+                                    selectinload(Content.media_details)
                                 )
                                 .join(ContentChunk, Content.id == ContentChunk.content_id)
                                 .order_by('distance')  # Order by the labeled distance
@@ -232,7 +235,7 @@ async def get_contents(
                     "source": content.source,
                     "insertion_date": content.insertion_date if content.insertion_date else None,
                     "text_content": content.text_content,
-                    "embeddings": content.embeddings.tolist() if content.embeddings is not None else None,
+                    "top_image": content.media_details.top_image if content.media_details else None,
                     "entities": [
                         {
                             "id": str(e.id),
@@ -461,7 +464,8 @@ async def get_articles_by_entity(
             .options(
                 selectinload(Content.entities).selectinload(Entity.locations),
                 selectinload(Content.tags),
-                selectinload(Content.evaluation)
+                selectinload(Content.evaluation),
+                selectinload(Content.media_details)
             )
             .join(ContentEntity, Content.id == ContentEntity.content_id)
             .join(Entity, ContentEntity.entity_id == Entity.id)
@@ -483,7 +487,7 @@ async def get_articles_by_entity(
                 "source": content.source,
                 "insertion_date": content.insertion_date if content.insertion_date else None,
                 "text_content": content.text_content,
-                "embeddings": content.embeddings.tolist() if content.embeddings is not None else None,
+                "top_image": content.media_details.top_image if content.media_details else None,
                 "entities": [
                     {
                         "id": str(e.id),
@@ -532,7 +536,8 @@ async def get_articles_by_location(
                 .options(
                     selectinload(Content.entities).selectinload(Entity.locations),
                     selectinload(Content.tags),
-                    selectinload(Content.evaluation)
+                    selectinload(Content.evaluation),
+                    selectinload(Content.media_details)
                 )
                 .join(ContentEntity, Content.id == ContentEntity.content_id)
                 .join(Entity, ContentEntity.entity_id == Entity.id)
@@ -558,7 +563,7 @@ async def get_articles_by_location(
                     "source": content.source,
                     "insertion_date": content.insertion_date if content.insertion_date else None,
                     "text_content": content.text_content,
-                    "embeddings": content.embeddings.tolist() if content.embeddings is not None else None,
+                    "top_image": content.media_details.top_image if content.media_details else None,
                     "entities": [
                         {
                             "id": str(e.id),

@@ -1,53 +1,28 @@
-import asyncio
-import pandas as pd
+from .base_scraper import BaseScraper
+from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
-import aiohttp
-import os
 
+class CNNScraper(BaseScraper):
+    source_name = "CNN"
+    start_url = "https://www.cnn.com"
 
+    async def parse(self, html: str) -> list:
+        soup = BeautifulSoup(html, features="html.parser")
+        all_urls = [urljoin(self.start_url, a['href']) for a in soup.find_all('a', href=True)
+                    if a['href']]
+        # Remove duplicates
+        all_urls = list(set(all_urls))
+        article_urls = [url for url in all_urls if self.url_is_article(url)]
+        self.logger.info(f"Found {len(article_urls)} CNN article URLs.")
+        return article_urls
 
-async def scrape_cnn_articles(session):
-    base_url = 'https://www.cnn.com'
-    async with session.get(base_url) as response:
-        data = await response.text()
-        soup = BeautifulSoup(data, features="html.parser")
-        all_urls = [base_url + a['href'] for a in soup.find_all('a', href=True) 
-                    if a['href'] and a['href'][0] == '/' and a['href'] != '#']
-    def url_is_article(url, current_year='2024'):
-        return ('cnn.com/{}/'.format(current_year) in url and 
-                '/politics/' in url and 
-                '/video/' not in url)
+    def url_is_article(self, url: str) -> bool:
+        parsed_url = urlparse(url)
+        path_segments = parsed_url.path.strip("/").split("/")
 
-    article_urls = [url for url in all_urls if url_is_article(url)]
-    tasks = [process_article_url(session, url) for url in article_urls]
-    articles = await asyncio.gather(*tasks)
-    return pd.DataFrame(articles, columns=['url', 'headline', 'paragraphs'])
-
-# Async function to process each article URL
-async def process_article_url(session, url):
-    try:
-        async with session.get(url) as response:
-            article_data = await response.text()
-            article_soup = BeautifulSoup(article_data, features="html.parser")
-            headline = article_soup.find('h1', class_='headline__text')
-            headline_text = headline.text.strip() if headline else 'N/A'
-            article_paragraphs = article_soup.find_all('div', class_='article__content')
-            cleaned_paragraph = ' '.join([p.text.strip() for p in article_paragraphs])
-            print(f"Processed {url}")
-            
-            return url, headline_text, cleaned_paragraph
-    except Exception:
-        return url, 'N/A', ''
-
-
-async def main():
-    async with aiohttp.ClientSession() as session:
-        df = await scrape_cnn_articles(session)
-        os.makedirs('/app/scrapers/data/dataframes', exist_ok=True)
-
-        df.to_csv('/app/scrapers/data/dataframes/cnn_articles.csv', index=False)
-        df.head(3)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        # CNN article URLs typically have '/year/month/day/category/article-name'
+        if len(path_segments) >= 5:
+            year, month, day = path_segments[:3]
+            if year.isdigit() and month.isdigit() and day.isdigit():
+                return True
+        return False

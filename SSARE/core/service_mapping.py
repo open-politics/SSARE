@@ -1,7 +1,8 @@
 import os
 
 class ServiceConfig:
-    # Service Ports
+    ## Service Ports
+
     MAIN_CORE_APP_PORT = os.getenv('MAIN_CORE_APP_PORT', '8089')
     POSTGRES_SERVICE_PORT = os.getenv('POSTGRES_SERVICE_PORT', '5434')
     EMBEDDING_SERVICE_PORT = os.getenv('EMBEDDING_SERVICE_PORT', '0420')
@@ -16,9 +17,14 @@ class ServiceConfig:
     PREFECT_SERVER_PORT = os.getenv('PREFECT_SERVER_PORT', '4200')
     PELIAS_PLACEHOLDER_PORT = os.getenv('PELIAS_PLACEHOLDER_PORT', '3999')
     R2R_PORT = os.getenv('R2R_PORT', '8000')
-    RAG_SERVICE_PORT = os.getenv('RAG_SERVICE_PORT', '4312')
     NEO4J_HTTP_PORT = os.getenv('NEO4J_HTTP_PORT', '7474')
     NEO4J_BOLT_PORT = os.getenv('NEO4J_BOLT_PORT', '7687')
+    LITELLM_PORT = os.getenv('LITELLM_PORT', '11435')
+    CLASSIFICATION_SERVICE_PORT = os.getenv('CLASSIFICATION_SERVICE_PORT', '5688')
+    SEMANTIC_ROUTER_PORT = os.getenv('SEMANTIC_ROUTER_PORT', '5689')
+
+    ## OLLAMA
+    OLLAMA_PORT = os.getenv('OLLAMA_PORT', '11434')
 
     # Database configurations
     R2R_DB_USER = os.getenv('R2R_DB_USER', 'r2r_user')
@@ -34,15 +40,26 @@ class ServiceConfig:
     ARTICLES_DB_USER = os.getenv('ARTICLES_DB_USER', 'articles_user')
     ARTICLES_DB_PASSWORD = os.getenv('ARTICLES_DB_PASSWORD', 'articles_password')
     ARTICLES_DB_NAME = os.getenv('ARTICLES_DB_NAME', 'articles_db')
-    ARTICLES_DB_PORT = os.getenv('ARTICLES_DB_PORT', '5473')
-
-    OLLAMA_PORT = os.getenv('OLLAMA_PORT', '11434')
-    LITELLM_PORT = os.getenv('LITELLM_PORT', '11435')
-
-    CLASSIFICATION_SERVICE_PORT = os.getenv('CLASSIFICATION_SERVICE_PORT', '5688')
-    SEMANTIC_ROUTER_PORT = os.getenv('SEMANTIC_ROUTER_PORT', '5689')
+    ARTICLES_DB_PORT = os.getenv('ARTICLES_DB_PORT', '5473') ## THIS IS THE MAIN DATABASE
 
 
+    # DB Mode
+    DB_MODE = os.getenv('DB_MODE', 'managed')
+
+    # Redis Mode
+    REDIS_MODE = os.getenv('REDIS_MODE', 'managed')
+
+
+    # Managed Database Configurations
+    MANAGED_ARTICLES_DB_HOST = os.getenv('MANAGED_ARTICLES_DB_HOST', 'x')
+    MANAGED_ARTICLES_DB_PORT = os.getenv('MANAGED_ARTICLES_DB_PORT', '5473')
+    MANAGED_ARTICLES_DB_USER = os.getenv('MANAGED_ARTICLES_DB_USER', 'x')
+    MANAGED_ARTICLES_DB_PASSWORD = os.getenv('MANAGED_ARTICLES_DB_PASSWORD', 'x')
+
+    # Managed Redis Configuration
+    MANAGED_REDIS_HOST = os.getenv('MANAGED_REDIS_HOST', 'x')
+    MANAGED_REDIS_PORT = os.getenv('MANAGED_REDIS_PORT', '6379')
+    
     # Service URLs
     service_urls = {
         "main_core_app": f"http://main_core_app:{MAIN_CORE_APP_PORT}",
@@ -59,7 +76,6 @@ class ServiceConfig:
         "reranker_service": f"http://reranker_service:{RERANKER_SERVICE_PORT}",
         "pelias_placeholder": f"http://pelias_placeholder:{PELIAS_PLACEHOLDER_PORT}",
         "r2r": f"http://r2r:{R2R_PORT}",
-        "rag_service": f"http://rag_service:{RAG_SERVICE_PORT}",
         "neo4j_http": f"http://neo4j:{NEO4J_HTTP_PORT}",
         "neo4j_bolt": f"bolt://neo4j:{NEO4J_BOLT_PORT}",
         "ollama": f"http://ollama:{OLLAMA_PORT}",
@@ -67,27 +83,64 @@ class ServiceConfig:
         "classification_service": f"http://classification_service:{CLASSIFICATION_SERVICE_PORT}",
         "semantic_router": f"http://semantic_router:{SEMANTIC_ROUTER_PORT}",
     }
-
-    # Redis channel mappings
+    
+    # Redis channel mappings with explicit types
     redis_queues = {
-        "contents_without_embedding_queue": {"db": 5, "key": "contents_without_embedding_queue"},
-        "contents_with_entities_queue": {"db": 2, "key": "contents_with_entities_queue"},
-        "scrape_sources": {"db": 0, "key": "scrape_sources"},
-        "raw_contents_queue": {"db": 1, "key": "raw_contents_queue"},
-        "contents_with_embeddings": {"db": 6, "key": "contents_with_embeddings"},
-        "contents_without_entities_queue": {"db": 2, "key": "contents_without_entities_queue"},
-        "contents_without_geocoding_queue": {"db": 3, "key": "contents_without_geocoding_queue"},
-        "contents_with_geocoding_queue": {"db": 4, "key": "contents_with_geocoding_queue"},
-        "contents_without_classification_queue" : {"db": 4, "key": "contents_without_classification_queue"},
-        "contents_with_classification_queue" : {"db": 4, "key": "contents_with_classification_queue"},
-        "Orchestration in progress": {"db": 1, "key": "Orchestration in progress"},
-        "scrapers_running": {"db": 1, "key": "scrapers_running"},
-        "outward_irrelevant_queue": {"db": 7, "key": "outward_irrelevant_queue"}
+        "contents_without_embedding_queue": {"db": 5, "key": "contents_without_embedding_queue", "type": "list"},
+        "contents_with_entities_queue": {"db": 2, "key": "contents_with_entities_queue", "type": "list"},
+        "scrape_sources": {"db": 0, "key": "scrape_sources", "type": "list"},
+        "raw_contents_queue": {"db": 1, "key": "raw_contents_queue", "type": "list"},
+        "contents_with_embeddings": {"db": 6, "key": "contents_with_embeddings", "type": "list"},
+        "contents_without_entities_queue": {"db": 2, "key": "contents_without_entities_queue", "type": "list"},
+        "contents_without_geocoding_queue": {"db": 3, "key": "contents_without_geocoding_queue", "type": "list"},
+        "contents_with_geocoding_queue": {"db": 4, "key": "contents_with_geocoding_queue", "type": "list"},
+        "contents_without_classification_queue": {"db": 4, "key": "contents_without_classification_queue", "type": "list"},
+        "contents_with_classification_queue": {"db": 4, "key": "contents_with_classification_queue", "type": "list"},
+        "Orchestration_in_progress": {"db": 1, "key": "Orchestration_in_progress", "type": "string"},
+        "scrapers_running": {"db": 1, "key": "scrapers_running", "type": "string"},
+        "outward_irrelevant_queue": {"db": 7, "key": "outward_irrelevant_queue", "type": "list"}
     }
+
 
     # Other configurations/ API Keys
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
     HUGGINGFACE_TOKEN = os.getenv('HUGGINGFACE_TOKEN')
     CONFIG_OPTION = os.getenv('CONFIG_OPTION', 'default')
 
+
+
 config = ServiceConfig()
+
+
+def get_db_url():
+    """Get database URL based on mode"""
+    if os.getenv('DB_MODE') == "managed":
+        return (
+            f"postgresql+asyncpg://{config.MANAGED_ARTICLES_DB_USER}:{config.MANAGED_ARTICLES_DB_PASSWORD}"
+                f"@{config.MANAGED_ARTICLES_DB_HOST}:{config.MANAGED_ARTICLES_DB_PORT}/{config.ARTICLES_DB_NAME}"
+            )
+    else:
+        return (
+            f"postgresql+asyncpg://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
+                f"@articles_database:{config.ARTICLES_DB_PORT}/{config.ARTICLES_DB_NAME}"
+            )
+
+def get_redis_url():
+    """Get Redis URL based on mode"""
+    if os.getenv('REDIS_MODE') == "managed":
+        return f"redis://{config.MANAGED_REDIS_HOST}:{config.MANAGED_REDIS_PORT}"
+    else:
+        return f"redis://redis:{config.REDIS_PORT}"
+
+def get_sync_db_url():
+    """Get synchronous database URL for Alembic"""
+    if os.getenv('DB_MODE') == "managed":
+        return (
+            f"postgresql://{config.MANAGED_ARTICLES_DB_USER}:{config.MANAGED_ARTICLES_DB_PASSWORD}"
+                f"@{config.MANAGED_ARTICLES_DB_HOST}:{config.MANAGED_ARTICLES_DB_PORT}/{config.ARTICLES_DB_NAME}"
+            )
+    else:
+            return (
+                f"postgresql://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
+                f"@articles_database:{config.ARTICLES_DB_PORT}/{config.ARTICLES_DB_NAME}"
+            )

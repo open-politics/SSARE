@@ -1,21 +1,18 @@
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 from app.core.models import SQLModel
-from app.core.service_mapping import ServiceConfig
+from app.core.service_mapping import config, get_sync_db_url
 import os
 import logging
 import pgvector
 from logging.config import fileConfig
 
-config = context.config
-fileConfig(config.config_file_name)
+# config = context.config
+# fileConfig(config.config_file_name)
 
-config = ServiceConfig()
+# config = ServiceConfig()
 
-DATABASE_URL = (
-    f"postgresql+psycopg2://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
-    f"@articles_database:5432/{config.ARTICLES_DB_NAME}"
-)
+DATABASE_URL = get_sync_db_url()
 
 target_metadata = SQLModel.metadata
 logger = logging.getLogger('alembic')

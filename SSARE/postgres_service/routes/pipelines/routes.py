@@ -31,15 +31,16 @@ from typing import AsyncGenerator
 
 from core.adb import engine, get_session, create_db_and_tables
 from core.middleware import add_cors_middleware
-from core.models import Content, ContentEntity, Entity, Location, Tag, ContentEvaluation, EntityLocation, ContentTag, ContentChunk
+from core.models import Content, ContentEntity, Entity, Location, Tag, ContentEvaluation, EntityLocation, ContentTag, ContentChunk, MediaDetails, Image
 from core.service_mapping import config
 from core.utils import logger
+from core.service_mapping import get_redis_url
 
 ## Setup 
 # App API Router
 router = APIRouter()
 # Redis connection
-redis_conn_flags = Redis(host='redis', port=config.REDIS_PORT, db=0)  # For flags
+redis_conn_flags = Redis.from_url(get_redis_url(), db=0)  # For flags
 
 
 ########################################################################################
@@ -57,33 +58,33 @@ async def produce_flags():
 @router.post("/store_raw_contents")
 async def store_raw_contents(session: AsyncSession = Depends(get_session)):
     try:
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=1, decode_responses=True)
+        redis_conn = await Redis.from_url(get_redis_url(), db=1, decode_responses=True)
         raw_contents = await redis_conn.lrange('raw_contents_queue', 0, -1)
         contents = [json.loads(content) for content in raw_contents]
-        contents = [Content(**content) for content in contents]
-        logger.info("Retrieved raw contents from Redis")
-        logger.info(f"First 1 content: {[{k: v for k, v in content.dict().items() if k in ['url', 'title']} for content in contents[:1]]}")
-
+        
         async with session.begin():
-            for content in contents:
-                try:
-                    # Check if content already exists
-                    existing_content = await session.execute(select(Content).where(Content.url == content.url))
-                    if existing_content.scalar_one_or_none() is not None:
-                        logger.info(f"Updating existing content: {content.url}")
-                        await session.execute(update(Content).where(Content.url == content.url).values(**content.dict(exclude_unset=True)))
-                    else:
-                        logger.info(f"Adding new content: {content.url}")
-                        session.add(content)
-                    await session.flush()
-                except Exception as e:
-                    logger.error(f"Error processing content {content.url}: {str(e)}")
-                   
+            for content_data in contents:
+                # Check if the URL already exists
+                existing_content = await session.execute(
+                    select(Content).where(Content.url == content_data['url'])
+                )
+                if existing_content.scalar_one_or_none():
+                    logger.info(f"Content with URL {content_data['url']} already exists. Skipping insertion.")
+                    continue
 
+                content = Content(**content_data)
+                media_details = content_data.get('media_details')
+                if media_details:
+                    media_details_obj = MediaDetails(
+                        top_image=media_details.get('top_image'),
+                        images=[Image(image_url=img) for img in media_details.get('images', [])]
+                    )
+                    content.media_details = media_details_obj
+                session.add(content)
+                await session.flush()
+        
         await session.commit()
-
         await redis_conn.ltrim('raw_contents_queue', len(raw_contents), -1)
-
         await redis_conn.close()
         return {"message": "Raw contents processed successfully."}
     except Exception as e:
@@ -101,18 +102,13 @@ async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
     logger.info("Trying to create embedding jobs.")
     try:
         async with session.begin():
-            # Modified query to select contents that have neither embeddings nor chunks
-            query = select(Content).where(
-                and_(
-                    Content.embeddings == None,
-                    ~Content.chunks.any()  # to check if there are no chunks at all
-                )
-            )
+            # Modified query to select contents that have no chunks with embeddings
+            query = select(Content).where(Content.embeddings == None)
             result = await session.execute(query)
             contents_without_embeddings = result.scalars().all()
-            logger.info(f"Found {len(contents_without_embeddings)} contents without embeddings.")
+            logger.info(f"Found {len(contents_without_embeddings)} contents without chunk embeddings.")
 
-            redis_conn_unprocessed_contents = await Redis(host='redis', port=config.REDIS_PORT, db=5)
+            redis_conn_unprocessed_contents = await Redis.from_url(get_redis_url(), db=5)
 
             # Get existing contents in the queue
             existing_urls = set(await redis_conn_unprocessed_contents.lrange('contents_without_embedding_queue', 0, -1))
@@ -148,7 +144,7 @@ async def create_embedding_jobs(session: AsyncSession = Depends(get_session)):
 @router.post("/store_contents_with_embeddings")
 async def store_contents_with_embeddings(session: AsyncSession = Depends(get_session)):
     try:
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=6, decode_responses=True)
+        redis_conn = await Redis.from_url(get_redis_url(), db=6, decode_responses=True)
         contents_with_embeddings = await redis_conn.lrange('contents_with_embeddings', 0, -1)
 
         async with session.begin():
@@ -164,6 +160,9 @@ async def store_contents_with_embeddings(session: AsyncSession = Depends(get_ses
                     content = result.scalar_one_or_none()
 
                     if content:
+                        # Update the overall content embeddings
+                        content.embeddings = content_data.get('embeddings')
+
                         # Handle chunks
                         for chunk_data in content_data.get('chunks', []):
                             chunk_data['content_id'] = content.id  # Associate with the content
@@ -216,7 +215,7 @@ async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_sess
         result = await session.execute(query)
         _contents = result.scalars().all()
 
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=2)
+        redis_conn = await Redis.from_url(get_redis_url(), db=2)
 
         # Get existing contents in the queue
         existing_urls = set(await redis_conn.lrange('contents_without_entities_queue', 0, -1))
@@ -255,7 +254,7 @@ async def create_entity_extraction_jobs(session: AsyncSession = Depends(get_sess
 async def store_contents_with_entities(session: AsyncSession = Depends(get_session)):
     try:
         logger.info("Starting store_contents_with_entities function")
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=2, decode_responses=True)
+        redis_conn = await Redis.from_url(get_redis_url(), db=2, decode_responses=True)
         logger.info(f"Connected to Redis on port {config.REDIS_PORT}, db 2")
         contents = await redis_conn.lrange('contents_with_entities_queue', 0, -1)
         logger.info(f"Retrieved {len(contents)} contents from Redis queue")
@@ -337,9 +336,7 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
                 Content.entities.any(
                     and_(
                         or_(
-                            Entity.entity_type == 'location',
-                            Entity.entity_type == 'state',
-                            Entity.entity_type == 'region'
+                            Entity.entity_type == 'LOC',
                         ),
                         ~Entity.locations.any()  # Check if the entity has no locations
                     )
@@ -351,17 +348,18 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
             contents = result.scalars().all()
             logger.info(f"Found {len(contents)} contents with entities that need geocoding.")
 
-            redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=3)
+            redis_conn = await Redis.from_url(get_redis_url(), db=3)
 
             # Get existing contents in the queue
             existing_urls = set(await redis_conn.lrange('contents_without_geocoding_queue', 0, -1))
             existing_urls = {json.loads(url)['url'] for url in existing_urls}
 
+
             contents_list = []
             not_pushed_count = 0
             for content in contents:
                 if content.url not in existing_urls:
-                    location_entities = [entity for entity in content.entities if entity.entity_type in ('location', 'state', 'region') and not entity.locations]
+                    location_entities = [entity for entity in content.entities if entity.entity_type in ('LOC') and not entity.locations]
                     
                     if location_entities:
                         content_dict = {
@@ -393,7 +391,7 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
 async def store_contents_with_geocoding(session: AsyncSession = Depends(get_session)):
     try:
         logger.info("Starting store_contents_with_geocoding function")
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4, decode_responses=True)
+        redis_conn = await Redis.from_url(get_redis_url(), db=4, decode_responses=True)
         logger.info(f"Connected to Redis on port {config.REDIS_PORT}, db 4")
         geocoded_contents = await redis_conn.lrange('contents_with_geocoding_queue', 0, -1)
         logger.info(f"Retrieved {len(geocoded_contents)} geocoded contents from Redis queue")
@@ -517,45 +515,46 @@ async def create_classification_jobs(session: AsyncSession = Depends(get_session
     logger.info("Starting to create classification jobs.")
     try:
         async with session.begin():
-            # Select contents with no tags
+            # Select contents with no evaluati
             query = select(Content).where(Content.evaluation == None)
             result = await session.execute(query)
-            _contents = result.scalars().all()
-            logger.info(f"Found {len(_contents)} contents with no classification.")
+            contents = result.scalars().all()
+            logger.info(f"Found {len(contents)} contents with no classification.")
 
-            redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4)
+            redis_conn = await Redis.from_url(get_redis_url(), db=4)
             existing_urls = set(await redis_conn.lrange('contents_without_classification_queue', 0, -1))
             existing_urls = {json.loads(url)['url'] for url in existing_urls}
 
             contents_list = []
             not_pushed_count = 0
-            for content in _contents:
+            for content in contents:
                 if content.url not in existing_urls:
                     contents_list.append(json.dumps({
                         'url': content.url,
                         'title': content.title,
-                        'text_content': content.text_content,
-                        'source': content.source
+                        'text_content': content.text_content
                     }))
                 else:
                     not_pushed_count += 1
-            
+
+            logger.info(f"{not_pushed_count} contents already in queue, not pushed again.")
+
         if contents_list:
             await redis_conn.rpush('contents_without_classification_queue', *contents_list)
             logger.info(f"Pushed {len(contents_list)} contents to Redis queue for classification.")
         else:
-            logger.info("No contents found that need classification.")
+            logger.info("No new contents found for classification.")
         await redis_conn.close()
-        return {"message": f"Classification jobs created for {len(_contents)} contents."}
+        return {"message": f"Classification jobs created for {len(contents_list)} contents."}
     except Exception as e:
-        logger.error(f"Error creating classification jobs: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Error creating classification jobs: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/store_contents_with_classification")
 async def store_contents_with_classification(session: AsyncSession = Depends(get_session)):
     try:
         logger.info("Starting store_contents_with_classification function")
-        redis_conn = await Redis(host='redis', port=config.REDIS_PORT, db=4, decode_responses=True)
+        redis_conn = await Redis.from_url(get_redis_url(), db=4, decode_responses=True)
         classified_contents = await redis_conn.lrange('contents_with_classification_queue', 0, -1)
         logger.info(f"Retrieved {len(classified_contents)} classified contents from Redis queue")
         
@@ -626,7 +625,6 @@ async def store_contents_with_classification(session: AsyncSession = Depends(get
         logger.error(f"Error storing classified contents: {e}", exc_info=True)
         await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
-
 
 
 

@@ -1,4 +1,4 @@
-FROM python:3.11
+FROM python:3.11-slim AS base
 
 WORKDIR /app
 
@@ -9,7 +9,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the core directory
 COPY core ./core
 
-# Copy the main.py and other files from postgres_service
+# Flow service stage
+FROM base AS flow
 COPY entity_service/main.py .
+COPY entity_service/flows/extract_entities.py .
+CMD ["python", "extract_entities.py"]
 
+# API service stage
+FROM base AS api
+COPY entity_service/main.py .
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "1290"]

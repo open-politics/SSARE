@@ -1,7 +1,6 @@
 # Standard library imports
 import os
 import asyncio
-import logging
 import subprocess
 from enum import Enum
 
@@ -12,33 +11,17 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from redis.asyncio import Redis
-from prefect import get_client
+from prefect import task, flow, deploy
+from prefect.deployments import run_deployment
 from pydantic import BaseModel
+from fastapi.logger import logger
+import logging
 
 # Local imports
 from core.service_mapping import ServiceConfig
-from flows.orchestration import (
-    deduplicate_contents, 
-    create_embedding_jobs, 
-    generate_embeddings,
-    store_contents_with_embeddings,
-    create_entity_extraction_jobs,
-    extract_entities,
-    store_contents_with_entities,
-    create_geocoding_jobs,
-    geocode_contents,
-    produce_flags,
-    create_scrape_jobs,
-    store_raw_contents,
-    store_contents_with_geocoding,
-    create_classification_jobs,
-    classify_contents,
-    store_contents_with_classification
-)
+from core.utils import get_redis_url
 
-# Configuration
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+
 templates = Jinja2Templates(directory="templates")
 config = ServiceConfig()
 
@@ -48,6 +31,10 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 router = APIRouter()
 app.include_router(router)
 status_message = "Ready to start scraping."
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("uvicorn.access")
 
 ### API Endpoints grouped by functionality
 
@@ -124,15 +111,25 @@ async def read_root(request: Request, query: str = "culture and arts"):
                 'paragraphs': content['text_content'],
                 'url': content['url']
             } for content in contents]
-            logger.info("Response for search was successful")
         else:
             contents = []     
-            logger.info("Response for search was not successful")
 
         if "HX-Request" in request.headers:
             return templates.TemplateResponse("partials/contents_list.html", {"request": request, "contents": contents})
         else:
-            return templates.TemplateResponse("index.html", {"request": request, "search_query": query})
+            use_local_prefect_server = os.getenv("LOCAL_PREFECT", "false").lower() == "true"
+            if use_local_prefect_server:
+                prefect_dashboard_url = "http://localhost:4200/dashboard"
+            else:
+                workspace_id = os.getenv("PREFECT_WORKSPACE_ID")
+                workspace = os.getenv("PREFECT_WORKSPACE")
+                prefect_dashboard_url = f"https://app.prefect.cloud/account/{workspace_id}/workspace/{workspace}/dashboard"
+
+            return templates.TemplateResponse("index.html", {
+                "request": request,
+                "search_query": query,
+                "prefect_dashboard_url": prefect_dashboard_url
+            })
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch contents: {str(e)}")
 
@@ -166,7 +163,6 @@ async def search_contents(
 async def outward_irrelevant_articles(request: Request):
     """Fetch and display articles marked as outward/irrelevant."""
     try:
-        # Assuming there's a service or database endpoint to fetch these articles
         postgres_service_url = f"{config.service_urls['postgres_service']}/outward_irrelevant"
         async with httpx.AsyncClient() as client:
             response = await client.get(postgres_service_url)
@@ -246,161 +242,119 @@ async def get_pipeline(request: Request, pipeline_name: str):
         "pipeline_name": pipeline_name
     })
 
-## Pipeline Flow Functions
-async def scraping_flow():
-    try:
-        await produce_flags()
-        await create_scrape_jobs()
-        await store_raw_contents()
-    except Exception as e:
-        logger.error(f"Error in scraping_flow: {e}")
-
-async def embedding_flow():
-    try:
-        await deduplicate_contents()
-        await create_embedding_jobs()
-        await generate_embeddings()
-        await store_contents_with_embeddings()
-    except Exception as e:
-        logger.error(f"Error in embedding_flow: {e}")
-
-async def entity_extraction_flow():
-    try:
-        await deduplicate_contents()
-        await create_entity_extraction_jobs()
-        await extract_entities()
-        await store_contents_with_entities()
-    except Exception as e:
-        logger.error(f"Error in entity_extraction_flow: {e}")
-
-async def geocoding_flow():
-    try:
-        await deduplicate_contents()
-        await create_geocoding_jobs()
-        await geocode_contents()
-        await store_contents_with_geocoding()
-    except Exception as e:
-        logger.error(f"Error in geocoding_flow: {e}")
-
-async def classification_flow():
-    try:
-        await deduplicate_contents()
-        await create_classification_jobs()
-        await classify_contents()
-        await store_contents_with_classification()
-    except Exception as e:
-        logger.error(f"Error in classification_flow: {e}")
-
-async def run_flow(flow_name: str):
-    flows = {
-        "scraping": scraping_flow,
-        "embedding": embedding_flow,
-        "entity_extraction": entity_extraction_flow,
-        "geocoding": geocoding_flow,
-        "classification": classification_flow
-    }
-    
-    if flow_name not in flows:
-        raise ValueError(f"Unknown flow: {flow_name}")
-    
-    await flows[flow_name]()
-
-@app.post("/trigger_flow/{flow_name}")
-async def trigger_flow(flow_name: str):
-    logger.info(f"Triggering {flow_name}")
-    try:
-        asyncio.create_task(run_flow(flow_name))
-        return {"message": f"{flow_name} triggered"}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to trigger {flow_name}: {str(e)}")
-
 async def setup_redis_connection():
     """Create and return a Redis connection."""
     try:
-        redis_conn = Redis(
-            host=config.service_urls['redis'].split('://')[1].split(':')[0],
-            port=int(config.REDIS_PORT),
+        redis_conn = Redis.from_url(
+            url=str(get_redis_url()),
             decode_responses=True
         )
         return redis_conn
     except Exception as e:
-        logger.error(f"Failed to setup Redis connection: {e}")
         raise HTTPException(status_code=500, detail="Failed to connect to Redis")
+
+
+from flows.orchestration import geocode_contents
 
 @app.post("/trigger_step/{step_name}")
 async def trigger_step(step_name: str, batch_size: int = Query(50, ge=1, le=100)):
     try:
         # Add context initialization
         redis_conn = await setup_redis_connection()
-        # Add service config context if needed
-        
-        step_functions = {
-            "produce_flags": produce_flags,
-            "create_scrape_jobs": create_scrape_jobs,
-            "store_raw_contents": store_raw_contents,
-            "deduplicate_contents": deduplicate_contents,
-            "create_embedding_jobs": create_embedding_jobs,
-            "generate_embeddings": lambda: generate_embeddings(batch_size=batch_size),
-            "store_contents_with_embeddings": store_contents_with_embeddings,
-            "create_entity_extraction_jobs": create_entity_extraction_jobs,
-            "extract_entities": lambda: extract_entities(batch_size=batch_size),
-            "store_contents_with_entities": store_contents_with_entities,
-            "create_geocoding_jobs": create_geocoding_jobs,
-            "geocode_contents": lambda: geocode_contents(batch_size=batch_size),
-            "store_contents_with_geocoding": store_contents_with_geocoding,
-            "create_classification_jobs": create_classification_jobs,
-            "classify_contents": lambda: classify_contents(batch_size=batch_size),
-            "store_contents_with_classification": store_contents_with_classification
+
+        # Only relevant flows
+        saving_steps = {
+            "store_raw_contents": "save-raw-contents-flow/save-raw-contents",
+            "store_contents_with_embeddings": "save-contents-with-embeddings-flow/save-contents-with-embeddings",
+            "store_contents_with_entities": "save-contents-with-entities-flow/save-contents-with-entities",
+            "store_contents_with_geocoding": "save-geocoded-contents-flow/save-geocoded-contents",
+            "store_contents_with_classification": "create-jobs-flow/create-jobs"
         }
+
+
+        # Let all creation steps call the aggregated one
+        job_creation_steps = {
+            "create_scrape_jobs": "scrape-sources-deployment",
+            "create_embedding_jobs": "create-embedding-jobs",
+            "create_entity_extraction_jobs": "create-entity-extraction-jobs",
+            "create_geocoding_jobs": "create-geocoding-jobs",
+            "create_classification_jobs": "create-classification-jobs"
+        }
+
+        process_steps = {
+            "scrape_sources": "Scrape Sources Flow/scrape-sources-deployment",
+            "generate_embeddings": "generate-embeddings-flow/generate-embeddings-deployment",
+            "extract_entities": "extract-entities-flow/extract-entities-deployment",
+            "classify_contents": "classify-contents-deployment",
+            "geocode_contents": "geocode-locations-flow/geocode-locations-deployment"
+        }
+
+        if step_name in saving_steps:
+            deployment_name = saving_steps[step_name]
+        elif step_name in job_creation_steps:
+            # Always create jobs for all
+            deployment_name = "create-jobs-flow/create-jobs"
+        elif step_name in process_steps:
+            deployment_name = process_steps[step_name]
         
-        if step_name not in step_functions:
-            raise HTTPException(status_code=400, detail="Invalid step name")
-        
-        result = await step_functions[step_name]()
+        exec = subprocess.run(["prefect", "deployment", "run", deployment_name], check=True)
+    
+
         await redis_conn.aclose()  # Clean up
-        return {"message": f"Step '{step_name}' completed successfully"}
+        return {"message": f"Step '{step_name}' completed successfully", "deployment_id": result.id}
     except Exception as e:
-        logger.error(f"Step execution failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 ## Redis Channel Management
 @app.get("/check_channels/{flow_name}")
 async def check_channels(request: Request, flow_name: str):
-    redis_conn = Redis(host=config.service_urls['redis'].split('://')[1].split(':')[0], 
-                       port=int(config.REDIS_PORT), 
-                       decode_responses=True)
-    
-    flow_channels = {
-        "status": {"Orchestration in progress"},
-        "scrapers_running": {"scrapers_running"},
-        "scraping": ["scrape_sources", "raw_contents_queue"],
-        "embedding": ["contents_without_embedding_queue", "contents_with_embeddings"],
-        "entity_extraction": ["contents_without_entities_queue", "contents_with_entities_queue"],
-        "geocoding": ["contents_without_geocoding_queue", "contents_with_geocoding_queue"],
-        "semantics": ["contents_without_tags_queue", "contents_with_tags_queue"],
-        "classification": ["contents_without_classification_queue", "contents_with_classification_queue"]
-    }
-    
-    if flow_name not in flow_channels:
-        raise HTTPException(status_code=404, detail=f"Invalid flow name: {flow_name}")
-    
     channels = {}
-    for channel_name in flow_channels[flow_name]:
-        queue_info = config.redis_queues.get(channel_name)
-        if queue_info:
-            await redis_conn.select(queue_info['db'])
-            if channel_name == 'Orchestration in progress':
-                value = await redis_conn.get(queue_info['key'])
-                channels[channel_name] = 'Active' if value == '1' else 'Inactive'
-            elif channel_name == 'scrapers_running':
-                value = await redis_conn.get(queue_info['key'])
-                channels[channel_name] = 'Active' if value == '1' else 'Inactive'
-            else:
-                channels[channel_name] = await redis_conn.llen(queue_info['key'])
-    
-    await redis_conn.aclose()
+    try:
+        # Temporarily set logging level to ERROR to reduce verbosity
+        logger.setLevel(logging.ERROR)
+        
+        redis_host = 'redis'
+        redis_port = int(config.REDIS_PORT)
+        
+        redis_conn = Redis(host=os.getenv('REDIS_HOST', 'redis'), port=int(os.getenv('REDIS_PORT', 6379)), decode_responses=True)
+        
+        flow_channels = {
+            "status": {"Orchestration in progress"},
+            "scrapers_running": {"scrapers_running"},
+            "scraping": ["scrape_sources", "raw_contents_queue"],
+            "embedding": ["contents_without_embedding_queue", "contents_with_embeddings"],
+            "entity_extraction": ["contents_without_entities_queue", "contents_with_entities_queue"],
+            "geocoding": ["contents_without_geocoding_queue", "contents_with_geocoding_queue"],
+            "semantics": ["contents_without_tags_queue", "contents_with_tags_queue"],
+            "classification": ["contents_without_classification_queue", "contents_with_classification_queue"]
+        }
+        
+        if flow_name not in flow_channels:
+            raise HTTPException(status_code=404, detail=f"Invalid flow name: {flow_name}")
+        
+        for channel_name in flow_channels[flow_name]:
+            queue_info = config.redis_queues.get(channel_name)
+            if queue_info:
+                try:
+                    await redis_conn.select(queue_info['db'])
+                    if channel_name == 'Orchestration in progress':
+                        value = await redis_conn.get(queue_info['key'])
+                        channels[channel_name] = 'Active' if value == '1' else 'Inactive'
+                    elif channel_name == 'scrapers_running':
+                        value = await redis_conn.get(queue_info['key'])
+                        channels[channel_name] = 'Active' if value == '1' else 'Inactive'
+                    else:
+                        channels[channel_name] = await redis_conn.llen(queue_info['key'])
+                except Exception as e:
+                    channels[channel_name] = 'Error accessing Redis'
+        
+        await redis_conn.aclose()
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error checking channels: Redis might be down")
+    finally:
+        # Restore logging level to INFO
+        logger.setLevel(logging.INFO)
     
     return templates.TemplateResponse("partials/multiple_channel_info.html", {"request": request, "channels": channels})
 
@@ -437,7 +391,6 @@ async def flush_redis_channels(flow_name: str = Path(..., description="The name 
 ## Scraping Control
 @app.post("/trigger_scraping_sequence")
 async def trigger_scraping_flow():
-    logger.info("Triggering scraping flow")
     try:
         asyncio.create_task(run_flow("scraping"))
         return {"message": "Scraping flow triggered"}
@@ -447,7 +400,6 @@ async def trigger_scraping_flow():
 @app.post("/trigger_scraping")
 async def trigger_scraping():
     try:
-        logger.info("Triggering scraping flow")
         subprocess.run(["python", "flows/orchestration.py"], check=True)
         return {"message": "Scraping flow triggered"}
     except subprocess.CalledProcessError as e:
@@ -473,183 +425,36 @@ async def get_redis_queue_length(redis_db: int, queue_key: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Redis error: {str(e)}")
 
-
 ## Data Models
 class SearchType(str, Enum):
     TEXT = "text"
     SEMANTIC = "semantic"
-@app.get("/service_health", response_class=HTMLResponse)
-async def service_health(request: Request):
-    health_status = {}
-    services_to_check = [
-        "main_core_app",
-        "postgres_service",
-        "embedding_service",
-        "scraper_service",
-        "r2r",
-        "rag_service",
-        "entity_service",
-        "geo_service",
-        "ollama",
-        "liteLLM",
-        "classification_service"
-    ]
-    async with httpx.AsyncClient() as client:
-        for service in services_to_check:
-            url = config.service_urls.get(service)
-            if url:
-                try:
-                    response = await client.get(f"{url}/healthz", timeout=5.0)
-                    if response.status_code == 200:
-                        health_status[service] = "green"
-                    else:
-                        health_status[service] = "red"
-                except httpx.RequestError:
-                    health_status[service] = "red"
-            else:
-                health_status[service] = "gray"
-    
-    return templates.TemplateResponse("partials/service_health.html", {"request": request, "service_health": health_status})
 
-@app.post("/trigger_step/{step_name}")
-async def trigger_step(step_name: str, batch_size: int = Query(50, ge=1, le=100)):
-    step_functions = {
-        "produce_flags": produce_flags,
-        "create_scrape_jobs": create_scrape_jobs,
-        "store_raw_contents": store_raw_contents,
-        "deduplicate_contents": deduplicate_contents,
-        "create_embedding_jobs": create_embedding_jobs,
-        "generate_embeddings": lambda: generate_embeddings(batch_size=batch_size),
-        "store_contents_with_embeddings": store_contents_with_embeddings,
-        "create_entity_extraction_jobs": create_entity_extraction_jobs,
-        "extract_entities": lambda: extract_entities(batch_size=batch_size),
-        "store_contents_with_entities": store_contents_with_entities,
-        "create_geocoding_jobs": create_geocoding_jobs,
-        "geocode_contents": lambda: geocode_contents(batch_size=batch_size),
-        "store_contents_with_geocoding": store_contents_with_geocoding,
-        "create_classification_jobs": create_classification_jobs,
-        "classify_contents": lambda: classify_contents(batch_size=batch_size),
-        "store_contents_with_classification": store_contents_with_classification
-    }
-    
-    if step_name not in step_functions:
-        raise HTTPException(status_code=400, detail="Invalid step name")
-    
+@app.post("/clear_redis")
+async def clear_redis_data():
+    redis_url = get_redis_url()
+    if not redis_url:
+        raise HTTPException(status_code=500, detail="Could not get Redis URL")
     try:
-        result = await step_functions[step_name]()
-        return {"message": f"Step '{step_name}' completed successfully", "batch_size": batch_size if step_name in ["generate_embeddings", "extract_entities", "geocode_contents", "classify_contents"] else None}
+        redis = Redis.from_url(redis_url, decode_responses=True)
+        await redis.flushall()
+        await redis.aclose()
+        return {"message": "Redis data cleared"}
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=f"Invalid Redis URL: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to execute step '{step_name}': {str(e)}")
-    
-@app.get("/pipeline/{pipeline_name}", response_class=HTMLResponse)
-async def get_pipeline(request: Request, pipeline_name: str):
-    pipelines = {
-        "scraping": {
-            "title": "Scraping Pipeline",
-            "input": "Flags",
-            "output": "Raw Contents",
-            "steps": [
-                {"name": "produce_flags", "label": "1. Produce Flags"},
-                {"name": "create_scrape_jobs", "label": "2. Scrape"},
-                {"name": "store_raw_contents", "label": "3. Store Raw Contents"}
-            ]
-        },
-        "embedding": {
-            "title": "Embedding Pipeline",
-            "input": "Raw Contents",
-            "output": "Embedded Contents",
-            "steps": [
-                {"name": "create_embedding_jobs", "label": "1. Create Jobs"},
-                {"name": "generate_embeddings", "label": "2. Generate", "batch": True},
-                {"name": "store_contents_with_embeddings", "label": "3. Store"}
-            ]
-        },
-        "entity_extraction": {
-            "title": "Entity Extraction Pipeline",
-            "input": "Raw Contents",
-            "output": "Contents with Entities",
-            "steps": [
-                {"name": "create_entity_extraction_jobs", "label": "1. Create Jobs"},
-                {"name": "extract_entities", "label": "2. Extract", "batch": True},
-                {"name": "store_contents_with_entities", "label": "3. Store"}
-            ]
-        },
-        "geocoding": {
-            "title": "Geocoding Pipeline",
-            "input": "Contents with Entities",
-            "output": "Geocoded Contents",
-            "steps": [
-                {"name": "create_geocoding_jobs", "label": "1. Create Jobs"},
-                {"name": "geocode_contents", "label": "2. Geocode", "batch": True},
-                {"name": "store_contents_with_geocoding", "label": "3. Store"}
-            ]
-        },
-        "classification": {
-            "title": "Classification Pipeline",
-            "input": "Processed Contents",
-            "output": "Classified Contents",
-            "steps": [
-                {"name": "create_classification_jobs", "label": "1. Create Jobs"},
-                {"name": "classify_contents", "label": "2. Process", "batch": True},
-                {"name": "store_contents_with_classification", "label": "3. Store"}
-            ]
-        }
-    }
-    
-    pipeline = pipelines.get(pipeline_name)
-    if not pipeline:
-        raise HTTPException(status_code=404, detail="Pipeline not found")
-    
-    return templates.TemplateResponse("partials/pipeline.html", {
-        "request": request,
-        "pipeline": pipeline,
-        "pipeline_name": pipeline_name
-    })
+        raise HTTPException(status_code=500, detail=f"Error clearing Redis data: {str(e)}")
 
-class SearchType(str, Enum):
-    TEXT = "text"
-    SEMANTIC = "semantic"
-    
-@app.get("/contents", response_class=HTMLResponse)
-async def search_contents(
-    request: Request,
-    search_query: str = Query(None),
-    search_type: str = Query("text"),
-    skip: int = 0,
-    limit: int = 10
-):
-    postgres_service_url = f"{config.service_urls['postgres_service']}/contents"
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            postgres_service_url,
-            params={
-                "search_query": search_query,
-                "search_type": search_type,
-                "skip": skip,
-                "limit": limit
-            }
-        )
-
-    if response.status_code == 200:
-        contents = response.json()
-        return templates.TemplateResponse("partials/search_results.html", {"request": request, "contents": contents})
-    else:
-        raise HTTPException(status_code=response.status_code, detail="Failed to fetch contents from PostgreSQL service")
-
-@app.get("/outward_irrelevant_articles", response_class=HTMLResponse)
-async def outward_irrelevant_articles(request: Request):
-    """Fetch and display articles marked as outward/irrelevant."""
+async def log_redis_url():
+    """Log the Redis URL every second."""
     try:
-        # Assuming there's a service or database endpoint to fetch these articles
-        postgres_service_url = f"{config.service_urls['postgres_service']}/outward_irrelevant"
-        async with httpx.AsyncClient() as client:
-            response = await client.get(postgres_service_url)
-
-        if response.status_code == 200:
-            articles = response.json()
-            # Display raw JSON data in a simple HTML field
-            return templates.TemplateResponse("partials/outward_irrelevant_articles.html", {"request": request, "articles": articles})
-        else:
-            raise HTTPException(status_code=response.status_code, detail="Failed to fetch outward/irrelevant articles")
+        redis_url = get_redis_url()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching outward/irrelevant articles: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching Redis URL: {str(e)}")
+
+@app.post("/log_redis_url")
+async def log_redis_url_endpoint():
+    await log_redis_url()
+    return {"message": "Redis URL logged"}
+
+

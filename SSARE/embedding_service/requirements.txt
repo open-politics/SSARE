@@ -9,6 +9,7 @@ transformers
 sentence-transformers
 prefect
 prefect-ray
+ray
 tenacity
 sqlmodel
 pgvector

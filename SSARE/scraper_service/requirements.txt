@@ -13,3 +13,4 @@ pgvector
 sqlmodel
 redis
 playwright
+ray==2.39.0

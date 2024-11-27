@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application files
 COPY app/ .
 COPY core/ ./core
-COPY flows/ ./flows
+COPY app/flows ./flows
 
 # Copy the start script and make it executable
 COPY app/start.sh .

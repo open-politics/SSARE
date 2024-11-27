@@ -1,0 +1,10 @@
+sqlmodel
+sqlalchemy
+redis
+nltk
+sentence-transformers
+prefect
+prefect_ray
+pgvector
+uvicorn
+redis

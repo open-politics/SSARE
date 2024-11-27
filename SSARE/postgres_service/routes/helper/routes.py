@@ -31,7 +31,7 @@ from typing import AsyncGenerator
 from core.utils import logger
 from core.adb import engine, get_session, create_db_and_tables
 from core.middleware import add_cors_middleware
-from core.models import Content, ContentEntity, ContentTag, Entity, EntityLocation, Location, Tag, ContentEvaluation  # Updated imports
+from core.models import Content, ContentEntity, ContentTag, Entity, EntityLocation, Location, Tag, ContentEvaluation, MediaDetails
 from core.service_mapping import ServiceConfig
 
 # App API Router
@@ -342,3 +342,206 @@ async def dump_contents(session: AsyncSession = Depends(get_session)) -> List[di
     ]
 
     return dumped_contents
+
+@router.post("/ingest_json_backup")
+async def ingest_json_backup(
+    contents: List[Dict[str, Any]] = Body(...),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Ingests JSON backups and saves them to the database using the Content model.
+    """
+    try:
+        async with session.begin():
+            for content_data in contents:
+                # Check if content with the same URL already exists
+                existing_content = await session.execute(
+                    select(Content).where(Content.url == content_data.get("url"))
+                )
+                if existing_content.scalar_one_or_none() is None:
+                    # Create a Content instance
+                    content = Content(
+                        url=content_data.get("url"),
+                        title=content_data.get("title"),
+                        text_content=content_data.get("text_content"),
+                        source=content_data.get("source"),
+                        content_type=content_data.get("content_type"),
+                        insertion_date=content_data.get("insertion_date")
+                    )
+                    session.add(content)
+                else:
+                    logger.info(f"Content with URL {content_data.get('url')} already exists. Skipping.")
+
+            await session.commit()
+            logger.info("JSON backup ingested successfully.")
+            return {"message": "JSON backup ingested successfully."}
+    except Exception as e:
+        logger.error(f"Error ingesting JSON backup: {e}", exc_info=True)
+        await session.rollback()
+        raise HTTPException(status_code=500, detail="Error ingesting JSON backup")
+
+# @router.post("/restore_dates_from_backup")
+# async def restore_dates_from_backup(
+#     backup_path: str = "/.backups",
+#     session: AsyncSession = Depends(get_session)
+# ):
+#     """
+#     Restores original insertion dates from backup files while preserving all other current data.
+#     """
+#     import os
+#     from datetime import datetime
+
+#     try:
+#         # Find all JSON files in backup directory
+#         backup_files = [f for f in os.listdir(backup_path) if f.endswith('.json')]
+#         if not backup_files:
+#             return {"message": "No backup files found"}
+
+#         date_updates = 0
+#         errors = []
+
+#         async with session.begin():
+#             for backup_file in backup_files:
+#                 try:
+#                     with open(os.path.join(backup_path, backup_file), 'r') as f:
+#                         backup_contents = json.load(f)
+
+#                     # Create a mapping of URLs to original dates
+#                     original_dates = {
+#                         content['url']: datetime.fromisoformat(content['insertion_date'])
+#                         for content in backup_contents 
+#                         if content.get('url') and content.get('insertion_date')
+#                     }
+
+#                     # Update dates for existing contents
+#                     for url, original_date in original_dates.items():
+#                         result = await session.execute(
+#                             update(Content)
+#                             .where(Content.url == url)
+#                             .values(insertion_date=original_date)
+#                             .returning(Content.id)
+#                         )
+#                         if result.scalar_one_or_none():
+#                             date_updates += 1
+#                             logger.info(f"Restored date for {url}: {original_date}")
+
+#                 except Exception as e:
+#                     errors.append(f"Error processing {backup_file}: {str(e)}")
+#                     logger.error(f"Error processing backup file {backup_file}: {e}", exc_info=True)
+
+#         await session.commit()
+        
+#         return {
+#             "message": f"Date restoration complete. Updated {date_updates} articles.",
+#             "errors": errors if errors else None
+#         }
+
+#     except Exception as e:
+#         logger.error(f"Error restoring dates: {e}", exc_info=True)
+#         await session.rollback()
+#         raise HTTPException(status_code=500, detail=str(e))
+
+#healthz
+@router.get("/healthz")
+async def healthz():
+    return {"status": "ok"}, 200
+
+@router.get("/bbc_article_urls")
+async def get_bbc_article_urls(
+    limit: int = Query(10, description="Number of BBC articles to return"),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Fetches URLs of BBC articles from the database.
+    """
+    try:
+        async with session.begin():
+            query = (
+                select(Content.url)
+                .where(Content.source == 'bbc')
+                .limit(limit)
+            )
+            result = await session.execute(query)
+            urls = result.scalars().all()
+            
+            return {"urls": urls}
+            
+    except Exception as e:
+        logger.error(f"Error fetching BBC article URLs: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error fetching BBC article URLs")
+
+@router.post("/update_articles")
+async def update_articles(
+    source: str = Query(..., description="Source to update (bbc, dw or cnn)"), 
+    limit: int = Query(..., description="how many of them"),
+    session: AsyncSession = Depends(get_session)):
+    try:
+        async with session.begin():
+            # Fetch articles based on source
+            url_pattern = '%www.bbc.com%' if source == 'bbc' else '%dw.com%' if source == 'dw' else '%www.cnn.com%'
+            query = select(Content).options(selectinload(Content.media_details)).where(
+                Content.url.ilike(url_pattern)
+            )
+            result = await session.execute(query)
+            contents = result.scalars().all()
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            for content in contents:
+                if content.url and '/video' not in content.url:
+                    logger.info(f"Processing {source} article: {content.url}")
+                    response = await client.post(
+                        "http://scraper_service:8081/scrape_article",
+                        params={"url": content.url}
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        logger.error(data)
+                        async with session.begin():
+                            content.url = data.get("url") if data.get("url") else None
+                            content.publication_date = data.get("publication_date")
+                            content.source = source
+                            content.text_content = data.get("text_content")
+                            content.summary = data.get("summary") if data.get("summary") else None
+                            content.meta_summary = data.get("meta_summary") if data.get("meta_summary") else None
+                            if content.media_details:
+                                content.media_details.top_image = data.get("top_image")
+                            else:
+                                content.media_details = MediaDetails(top_image=data.get("top_image"))
+                            await session.flush()
+                    else:
+                        logger.error(f"Failed to scrape {content.url}: {response.text}")
+                else:
+                    logger.error("Encountered an empty URL or Video, skipping.")
+
+        await session.commit()
+        return {"message": f"{source.upper()} articles updated successfully."}
+    except Exception as e:
+        logger.error(f"Error updating {source} articles: {e}", exc_info=True)
+        await session.rollback()
+        raise HTTPException(status_code=500, detail=f"Error updating {source} articles")
+    
+@router.get("/articles_with_top_image")
+async def get_articles_with_top_image(session: AsyncSession = Depends(get_session)):
+    """
+    Retrieve articles where the top image is not empty, returning article data and top image URL.
+    """
+    try:
+        async with session.begin():
+            query = (
+                select(Content, MediaDetails.top_image)
+                .join(Content.media_details)
+                .where(MediaDetails.top_image.isnot(None))
+            )
+            result = await session.execute(query)
+            articles_with_images = result.all()
+
+            articles_data = []
+            for article, top_image in articles_with_images:
+                article_dict = article.dict()
+                article_dict["top_image"] = top_image
+                articles_data.append(article_dict)
+
+        return {"articles": articles_data}
+    except Exception as e:
+        logger.error(f"Error retrieving articles with top image: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving articles with top image")

@@ -20,12 +20,13 @@ from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from classx import classify_with_model
 from core.adb import get_session
+from core.service_mapping import get_redis_url
 from sqlalchemy.orm import selectinload
 
 
 app = FastAPI()
 config = ServiceConfig()
-model = "llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4o-2024-08-06"
+model = "llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4o-mini"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -79,7 +80,7 @@ def retrieve_contents_from_redis(batch_size: int = 10) -> List[Content]:
     logger = get_run_logger()
     logger.info(f"Attempting to retrieve {batch_size} contents from Redis")
     
-    redis_conn = Redis(host='redis', port=6379, db=4)
+    redis_conn = Redis.from_url(get_redis_url(), db=4)
     _contents = redis_conn.lrange('contents_without_classification_queue', 0, batch_size - 1)
     redis_conn.ltrim('contents_without_classification_queue', batch_size, -1)
 
@@ -108,7 +109,7 @@ def write_contents_to_redis(serialized_contents):
 
     serialized_contents = [json.dumps(content, cls=UUIDEncoder) if isinstance(content, dict) else content for content in serialized_contents]
 
-    redis_conn_processed = Redis(host='redis', port=6379, db=4)
+    redis_conn_processed = Redis.from_url(get_redis_url(), db=4)
     redis_conn_processed.lpush('contents_with_classification_queue', *serialized_contents)
     logger.info(f"Wrote {len(serialized_contents)} contents with classification to Redis")
 
@@ -116,6 +117,7 @@ def convert_llm_to_db_evaluation(llm_eval: LLMContentEvaluation, content_id: UUI
     """Convert LLM evaluation model to database model."""
     return DBContentEvaluation(
         content_id=content_id,
+        thematic_locations=llm_eval.thematic_locations,
         sociocultural_interest=llm_eval.sociocultural_interest,
         global_political_impact=llm_eval.global_political_impact,
         regional_political_impact=llm_eval.regional_political_impact,
@@ -123,7 +125,6 @@ def convert_llm_to_db_evaluation(llm_eval: LLMContentEvaluation, content_id: UUI
         regional_economic_impact=llm_eval.regional_economic_impact,
         event_type=llm_eval.event_type,
         event_subtype=llm_eval.event_subtype,
-        keywords=llm_eval.keywords,
         categories=llm_eval.categories
     )
 
@@ -131,7 +132,7 @@ def convert_llm_to_db_evaluation(llm_eval: LLMContentEvaluation, content_id: UUI
 def process_contents(batch_size: int = 10):
     """Process a batch of contents: retrieve, classify, and print them."""
     logger = get_run_logger()
-    contents = retrieve_contents_from_redis(batch_size=5)
+    contents = retrieve_contents_from_redis(batch_size=batch_size)
 
     if not contents:
         logger.warning("No contents to process.")
