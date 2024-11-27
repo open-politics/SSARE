@@ -3,6 +3,7 @@
 Open Politics - especially Opol.io is a running data operation in the name of an open and enabled society.
 
 We are organising methods and infrastructure focusing on political analysis and reasearch.
+
 On a mission to find the **#NeedleInTheHayStack**
 
 **SSARE** stands for Semantic **Search Article Recommendation Engine**: 
