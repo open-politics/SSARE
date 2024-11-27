@@ -80,8 +80,8 @@ jobs:
           cd SSARE
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/liteLLM:${{ github.sha }} -f ./liteLLM/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/liteLLM:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/liteLLM:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/liteLLM:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/liteLLM:latest
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/liteLLM:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/custom_litellm:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/custom_litellm:latest
 
       - name: Build and Push Embedding Flow
         run: |
