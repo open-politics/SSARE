@@ -11,11 +11,12 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from redis.asyncio import Redis
-from prefect import task, flow, deploy
+# from prefect import task, flow, deploy
 from prefect.deployments import run_deployment
 from pydantic import BaseModel
 from fastapi.logger import logger
 import logging
+from jinja2 import Environment, FileSystemLoader
 
 # Local imports
 from core.service_mapping import ServiceConfig
@@ -87,8 +88,12 @@ async def check_services():
             service_statuses[service] = str(e)
     return service_statuses
 
-## Main Application Routes
 @app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    return templates.TemplateResponse("opol.html", {"request": request})
+
+## Main Application Routes
+@app.get("/dashboardx", response_class=HTMLResponse)
 async def read_root(request: Request, query: str = "culture and arts"):
     try:
         postgres_service_url = f"{config.service_urls['postgres-service']}/contents"
@@ -306,20 +311,24 @@ async def trigger_step(step_name: str, batch_size: int = Query(50, ge=1, le=100)
         raise HTTPException(status_code=500, detail=str(e))
 
 ## Redis Channel Management
-@app.get("/check_channels/{flow_name}")
+@app.get("/check_channels/{flow_name}", response_class=HTMLResponse)
 async def check_channels(request: Request, flow_name: str):
     channels = {}
     try:
         # Temporarily set logging level to ERROR to reduce verbosity
+        logger = logging.getLogger("uvicorn.access")
         logger.setLevel(logging.ERROR)
         
-        redis_host = 'redis'
-        redis_port = int(config.REDIS_PORT)
-        
-        redis_conn = Redis(host=os.getenv('REDIS_HOST', 'redis'), port=int(os.getenv('REDIS_PORT', 6379)), decode_responses=True)
+        redis_url = get_redis_url()
+        try:
+            redis_conn = Redis.from_url(redis_url, decode_responses=True)
+            await redis_conn.ping()
+        except Exception as e:
+            logger.error(f"Failed to connect to Redis at {redis_url}: {e}")
+            raise HTTPException(status_code=500, detail="Error connecting to Redis")
         
         flow_channels = {
-            "status": {"Orchestration in progress"},
+            "status": {"Orchestration_in_progress"},
             "scrapers_running": {"scrapers_running"},
             "scraping": ["scrape_sources", "raw_contents_queue"],
             "embedding": ["contents_without_embedding_queue", "contents_with_embeddings"],
@@ -337,32 +346,36 @@ async def check_channels(request: Request, flow_name: str):
             if queue_info:
                 try:
                     await redis_conn.select(queue_info['db'])
-                    if channel_name == 'Orchestration in progress':
-                        value = await redis_conn.get(queue_info['key'])
-                        channels[channel_name] = 'Active' if value == '1' else 'Inactive'
-                    elif channel_name == 'scrapers_running':
+                    if channel_name in ['Orchestration_in_progress', 'scrapers_running']:
                         value = await redis_conn.get(queue_info['key'])
                         channels[channel_name] = 'Active' if value == '1' else 'Inactive'
                     else:
-                        channels[channel_name] = await redis_conn.llen(queue_info['key'])
+                        value = await redis_conn.llen(queue_info['key'])
+                        channels[channel_name] = int(value)  # Ensure numeric value
                 except Exception as e:
+                    logger.error(f"Error accessing Redis for channel '{channel_name}': {e}")
                     channels[channel_name] = 'Error accessing Redis'
         
         await redis_conn.aclose()
         
+    except HTTPException as http_exc:
+        raise http_exc
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Error checking channels: Redis might be down")
+        logger.error(f"Unexpected error in check_channels: {e}")
+        raise HTTPException(status_code=500, detail="Unexpected error occurred")
     finally:
         # Restore logging level to INFO
         logger.setLevel(logging.INFO)
+    
+    # Log channels for debugging
+    logger.info(f"Channels data: {channels}")
     
     return templates.TemplateResponse("partials/multiple_channel_info.html", {"request": request, "channels": channels})
 
 @app.post("/flush_redis_channels/{flow_name}")
 async def flush_redis_channels(flow_name: str = Path(..., description="The name of the flow to flush")):
-    redis_conn = Redis(host=config.service_urls['redis'].split('://')[1].split(':')[0], 
-                       port=int(config.REDIS_PORT), 
-                       decode_responses=True)
+    redis_url = get_redis_url()
+    redis_conn = Redis.from_url(redis_url, decode_responses=True)
     
     flow_channels = {
         "scraping": ["scrape_sources", "raw_contents_queue"],
@@ -456,5 +469,26 @@ async def log_redis_url():
 async def log_redis_url_endpoint():
     await log_redis_url()
     return {"message": "Redis URL logged"}
+
+def is_number(value):
+    try:
+        float(value)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+# Register the custom filter
+templates.env.filters['is_number'] = is_number
+
+# Define the custom test
+def is_number(value):
+    try:
+        float(value)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+# Register the custom test
+templates.env.tests['is_number'] = is_number
 
 

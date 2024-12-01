@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Elegant Interactive Globe</title>
+    <!-- Include Google Fonts for Improved Typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #000; 
+            font-family: 'Inter', sans-serif; /* Updated Font Family */
+        }
+        canvas { display: block; }
+        /* Caption Styles */
+        #caption {
+            position: absolute;
+            bottom: 15vh;
+            width: 100%;
+            text-align: center;
+            color: #ffffff;
+            font-size: 2rem; /* Increased Font Size for Emphasis */
+            font-weight: 400;
+        }
+        #link {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #ffffff;
+            font-size: 1.5rem;
+            text-decoration: none;
+        }
+        #emoji {
+            position: absolute;
+            top: 100%; /* Position below the "opol" text */
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 10px;
+            font-size: 1.5rem; /* Smaller font size for the emoji */
+        }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.module.js",
+          "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.149.0/examples/jsm/"
+        }
+      }
+    </script>
+    <!-- Include TWEEN.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+</head>
+<body>
+    <div id="caption">
+        opol
+        <a id="emoji" href="https://open-politics.org" target="_blank">✨</a>
+    </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+        // Initialize Scene
+        const scene = new THREE.Scene();
+
+        // Initialize Camera
+        const camera = new THREE.PerspectiveCamera(
+            60,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            1000
+        );
+        camera.position.set(15, 0, 15); // Adjusted camera position for better fit
+
+        // Initialize Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setClearColor(0x000000, 0);
+        document.body.appendChild(renderer.domElement);
+
+        // Initialize OrbitControls with reduced rotation speed and disable zoom
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.1;
+        controls.rotateSpeed = 0.3; // Slower rotation for a heavier movement
+        controls.enableZoom = false; // Disable zoom interactions
+
+        // Add Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const pointLight = new THREE.PointLight(0xffffff, 1);
+        pointLight.position.set(10, 10, 10);
+        scene.add(pointLight);
+
+        // Globe Parameters
+        const globeRadius = 5;
+        const pointCount = 1000;
+
+        // Create Point Cloud Geometry
+        const pointsGeometry = new THREE.BufferGeometry();
+        const positions = [];
+        const colors = [];
+
+        const color = new THREE.Color();
+
+        // Generate Points with Gradient Colors
+        for (let i = 0; i < pointCount; i++) {
+            const phi = Math.acos(THREE.MathUtils.randFloatSpread(2)); // Polar angle
+            const theta = THREE.MathUtils.randFloatSpread(360); // Azimuthal angle
+
+            const x = globeRadius * Math.sin(phi) * Math.cos(theta);
+            const y = globeRadius * Math.sin(phi) * Math.sin(theta);
+            const z = globeRadius * Math.cos(phi);
+
+            positions.push(x, y, z);
+
+            // Gradient color based on z-axis
+            color.setHSL((z / globeRadius + 1) / 2, 0.6, 0.6);
+            colors.push(color.r, color.g, color.b);
+        }
+
+        pointsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        pointsGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+        // Create Points Material
+        const pointsMaterial = new THREE.PointsMaterial({
+            size: 0.05,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.8,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        // Create Points and Add to Scene
+        const points = new THREE.Points(pointsGeometry, pointsMaterial);
+        scene.add(points);
+
+        // Nodes for Interactivity
+        const nodeGeometry = new THREE.SphereGeometry(0.1, 32, 32);
+        const nodeMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffaa00,
+            metalness: 0.6,
+            roughness: 0.4,
+            emissive: 0x555555,
+            emissiveIntensity: 0.5,
+            transparent: true,
+            opacity: 0.9
+        });
+
+        // Increased Number of Nodes
+        const nodePositions = [
+            { lat: 40.7128, lon: -74.0060, name: 'New York' },
+            { lat: 35.6895, lon: 139.6917, name: 'Tokyo' },
+            { lat: -33.8688, lon: 151.2093, name: 'Sydney' },
+            { lat: 51.5074, lon: -0.1278, name: 'London' },
+            { lat: 48.8566, lon: 2.3522, name: 'Paris' },
+            { lat: 55.7558, lon: 37.6173, name: 'Moscow' },
+            { lat: 34.0522, lon: -118.2437, name: 'Los Angeles' },
+            { lat: 19.0760, lon: 72.8777, name: 'Mumbai' },
+            { lat: -23.5505, lon: -46.6333, name: 'São Paulo' },
+            { lat: 28.6139, lon: 77.2090, name: 'Delhi' },
+            { lat: 59.9343, lon: 30.3351, name: 'Saint Petersburg' },
+            { lat: 1.3521, lon: 103.8198, name: 'Singapore' },
+            { lat: -34.6037, lon: -58.3816, name: 'Buenos Aires' }
+            // Add more nodes as needed
+        ];
+
+        const nodesGroup = new THREE.Group();
+
+        // Hover Effect: Elegant Node Appearance without Zoom
+        nodePositions.forEach(pos => {
+            const phi = THREE.MathUtils.degToRad(90 - pos.lat);
+            const theta = THREE.MathUtils.degToRad(pos.lon + 180);
+            const x = globeRadius * Math.sin(phi) * Math.cos(theta);
+            const y = globeRadius * Math.sin(phi) * Math.sin(theta);
+            const z = globeRadius * Math.cos(phi);
+            const node = new THREE.Mesh(nodeGeometry, nodeMaterial.clone());
+            node.position.set(x, y, z);
+            node.scale.set(1, 1, 1);
+            node.userData = { 
+                originalColor: node.material.color.getHex(), 
+                hovered: false, 
+                name: pos.name 
+            };
+            nodesGroup.add(node);
+        });
+
+        scene.add(nodesGroup);
+
+        // Raycaster for Interaction
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        const info = document.getElementById('info');
+
+        // Packets Effect
+        const packets = [];
+        const MAX_PACKETS = 50; // Reduced from 200 to 50 for a cleaner look
+
+        // Persistent Connections
+        const connections = [];
+        const MAX_CONNECTIONS = nodePositions.length * (nodePositions.length - 1) / 2;
+        const connectionPool = [];
+        const CONNECTION_FADE_DURATION = 2000; // in milliseconds
+
+        // Function to Create and Trigger Packets between Nodes
+        function triggerPackets(originPosition, isHover = false) {
+            if (packets.length >= MAX_PACKETS) return; // Prevent overload
+
+            const origin = new THREE.Vector3().copy(originPosition);
+            const targetNodes = nodePositions.filter(node => {
+                const nodeVec = sphericalToCartesian(node.lat, node.lon, globeRadius);
+                return !nodeVec.equals(origin);
+            });
+
+            // Randomly select a target node from the filtered list
+            const randomTargetIndex = Math.floor(Math.random() * targetNodes.length);
+            const target = targetNodes[randomTargetIndex];
+            const endPoint = sphericalToCartesian(target.lat, target.lon, globeRadius);
+
+            // Create a curved path using a quadratic bezier curve for smooth arcs
+            const midPoint = new THREE.Vector3().addVectors(origin, endPoint).multiplyScalar(0.5);
+            midPoint.normalize().multiplyScalar(globeRadius * 1.2); // Elevate the midpoint above the globe
+
+            const curve = new THREE.QuadraticBezierCurve3(origin, midPoint, endPoint);
+            const pointsOnCurve = curve.getPoints(50); // Increase for smoother curves
+
+            const geometry = new THREE.BufferGeometry().setFromPoints(pointsOnCurve);
+
+            // Create a gradient color for the packet
+            const packetColor = new THREE.Color();
+            packetColor.setHSL(Math.random(), 0.7, 0.5); // Random color for each packet
+
+            const packetMaterial = new THREE.LineBasicMaterial({
+                color: packetColor,
+                transparent: true,
+                opacity: 0.7,
+                linewidth: 2,
+                blending: THREE.AdditiveBlending
+            });
+
+            const packet = new THREE.Line(geometry, packetMaterial);
+            packet.userData = {
+                curvePoints: pointsOnCurve,
+                currentPointIndex: 0,
+                speed: isHover ? 30 : 15, // Slower speed for longer travel time
+                delay: Math.random() * 0.5, // Random delay for each packet
+                fading: false
+            };
+            packets.push(packet);
+            scene.add(packet);
+        }
+
+        // Function to Initialize Network Connections on Load
+        function initializeNetworkConnections() {
+            nodePositions.forEach(node => {
+                const nodeVec = sphericalToCartesian(node.lat, node.lon, globeRadius);
+                // Introduce a delay before triggering packets
+                setTimeout(() => triggerPackets(nodeVec), Math.random() * 5000); // Random delay up to 5 seconds
+            });
+
+            // Initialize Persistent Connections
+            for (let i = 0; i < nodePositions.length; i++) {
+                for (let j = i + 1; j < nodePositions.length; j++) {
+                    const origin = sphericalToCartesian(nodePositions[i].lat, nodePositions[i].lon, globeRadius);
+                    const target = sphericalToCartesian(nodePositions[j].lat, nodePositions[j].lon, globeRadius);
+                    createPersistentConnection(origin, target);
+                }
+            }
+        }
+
+        function sphericalToCartesian(lat, lon, radius) {
+            const phi = THREE.MathUtils.degToRad(90 - lat);
+            const theta = THREE.MathUtils.degToRad(lon + 180);
+            const x = radius * Math.sin(phi) * Math.cos(theta);
+            const y = radius * Math.sin(phi) * Math.sin(theta);
+            const z = radius * Math.cos(phi);
+            return new THREE.Vector3(x, y, z);
+        }
+
+        // Function to Create a Persistent Connection
+        function createPersistentConnection(origin, target) {
+            const midPoint = new THREE.Vector3().addVectors(origin, target).multiplyScalar(0.5);
+            midPoint.normalize().multiplyScalar(globeRadius * 0.8); // Lowered to pass through the globe
+
+            const curve = new THREE.QuadraticBezierCurve3(origin, midPoint, target);
+            const pointsOnCurve = curve.getPoints(50);
+
+            const geometry = new THREE.BufferGeometry().setFromPoints(pointsOnCurve);
+
+            const connectionMaterial = new THREE.LineBasicMaterial({
+                color: 0x00ffea,
+                transparent: true,
+                opacity: 0.1, // Reduced opacity for fainter connections
+                linewidth: 1,
+                blending: THREE.AdditiveBlending
+            });
+
+            const connection = new THREE.Line(geometry, connectionMaterial);
+            connection.userData = {
+                fadeIn: true,
+                fadeOut: false,
+                lastUpdate: Date.now()
+            };
+            connections.push(connection);
+            scene.add(connection);
+        }
+
+        // Function to Update Packets
+        function updatePackets(delta) {
+            packets.forEach(packet => {
+                // Apply delay before starting movement
+                if (packet.userData.delay > 0) {
+                    packet.userData.delay -= delta;
+                    return;
+                }
+
+                packet.userData.currentPointIndex += packet.userData.speed * delta * 60; // Adjust speed based on delta
+
+                if (packet.userData.currentPointIndex >= packet.userData.curvePoints.length) {
+                    // Start fading out
+                    if (!packet.userData.fading) {
+                        packet.userData.fading = true;
+                        new TWEEN.Tween(packet.material)
+                            .to({ opacity: 0 }, 2000) // Adjust fade duration
+                            .easing(TWEEN.Easing.Quadratic.Out)
+                            .onComplete(() => {
+                                scene.remove(packet);
+                                packets.splice(packets.indexOf(packet), 1);
+                            })
+                            .start();
+                    }
+                } else {
+                    // Update position by clipping the curve to currentPointIndex
+                    const visiblePoints = packet.userData.curvePoints.slice(0, Math.floor(packet.userData.currentPointIndex));
+                    packet.geometry.setFromPoints(visiblePoints);
+                }
+            });
+
+            // Gradually increase packet frequency over time
+            const timeElapsed = clock.getElapsedTime();
+            const packetFrequency = Math.min(0.005 + timeElapsed * 0.0001, 0.02); // Start slow, increase to a max frequency
+
+            if (Math.random() < packetFrequency) {
+                const randomOrigin = nodeGroupRandomNode();
+                triggerPackets(randomOrigin);
+            }
+
+            // Update Persistent Connections
+            connections.forEach(connection => {
+                const now = Date.now();
+                const elapsed = now - connection.userData.lastUpdate;
+
+                if (connection.userData.fadeIn) {
+                    connection.material.opacity += delta / (CONNECTION_FADE_DURATION / 1000);
+                    if (connection.material.opacity >= 0.1) { // Reduced maximum opacity
+                        connection.material.opacity = 0.1;
+                        connection.userData.fadeIn = false;
+                        connection.userData.lastUpdate = now;
+                    }
+                } else if (!connection.userData.fadeIn && !connection.userData.fadeOut) {
+                    // Randomly decide to fade out
+                    if (Math.random() < 0.001 * delta * 60) { // Adjust probability as needed
+                        connection.userData.fadeOut = true;
+                    }
+                }
+
+                if (connection.userData.fadeOut) {
+                    connection.material.opacity -= delta / (CONNECTION_FADE_DURATION / 1000);
+                    if (connection.material.opacity <= 0) {
+                        connection.material.opacity = 0;
+                        connection.userData.fadeOut = false;
+                        connection.userData.fadeIn = true;
+                        connection.userData.lastUpdate = now;
+                    }
+                }
+            });
+        }
+
+        // Function to Select a Random Node Position
+        function nodeGroupRandomNode() {
+            const randomIndex = Math.floor(Math.random() * nodesGroup.children.length);
+            return nodesGroup.children[randomIndex].position;
+        }
+
+        // Function to Handle Hover Effects without Zoom
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersectedNodes = raycaster.intersectObjects(nodesGroup.children, false);
+
+            // Reset Hover States
+            nodesGroup.children.forEach(node => {
+                if (node.userData.hovered) {
+                    node.material.color.set(node.userData.originalColor);
+                    node.userData.hovered = false;
+                    // Reset scale with transition
+                    new TWEEN.Tween(node.scale)
+                        .to({ x: 1, y: 1, z: 1 }, 300)
+                        .easing(TWEEN.Easing.Cubic.Out)
+                        .start();
+                }
+            });
+            info.textContent = 'Explore the Interactive Globe';
+            document.body.style.cursor = 'default';
+
+            // Highlight Hovered Node
+            if (intersectedNodes.length > 0) {
+                const intersected = intersectedNodes[0].object;
+                intersected.userData.hovered = true;
+                intersected.material.color.set(0x00ffea);
+                info.textContent = `Hovering over: ${intersected.userData.name}`;
+                
+                document.body.style.cursor = 'pointer';
+
+                // Trigger Stronger Packets Effect on Hover
+                triggerPackets(intersected.position, true);
+            }
+        }
+
+        window.addEventListener('mousemove', onMouseMove, false);
+
+        // Initialize Clock for Time-Based Animations
+        const clock = new THREE.Clock();
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+
+            // Update Controls
+            controls.update();
+
+            // Update Packets and Connections
+            updatePackets(delta);
+
+            // Update TWEEN animations
+            TWEEN.update();
+
+            // Render Scene
+            renderer.render(scene, camera);
+        }
+
+        // Initialize Network Connections on Load
+        initializeNetworkConnections();
+
+        animate();
+
+        // Handle Window Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
