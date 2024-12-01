@@ -12,5 +12,3 @@ RUN pip install --no-cache-dir -r raybaserequirements.txt
 
 # Add NLTK data download
 RUN python -m nltk.downloader punkt punkt_tab
-
-ENV PYTHONPATH="/app/:${PYTHONPATH}"
