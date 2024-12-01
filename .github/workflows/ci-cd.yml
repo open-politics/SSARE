@@ -18,7 +18,31 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
       
+      - name: Build and Push Embedding Flow
+        run: |
+          cd SSARE
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/embedding-flow:${{ github.sha }} -f ./embedding-service/Dockerfile --target flow .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/embedding-flow:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/embedding-flow:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/embedding-flow:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/embedding-flow:latest
+
+      - name: Build and Push Scraper Flow
+        run: |
+          cd SSARE
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/scraper-flow:${{ github.sha }} -f ./scraper-service/Dockerfile --target flow .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper-flow:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/scraper-flow:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/scraper-flow:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper-flow:latest
+
       - name: Build and Push Entities Flow
+        run: |
+          cd SSARE
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:${{ github.sha }} -f ./entity-service/Dockerfile --target flow .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:latest
+
+      - name: Build and Push Custom LiteLLM
         run: |
           cd SSARE
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:${{ github.sha }} -f ./entity-service/Dockerfile --target flow .
@@ -90,32 +114,7 @@ jobs:
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/classificationservice:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/classificationservice:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/classificationservice:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/classificationservice:latest
-
-
-      - name: Build and Push Embedding Flow
-        run: |
-          cd SSARE
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/embedding-flow:${{ github.sha }} -f ./embeddingservice/Dockerfile --target flow .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/embedding-flow:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/embedding-flow:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/embedding-flow:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/embedding-flow:latest
-
-      - name: Build and Push Scraper Flow
-        run: |
-          cd SSARE
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/scraper-flow:${{ github.sha }} -f ./scraper-service/Dockerfile --target flow .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper-flow:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/scraper-flow:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/scraper-flow:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper-flow:latest
-
-      - name: Build and Push Entities Flow
-        run: |
-          cd SSARE
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:${{ github.sha }} -f ./entity-service/Dockerfile --target flow .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:latest
-
+ 
       - name: Build and Push Ray Worker
         run: | 
           cd ssare
