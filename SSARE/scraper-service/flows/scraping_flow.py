@@ -4,7 +4,7 @@ from tasks.scraping_tasks import scrape_cnn_articles, scrape_dw_articles, scrape
 from tasks.processing_tasks import process_scraped_data
 from tasks.redis_tasks import save_contents_to_redis
 import pandas as pd
-
+import os
 SCRAPER_TASKS = {
     'cnn': scrape_cnn_articles,
     'dw': scrape_dw_articles,
@@ -12,7 +12,7 @@ SCRAPER_TASKS = {
 }
 
 task_runner = RayTaskRunner(
-    address="ray://ray_head:10001",
+    address=os.getenv("RAY_ADDRESS"),
     init_kwargs={
         "runtime_env": {
             "working_dir": ".",  
@@ -50,6 +50,6 @@ def scrape_sources_flow(flags: list):
 if __name__ == "__main__":
     scrape_sources_flow.serve(
         name="scrape-sources-deployment",
-        parameters={"flags": ["cnn", "dw"]},
+        parameters={"flags": ["cnn", "dw", "bbc"]},
         cron="0 * * * *"
     )

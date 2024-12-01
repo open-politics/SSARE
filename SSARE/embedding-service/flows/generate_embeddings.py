@@ -146,7 +146,7 @@ def write_contents_to_redis(contents_with_embeddings: List[dict]):
     finally:
         redis_conn.close()
 
-@flow(task_runner=RayTaskRunner(address=os.getenv("RAY_ADDRESS"), init_kwargs={"pip": ["prefect-ray", "sentence-transformers", "nltk", "numpy"]}), log_prints=True)
+@flow(task_runner=RayTaskRunner(address=os.getenv("RAY_ADDRESS"), init_kwargs={"runtime_env":{"pip": ["prefect-ray", "sentence-transformers", "nltk", "numpy", "redis"]}}), log_prints=True)
 def generate_embeddings_flow(batch_size: int):
     """
     The main flow that orchestrates the retrieval, processing, and storage of content embeddings.

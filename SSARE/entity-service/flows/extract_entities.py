@@ -8,6 +8,7 @@ from prefect import task, flow
 from flair.data import Sentence
 from flair.models import SequenceTagger
 from prefect_ray import RayTaskRunner
+import os
 
 # Global variable to store the NER model
 ner_tagger = None
@@ -57,7 +58,7 @@ def push_contents_with_entities(contents_with_entities: List[Tuple[Content, List
     finally:
         redis_conn.close()
 
-@flow(task_runner=RayTaskRunner(address="ray://ray_head:10001", init_kwargs={"runtime_env": {"pip": ["flair"]}}))
+@flow(task_runner=RayTaskRunner(address=os.getenv("RAY_ADDRESS"), init_kwargs={"runtime_env":{"pip": ["flair", "redis", "prefect"]}}), log_prints=True)
 def extract_entities_flow(batch_size: int = 50):
     logger.info("Starting entity extraction process")
     contents = retrieve_contents_from_redis(batch_size)
