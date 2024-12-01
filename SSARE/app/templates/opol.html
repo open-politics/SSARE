@@ -142,11 +142,11 @@
         // Nodes for Interactivity
         const nodeGeometry = new THREE.SphereGeometry(0.1, 32, 32);
         const nodeMaterial = new THREE.MeshStandardMaterial({
-            color: 0xffaa00,
-            metalness: 0.6,
-            roughness: 0.4,
-            emissive: 0x555555,
-            emissiveIntensity: 0.5,
+            color: 0x00ffea,
+            metalness: 0.8,
+            roughness: 0.2,
+            emissive: 0x0044ff,
+            emissiveIntensity: 0.3,
             transparent: true,
             opacity: 0.9
         });
@@ -195,8 +195,6 @@
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
 
-        const info = document.getElementById('info');
-
         // Packets Effect
         const packets = [];
         const MAX_PACKETS = 50; // Reduced from 200 to 50 for a cleaner look
@@ -209,50 +207,53 @@
 
         // Function to Create and Trigger Packets between Nodes
         function triggerPackets(originPosition, isHover = false) {
-            if (packets.length >= MAX_PACKETS) return; // Prevent overload
+            const packetCount = isHover ? 20 : 1; // Increase packets on hover
+            for (let i = 0; i < packetCount; i++) {
+                if (packets.length >= MAX_PACKETS) return; // Prevent overload
 
-            const origin = new THREE.Vector3().copy(originPosition);
-            const targetNodes = nodePositions.filter(node => {
-                const nodeVec = sphericalToCartesian(node.lat, node.lon, globeRadius);
-                return !nodeVec.equals(origin);
-            });
+                const origin = new THREE.Vector3().copy(originPosition);
+                const targetNodes = nodePositions.filter(node => {
+                    const nodeVec = sphericalToCartesian(node.lat, node.lon, globeRadius);
+                    return !nodeVec.equals(origin);
+                });
 
-            // Randomly select a target node from the filtered list
-            const randomTargetIndex = Math.floor(Math.random() * targetNodes.length);
-            const target = targetNodes[randomTargetIndex];
-            const endPoint = sphericalToCartesian(target.lat, target.lon, globeRadius);
+                // Randomly select a target node from the filtered list
+                const randomTargetIndex = Math.floor(Math.random() * targetNodes.length);
+                const target = targetNodes[randomTargetIndex];
+                const endPoint = sphericalToCartesian(target.lat, target.lon, globeRadius);
 
-            // Create a curved path using a quadratic bezier curve for smooth arcs
-            const midPoint = new THREE.Vector3().addVectors(origin, endPoint).multiplyScalar(0.5);
-            midPoint.normalize().multiplyScalar(globeRadius * 1.2); // Elevate the midpoint above the globe
+                // Create a curved path using a quadratic bezier curve for smooth arcs
+                const midPoint = new THREE.Vector3().addVectors(origin, endPoint).multiplyScalar(0.5);
+                midPoint.normalize().multiplyScalar(globeRadius * 1.2); // Elevate the midpoint above the globe
 
-            const curve = new THREE.QuadraticBezierCurve3(origin, midPoint, endPoint);
-            const pointsOnCurve = curve.getPoints(50); // Increase for smoother curves
+                const curve = new THREE.QuadraticBezierCurve3(origin, midPoint, endPoint);
+                const pointsOnCurve = curve.getPoints(50); // Increase for smoother curves
 
-            const geometry = new THREE.BufferGeometry().setFromPoints(pointsOnCurve);
+                const geometry = new THREE.BufferGeometry().setFromPoints(pointsOnCurve);
 
-            // Create a gradient color for the packet
-            const packetColor = new THREE.Color();
-            packetColor.setHSL(Math.random(), 0.7, 0.5); // Random color for each packet
+                // Create a gradient color for the packet
+                const packetColor = new THREE.Color();
+                packetColor.setHSL(Math.random(), 0.7, 0.5); // Random color for each packet
 
-            const packetMaterial = new THREE.LineBasicMaterial({
-                color: packetColor,
-                transparent: true,
-                opacity: 0.7,
-                linewidth: 2,
-                blending: THREE.AdditiveBlending
-            });
+                const packetMaterial = new THREE.LineBasicMaterial({
+                    color: packetColor,
+                    transparent: true,
+                    opacity: 0.7,
+                    linewidth: 2,
+                    blending: THREE.AdditiveBlending
+                });
 
-            const packet = new THREE.Line(geometry, packetMaterial);
-            packet.userData = {
-                curvePoints: pointsOnCurve,
-                currentPointIndex: 0,
-                speed: isHover ? 30 : 15, // Slower speed for longer travel time
-                delay: Math.random() * 0.5, // Random delay for each packet
-                fading: false
-            };
-            packets.push(packet);
-            scene.add(packet);
+                const packet = new THREE.Line(geometry, packetMaterial);
+                packet.userData = {
+                    curvePoints: pointsOnCurve,
+                    currentPointIndex: 0,
+                    speed: isHover ? 100 : 15, // Faster speed on hover
+                    delay: Math.random() * 0.5, // Random delay for each packet
+                    fading: false
+                };
+                packets.push(packet);
+                scene.add(packet);
+            }
         }
 
         // Function to Initialize Network Connections on Load
@@ -401,26 +402,27 @@
                 if (node.userData.hovered) {
                     node.material.color.set(node.userData.originalColor);
                     node.userData.hovered = false;
-                    // Reset scale with transition
                     new TWEEN.Tween(node.scale)
                         .to({ x: 1, y: 1, z: 1 }, 300)
                         .easing(TWEEN.Easing.Cubic.Out)
                         .start();
                 }
             });
-            info.textContent = 'Explore the Interactive Globe';
+
             document.body.style.cursor = 'default';
 
-            // Highlight Hovered Node
             if (intersectedNodes.length > 0) {
                 const intersected = intersectedNodes[0].object;
                 intersected.userData.hovered = true;
-                intersected.material.color.set(0x00ffea);
-                info.textContent = `Hovering over: ${intersected.userData.name}`;
+                intersected.material.color.set(0xff0000);
                 
                 document.body.style.cursor = 'pointer';
 
-                // Trigger Stronger Packets Effect on Hover
+                new TWEEN.Tween(intersected.scale)
+                    .to({ x: 1.5, y: 1.5, z: 1.5 }, 300)
+                    .easing(TWEEN.Easing.Cubic.Out)
+                    .start();
+
                 triggerPackets(intersected.position, true);
             }
         }
