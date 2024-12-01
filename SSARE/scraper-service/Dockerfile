@@ -3,7 +3,7 @@ FROM python:3.11 AS base
 
 WORKDIR /app
 
-COPY scraper_service/requirements.txt .
+COPY scraper-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 RUN apt-get update && apt-get install -y wget gnupg2
@@ -15,14 +15,14 @@ RUN playwright install
 RUN apt-get install -y supervisor
 
 COPY core ./core
-COPY scraper_service/ .
+COPY scraper-service/ .
 
 # Flow service stage
 FROM base AS flow
-COPY scraper_service/flows/scraping_flow.py .
+COPY scraper-service/flows/scraping_flow.py .
 CMD ["python", "scraping_flow.py"]
 
 # API service stage
 FROM base AS api
-COPY scraper_service/main.py .
+COPY scraper-service/main.py .
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8081"]

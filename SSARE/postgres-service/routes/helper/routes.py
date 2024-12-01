@@ -490,7 +490,7 @@ async def update_articles(
                 if content.url and '/video' not in content.url:
                     logger.info(f"Processing {source} article: {content.url}")
                     response = await client.post(
-                        "http://scraper_service:8081/scrape_article",
+                        "http://scraper-service:8081/scrape_article",
                         params={"url": content.url}
                     )
                     if response.status_code == 200:

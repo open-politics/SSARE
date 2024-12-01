@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY embedding_service/requirements.txt .
+COPY embedding-service/requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY . .

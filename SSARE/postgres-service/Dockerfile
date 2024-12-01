@@ -11,11 +11,11 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements.txt file and install Python dependencies
-COPY postgres_service/requirements.txt /app/
+COPY postgres-service/requirements.txt /app/
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy the postgres_service directory
-COPY postgres_service .
+# Copy the postgres-service directory
+COPY postgres-service .
 
 # Copy the core directory
 COPY core ./core

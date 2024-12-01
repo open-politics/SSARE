@@ -100,7 +100,7 @@ async def get_embeddings(texts: List[str]) -> List[List[float]]:
     async with httpx.AsyncClient() as client:
         embeddings = []
         for text in texts:
-            response = await client.get("http://embedding_service:8000/generate_query_embeddings", params={"query": text})
+            response = await client.get("http://embedding-service:8000/generate_query_embeddings", params={"query": text})
             response.raise_for_status()
             embeddings.append(response.json()["embeddings"])
         return embeddings

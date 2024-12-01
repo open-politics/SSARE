@@ -3,7 +3,7 @@ set -e
 
 cd /app
 
-python -m flows.geocode_locations &
+# python -m flows.geocode_locations &
 
 # Start the server
 echo "Starting the server on port 3690"

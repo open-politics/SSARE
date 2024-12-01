@@ -47,17 +47,17 @@ async def healthcheck():
 async def service_health(request: Request):
     health_status = {}
     services_to_check = [
-        "main_core_app",
-        "postgres_service",
-        "embedding_service",
-        "scraper_service",
+        "main-core-app",
+        "postgres-service",
+        "embedding-service",
+        "scraper-service",
         "r2r",
-        "rag_service",
-        "entity_service",
-        "geo_service",
+        "rag-service",
+        "entity-service",
+        "geo-service",
         "ollama",
         "liteLLM",
-        "classification_service"
+        "classification-service"
     ]
     async with httpx.AsyncClient() as client:
         for service in services_to_check:
@@ -79,7 +79,7 @@ async def service_health(request: Request):
 @app.get("/check_services")
 async def check_services():
     service_statuses = {}
-    for service, url in config.SERVICE_URLS.items():
+    for service, url in config.service_urls.items():
         try:
             response = await httpx.get(f"{url}/healthz", timeout=10.0)
             service_statuses[service] = response.status_code
@@ -91,7 +91,7 @@ async def check_services():
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, query: str = "culture and arts"):
     try:
-        postgres_service_url = f"{config.service_urls['postgres_service']}/contents"
+        postgres_service_url = f"{config.service_urls['postgres-service']}/contents"
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 postgres_service_url,
@@ -141,7 +141,7 @@ async def search_contents(
     skip: int = 0,
     limit: int = 10
 ):
-    postgres_service_url = f"{config.service_urls['postgres_service']}/contents"
+    postgres_service_url = f"{config.service_urls['postgres-service']}/contents"
     async with httpx.AsyncClient() as client:
         response = await client.get(
             postgres_service_url,
@@ -163,7 +163,7 @@ async def search_contents(
 async def outward_irrelevant_articles(request: Request):
     """Fetch and display articles marked as outward/irrelevant."""
     try:
-        postgres_service_url = f"{config.service_urls['postgres_service']}/outward_irrelevant"
+        postgres_service_url = f"{config.service_urls['postgres-service']}/outward_irrelevant"
         async with httpx.AsyncClient() as client:
             response = await client.get(postgres_service_url)
 
@@ -408,7 +408,7 @@ async def trigger_scraping():
 ## Embedding Management
 @app.post("/store_embeddings_in_qdrant")
 async def store_embeddings_in_qdrant():
-    response = await httpx.post(f"{config.SERVICE_URLS['qdrant_service']}/store_embeddings")
+    response = await httpx.post(f"{config.SERVICE_URLS['qdrant-service']}/store_embeddings")
     if response.status_code == 200:
         return {"message": "Embeddings storage in Qdrant triggered successfully."}
     else:

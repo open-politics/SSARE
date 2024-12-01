@@ -141,7 +141,7 @@ async def analyze_contents(
 
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
-                        "http://classification_service:5688/test_dynamic_classification",
+                        "http://classification-service:5688/test_dynamic_classification",
                         json=classification_request,
                         headers={"Content-Type": "application/json"},
                         timeout=60.0

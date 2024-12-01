@@ -3,7 +3,7 @@ FROM python:3.11-slim AS base
 WORKDIR /app
 
 # Copy the requirements.txt file
-COPY entity_service/requirements.txt .
+COPY entity-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the core directory
@@ -11,11 +11,11 @@ COPY core ./core
 
 # Flow service stage
 FROM base AS flow
-COPY entity_service/main.py .
-COPY entity_service/flows/extract_entities.py .
+COPY entity-service/main.py .
+COPY entity-service/flows/extract_entities.py .
 CMD ["python", "extract_entities.py"]
 
 # API service stage
 FROM base AS api
-COPY entity_service/main.py .
+COPY entity-service/main.py .
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "1290"]

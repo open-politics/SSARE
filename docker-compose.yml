@@ -1,9 +1,9 @@
 services:
 
-  classification_service:
+  classification-service:
     build: 
       context: ./SSARE
-      dockerfile: ./classification_service/Dockerfile
+      dockerfile: ./classification-service/Dockerfile
     ports:
       - "${CLASSIFICATION_SERVICE_PORT}:5688"
     environment:
@@ -17,16 +17,16 @@ services:
       - default
       - ssare-network
 
-  embedding_service:
+  embedding-service:
     build: 
       context: ./SSARE
-      dockerfile: ./embedding_service/Dockerfile
+      dockerfile: ./embedding-service/Dockerfile
       target: api
     restart: always
     ports:
       - "${EMBEDDING_SERVICE_PORT}:0420"
     depends_on:
-      - postgres_service
+      - postgres-service
     environment:
       - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
       - PREFECT_API_KEY=${PREFECT_API_KEY}
@@ -36,15 +36,15 @@ services:
       - default
       - ssare-network
 
-  entity_service:
+  entity-service:
     build: 
       context: ./SSARE
-      dockerfile: ./entity_service/Dockerfile
+      dockerfile: ./entity-service/Dockerfile
     restart: always
     ports:
       - "${ENTITY_SERVICE_PORT}:1290"
     depends_on:
-      - postgres_service
+      - postgres-service
     environment:
       - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
       - PREFECT_API_KEY=${PREFECT_API_KEY}
@@ -52,10 +52,10 @@ services:
       - default
       - ssare-network
 
-  geo_service:
+  geo-service:
     build: 
       context: ./SSARE
-      dockerfile: ./geo_service/Dockerfile
+      dockerfile: ./geo-service/Dockerfile
     restart: always
     networks:
       - default
@@ -98,8 +98,8 @@ services:
       - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
       - PREFECT_API_KEY=${PREFECT_API_KEY}
     depends_on:
-      - scraper_service
-      - postgres_service
+      - scraper-service
+      - postgres-service
     networks:
       - default
       - ssare-network
@@ -152,12 +152,12 @@ services:
       - default
       - ssare-network
 
-  postgres_service:
+  postgres-service:
     build: 
       context: ./SSARE
-      dockerfile: ./postgres_service/Dockerfile
+      dockerfile: ./postgres-service/Dockerfile
     volumes:
-      - ./SSARE/postgres_service/alembic/versions:/app/alembic/versions
+      - ./SSARE/postgres-service/alembic/versions:/app/alembic/versions
       - ./credentials/postgres-service-key.json:/app/credentials/postgres-service-key.json
       - cloudsql:/cloudsql
       - ./backups:/app/backups
@@ -245,10 +245,10 @@ services:
       - default
       - ssare-network
 
-  scraper_service:
+  scraper-service:
     build: 
       context: ./SSARE
-      dockerfile: ./scraper_service/Dockerfile
+      dockerfile: ./scraper-service/Dockerfile
     ports:
       - "${SCRAPER_SERVICE_PORT}:8081"
     environment:
@@ -263,7 +263,7 @@ services:
   embedding_flow:
       build: 
         context: ./SSARE
-        dockerfile: ./embedding_service/Dockerfile
+        dockerfile: ./embedding-service/Dockerfile
         target: flow
       restart: always
       environment:
@@ -278,7 +278,7 @@ services:
   scraper_flow:
     build: 
       context: ./SSARE
-      dockerfile: ./scraper_service/Dockerfile
+      dockerfile: ./scraper-service/Dockerfile
       target: flow
     restart: always
     environment:
@@ -293,7 +293,7 @@ services:
   entities_flow:
     build: 
       context: ./SSARE
-      dockerfile: ./entity_service/Dockerfile
+      dockerfile: ./entity-service/Dockerfile
       target: flow
     restart: always
     environment:

@@ -60,30 +60,57 @@ class ServiceConfig:
     MANAGED_REDIS_HOST = os.getenv('MANAGED_REDIS_HOST', 'x')
     MANAGED_REDIS_PORT = os.getenv('MANAGED_REDIS_PORT', '6379')
     
+    # Determine if running in Kubernetes or Docker Compose
+    RUNNING_ENV = os.getenv('RUNNING_ENV', 'compose')
+
     # Service URLs
-    service_urls = {
-        "main_core_app": f"http://main_core_app:{MAIN_CORE_APP_PORT}",
-        "postgres_service": f"http://postgres_service:{POSTGRES_SERVICE_PORT}",
-        "embedding_service": f"http://embedding_service:{EMBEDDING_SERVICE_PORT}",
-        "qdrant_service": f"http://qdrant_service:{QDRANT_SERVICE_PORT}",
-        "qdrant_storage": f"http://qdrant_storage:{QDRANT_STORAGE_PORT}",
-        "scraper_service": f"http://scraper_service:{SCRAPER_SERVICE_PORT}",
-        "rag_service": f"http://rag_service:{RAG_SERVICE_PORT}",
-        "entity_service": f"http://entity_service:{ENTITY_SERVICE_PORT}",
-        "geo_service": f"http://geo_service:{GEO_SERVICE_PORT}",
-        "redis": f"redis://redis:{REDIS_PORT}",
-        "prefect_server": f"http://prefect_server:{PREFECT_SERVER_PORT}",
-        "reranker_service": f"http://reranker_service:{RERANKER_SERVICE_PORT}",
-        "pelias_placeholder": f"http://pelias_placeholder:{PELIAS_PLACEHOLDER_PORT}",
-        "r2r": f"http://r2r:{R2R_PORT}",
-        "neo4j_http": f"http://neo4j:{NEO4J_HTTP_PORT}",
-        "neo4j_bolt": f"bolt://neo4j:{NEO4J_BOLT_PORT}",
-        "ollama": f"http://ollama:{OLLAMA_PORT}",
-        "liteLLM": f"http://liteLLM:{LITELLM_PORT}",
-        "classification_service": f"http://classification_service:{CLASSIFICATION_SERVICE_PORT}",
-        "semantic_router": f"http://semantic_router:{SEMANTIC_ROUTER_PORT}",
-    }
-    
+    if RUNNING_ENV == 'kubernetes':
+        service_urls = {
+            "main_core-app": "http://main-core-app",
+            "postgres-service": "http://postgres-service",
+            "embedding-service": "http://embedding-service",
+            "qdrant-service": "http://qdrant-service",
+            "qdrant-storage": "http://qdrant-storage",
+            "scraper-service": "http://scraper-service",
+            "rag-service": "http://rag-service",
+            "entity-service": "http://entity-service",
+            "geo-service": "http://geo-service",
+            "redis": "redis://redis",
+            "prefect-server": "http://prefect-server",
+            "reranker-service": "http://reranker-service",
+            "pelias-placeholder": "http://pelias-placeholder",
+            "r2r": "http://r2r",
+            "neo4j-http": "http://neo4j",
+            "neo4j-bolt": "bolt://neo4j",
+            "ollama": "http://ollama",
+            "liteLLM": "http://liteLLM",
+            "classification-service": "http://classification-service",
+            "semantic-router": "http://semantic-router",
+        }
+    else:  # Default to Docker Compose configuration
+        service_urls = {
+            "main_core-app": f"http://main-core-app:{MAIN_CORE_APP_PORT}",
+            "postgres-service": f"http://postgres-service:{POSTGRES_SERVICE_PORT}",
+            "embedding-service": f"http://embedding-service:{EMBEDDING_SERVICE_PORT}",
+            "qdrant-service": f"http://qdrant-service:{QDRANT_SERVICE_PORT}",
+            "qdrant-storage": f"http://qdrant-storage:{QDRANT_STORAGE_PORT}",
+            "scraper-service": f"http://scraper-service:{SCRAPER_SERVICE_PORT}",
+            "rag-service": f"http://rag-service:{RAG_SERVICE_PORT}",
+            "entity-service": f"http://entity-service:{ENTITY_SERVICE_PORT}",
+            "geo-service": f"http://geo-service:{GEO_SERVICE_PORT}",
+            "redis": f"redis://redis:{REDIS_PORT}",
+            "prefect-server": f"http://prefect-server:{PREFECT_SERVER_PORT}",
+            "reranker-service": f"http://reranker-service:{RERANKER_SERVICE_PORT}",
+            "pelias-placeholder": f"http://pelias-placeholder:{PELIAS_PLACEHOLDER_PORT}",
+            "r2r": f"http://r2r:{R2R_PORT}",
+            "neo4j-http": f"http://neo4j:{NEO4J_HTTP_PORT}",
+            "neo4j-bolt": f"bolt://neo4j:{NEO4J_BOLT_PORT}",
+            "ollama": f"http://ollama:{OLLAMA_PORT}",
+            "liteLLM": f"http://liteLLM:{LITELLM_PORT}",
+            "classification-service": f"http://classification-service:{CLASSIFICATION_SERVICE_PORT}",
+            "semantic-router": f"http://semantic-router:{SEMANTIC_ROUTER_PORT}",
+        }
+
     # Redis channel mappings with explicit types
     redis_queues = {
         "contents_without_embedding_queue": {"db": 5, "key": "contents_without_embedding_queue", "type": "list"},

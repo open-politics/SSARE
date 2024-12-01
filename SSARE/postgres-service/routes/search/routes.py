@@ -130,7 +130,7 @@ async def get_contents(
                     try:
                         async with httpx.AsyncClient() as client:
                             response = await client.get(
-                                f"{config.service_urls['embedding_service']}/generate_query_embeddings",
+                                f"{config.service_urls['embedding-service']}/generate_query_embeddings",
                                 params={"query": search_query}
                             )
                             response.raise_for_status()
