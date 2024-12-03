@@ -88,6 +88,7 @@ services:
     build: 
       context: ./SSARE
       dockerfile: ./app/Dockerfile
+      target: app
     ports:
       - "${MAIN_CORE_APP_PORT}:8089"
     volumes:
@@ -294,6 +295,36 @@ services:
     build: 
       context: ./SSARE
       dockerfile: ./entity-service/Dockerfile
+      target: flow
+    restart: always
+    environment:
+      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - default
+      - ssare-network
+
+  classification-flow:
+    build: 
+      context: ./SSARE
+      dockerfile: ./classification-service/Dockerfile
+      target: flow
+    restart: always
+    environment:
+      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - default
+      - ssare-network
+
+  pipeline_flow:
+    build: 
+      context: ./SSARE
+      dockerfile: ./app/Dockerfile
       target: flow
     restart: always
     environment:

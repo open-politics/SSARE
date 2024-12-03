@@ -201,6 +201,14 @@ async def save_geocoded_contents_flow():
         logger.error(f"Error saving geocoded contents: {e}")
         raise e
 
+@flow(name="save-contents-with-classification-flow")
+async def save_contents_with_classification_flow():
+    try:
+        await store_contents_with_classification()
+    except Exception as e:
+        logger.error(f"Error saving contents with classification: {e}")
+        raise e
+
 @flow(name="create-jobs-flow")
 async def create_jobs_flow():
     try:
@@ -222,22 +230,27 @@ if __name__ == "__main__":
     serve(
         save_scraped_contents.to_deployment(
             name="save-raw-contents",
-            cron="*/10 * * * *"  # Run every 10 minutes
+            cron="*/2 * * * *"  # Run every 2 minutes
         ),
         save_contents_with_embeddings_flow.to_deployment(
             name="save-contents-with-embeddings",
-            cron="*/10 * * * *"  # Run every 10 minutes
+            cron="1-59/2 * * * *"  # Run every 2 minutes, starting at 1 minute past the hour
         ),
         save_contents_with_entities_flow.to_deployment(
             name="save-contents-with-entities",
-            cron="*/20 * * * *"  # Run every 20 minutes
+            cron="2-59/2 * * * *"  # Run every 2 minutes, starting at 2 minutes past the hour
         ),
         save_geocoded_contents_flow.to_deployment(
             name="save-geocoded-contents",
-            cron="*/20 * * * *"  # Run every 20 minutes
+            cron="3-59/2 * * * *"  # Run every 2 minutes, starting at 3 minutes past the hour
+        ),
+        save_contents_with_classification_flow.to_deployment(
+            name="save-contents-with-classification",
+            cron="4-59/2 * * * *"  # Run every 2 minutes, starting at 4 minutes past the hour
         ),
         create_jobs_flow.to_deployment(
             name="create-jobs",
-            cron="0 */4 * * *"  # Run every 4 hours
+            cron="0 */1 * * *"  # Run every 1 hour
         )
     )
+    

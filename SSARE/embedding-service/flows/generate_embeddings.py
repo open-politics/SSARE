@@ -1,7 +1,6 @@
 from typing import List, Union
 import os
 from prefect import flow, task
-from prefect_ray import RayTaskRunner
 from redis import Redis
 import json
 import numpy as np
@@ -146,7 +145,7 @@ def write_contents_to_redis(contents_with_embeddings: List[dict]):
     finally:
         redis_conn.close()
 
-@flow(task_runner=RayTaskRunner(address=os.getenv("RAY_ADDRESS"), init_kwargs={"runtime_env":{"pip": ["prefect-ray", "sentence-transformers", "nltk", "numpy", "redis"]}}), log_prints=True)
+@flow(log_prints=True)
 def generate_embeddings_flow(batch_size: int):
     """
     The main flow that orchestrates the retrieval, processing, and storage of content embeddings.
@@ -158,7 +157,7 @@ def generate_embeddings_flow(batch_size: int):
     sets = [raw_contents[i::5] for i in range(5)]
     
     # Submit only 5 tasks, each processing a set of contents
-    futures = [process_content_set.submit(content_set) for content_set in sets]
+    futures = [process_content_set(content_set) for content_set in sets]
     
     # Collect results from each task
     contents_with_embeddings = []

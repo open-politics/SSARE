@@ -80,3 +80,4 @@ class ContentEvaluation(BaseModel):
             raise ValueError(f"All items in {info.field_name} must be strings.")
 
         return v
+

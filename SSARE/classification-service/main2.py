@@ -7,13 +7,13 @@ from fastapi import FastAPI, HTTPException, Depends
 from contextlib import asynccontextmanager
 from openai import OpenAI
 import instructor
-from classification_models import ContentEvaluation as LLMContentEvaluation, ContentRelevance
+from classification_models import ContentEvaluation, ContentRelevance
 from core.utils import UUIDEncoder, logger
-from core.models import Content, ClassificationDimension, ContentEvaluation as DBContentEvaluation
+from core.models import Content, ClassificationDimension, ContentEvaluation
 from core.service_mapping import ServiceConfig
 from pydantic import BaseModel, Field
-from prefect import flow, task
-from prefect.logging import get_run_logger
+# from prefect import flow, task
+# from prefect.logging import get_run_logger
 import time
 from uuid import UUID
 from sqlmodel import select
@@ -22,11 +22,11 @@ from classx import classify_with_model
 from core.adb import get_session
 from core.service_mapping import get_redis_url
 from sqlalchemy.orm import selectinload
-
+import google.generativeai as genai
 
 app = FastAPI()
 config = ServiceConfig()
-model = "llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4o-mini"
+model = "models/gemini-1.5-flash-latest"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,13 +38,21 @@ app = FastAPI(lifespan=lifespan)
 my_proxy_api_key = "sk-1234"
 my_proxy_base_url = "http://litellm:4000"
 
-client = instructor.from_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
+# client = instructor.from_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
 
-@task(retries=1)
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+client = instructor.from_gemini(
+    client=genai.GenerativeModel(
+        model_name="models/gemini-1.5-flash-latest", 
+    ),
+    mode=instructor.Mode.GEMINI_JSON,
+)
+
+# @task(retries=1)
 def classify_content(content: Content) -> ContentRelevance:
     """Classify the content using LLM for relevance."""
-    logger = get_run_logger()
-    logger.info(f"Starting classification for content: {content.title}")
+    # logger = get_run_logger()
+    # logger.info(f"Starting classification for content: {content.title}")
     
     response = classify_with_model(
         content=content,
@@ -58,11 +66,11 @@ def classify_content(content: Content) -> ContentRelevance:
     
     return response
 
-@task(retries=1)
+# @task(retries=1)
 def evaluate_content(content: Content) -> LLMContentEvaluation:
     """Evaluate the content using LLM if it is relevant."""
-    logger = get_run_logger()
-    logger.info(f"Starting detailed evaluation for content: {content.title[:50]}...")
+    # logger = get_run_logger()
+    # logger.info(f"Starting detailed evaluation for content: {content.title[:50]}...")
     
     response = classify_with_model(
         content=content,
@@ -74,11 +82,11 @@ def evaluate_content(content: Content) -> LLMContentEvaluation:
     
     return response
 
-@task
+# @task
 def retrieve_contents_from_redis(batch_size: int = 10) -> List[Content]:
     """Retrieve contents from Redis queue."""
-    logger = get_run_logger()
-    logger.info(f"Attempting to retrieve {batch_size} contents from Redis")
+    # logger = get_run_logger()
+    # logger.info(f"Attempting to retrieve {batch_size} contents from Redis")
     
     redis_conn = Redis.from_url(get_redis_url(), db=4)
     _contents = redis_conn.lrange('contents_without_classification_queue', 0, batch_size - 1)
@@ -113,25 +121,11 @@ def write_contents_to_redis(serialized_contents):
     redis_conn_processed.lpush('contents_with_classification_queue', *serialized_contents)
     logger.info(f"Wrote {len(serialized_contents)} contents with classification to Redis")
 
-def convert_llm_to_db_evaluation(llm_eval: LLMContentEvaluation, content_id: UUID) -> DBContentEvaluation:
-    """Convert LLM evaluation model to database model."""
-    return DBContentEvaluation(
-        content_id=content_id,
-        thematic_locations=llm_eval.thematic_locations,
-        sociocultural_interest=llm_eval.sociocultural_interest,
-        global_political_impact=llm_eval.global_political_impact,
-        regional_political_impact=llm_eval.regional_political_impact,
-        global_economic_impact=llm_eval.global_economic_impact,
-        regional_economic_impact=llm_eval.regional_economic_impact,
-        event_type=llm_eval.event_type,
-        event_subtype=llm_eval.event_subtype,
-        categories=llm_eval.categories
-    )
 
-@flow(log_prints=True)
+# @flow(log_prints=True)
 def process_contents(batch_size: int = 10):
     """Process a batch of contents: retrieve, classify, and print them."""
-    logger = get_run_logger()
+    # logger = get_run_logger()
     contents = retrieve_contents_from_redis(batch_size=batch_size)
 
     if not contents:
@@ -156,7 +150,10 @@ def process_contents(batch_size: int = 10):
                 logger.info(f"Evaluation completed for: {content.title[:50]}")
                 
                 # Convert LLM evaluation to database model
-                db_evaluation = convert_llm_to_db_evaluation(llm_evaluation, content.id)
+                db_evaluation = ContentEvaluation(
+                    content_id=content.id,
+                    **llm_evaluation.dict()
+                )
                 
                 # Create a clean dictionary with just the necessary data
                 content_dict = {
@@ -196,7 +193,7 @@ def get_location_from_query(query: str):
         location: str
 
     response = client.chat.completions.create(
-        model="llama3.1" if os.getenv("LOCAL_LLM") == "True" else "gpt-4o-2024-08-06",
+        model="models/gemini-1.5-flash-latest",
         response_model=LocationFromQuery,
         messages=[
             {"role": "system", "content": "You are an AI assistant embedded as a function in a larger application. You are given a query and you need to return the location name most relevant to the query. Your response should be geo-codable to a region, city, town, country or continent."},
@@ -255,7 +252,7 @@ def split_query(query: str):
         search_queries: SearchQueries
         entities: Optional[List[str]] = None
 
-    @task(retries=3)
+    # @task(retries=3)
     def split_query_task(query: str) -> QueryResult:
         response = client.chat.completions.create(
             model=model_name,

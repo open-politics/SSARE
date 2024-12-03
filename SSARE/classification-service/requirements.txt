@@ -6,3 +6,5 @@ sqlmodel
 pgvector
 pydantic
 instructor
+google-generativeai
+jsonref
