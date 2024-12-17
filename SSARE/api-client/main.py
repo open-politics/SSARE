@@ -9,11 +9,12 @@ class OPOL(BaseClient):
     Main API client to interact with all SSARE services.
     """
     def __init__(self, mode: str = "remote", base_url: str = None, api_key: str = None, timeout: int = 60):
-        super().__init__(mode, base_url, api_key, timeout)
         if mode == "remote":
-            base_url = "https://api.opol.io"
+            base_url = base_url or "https://api.opol.io"
         else:
-            base_url = "http://localhost"
+            base_url = base_url or "http://localhost"
+
+        super().__init__(mode, base_url, api_key, timeout)
 
         self.articles = Articles(mode, base_url, api_key)
         self.entities = Entities(mode, base_url, api_key)
