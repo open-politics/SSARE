@@ -1,8 +1,8 @@
-from api.articles import Articles
-from api.entities import Entities
-from api.geojson import GeoJSON
-from api.classification import Classification
-from api.client_base import BaseClient
+from .api.articles import Articles
+from .api.entities import Entities
+from .api.geojson import GeoJSON
+from .api.classification import Classification
+from .api.client_base import BaseClient
 
 class OPOL(BaseClient):
     """
