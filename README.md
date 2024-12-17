@@ -54,7 +54,7 @@ an open-source self-hostable stack that comfortably orchestrates: \
 
 
 
-![opol](media/banner.jpg)
+![opol](.github/media/banner.jpg)
 
 ## Introduction
 
@@ -70,17 +70,17 @@ Furthermore all articles' text is undergoing Named Entity Recognition (NER) wher
 The GPE (Geoplolitical Entity) tags are the geoencoded, e.g. for the recognised location "Berlin" it returns the latitude and longitude and passes a geojson file.
 
 **THE FINAL RESULT** is a live postgres database with articles saved using this data schema (as pydantic/sqlmodel model):
-![Basis SQLModel/Pydantic Model](media/opp_base_model.png)
+![Basis SQLModel/Pydantic Model](.github/media/opp_base_model.png)
 
 
 PLUS
 
 Multiple query interfaces to retrieve the data. From the main dashboard to (upcoming) numerous rag pipelines and knowledge graph features.
 We aim to provide numerous search entrypoints from Elastic Search, Keyword Matching to Semantic Search and Geospatial Queries.
-![Simple UI](media/opp_dashboard_0.png)
+![Simple UI](.github/media/opp_dashboard_0.png)
 
 Which yields results like this:
-![Results](media/opol_results_new.png)
+![Results](.github/media/opol_results_new.png)
 
 Please note that the current classifications are derived from unoptimized prompts and arbitrary scales (some for testing purposes) using Llama 3.1 from Ollama as the classifier. In future updates, the prompt engineering for these classifications will be moved to environment files or similar configurable setups, allowing for easy customization of your system. Additionally, we plan to implement TextGrad as a background engine to automatically optimize prompts, further enhancing the classification process.
 
@@ -90,7 +90,7 @@ That can be used in a lot of ways already, have fun!
 
 ## High Level Diagramm:
 
-![High Level Architecture](media/opol_high_level_diagramm_github.png)
+![High Level Architecture](.github/media/opol_high_level_diagramm_github.png)
 This diagram is currently outdated. Key updates include:
 - Embeddings are now stored in PostgreSQL using the pgvector extension
 - Named Entity Recognition (NER) and Geocoding processes have been added
@@ -120,8 +120,8 @@ http://main_core_app:8089/
 ````
 Here you can trigger the scraping process, overview the redis channels, search the articles and observe the prefect dashboard where the tasks are executed.
 
-![Simple UI](media/opp_dashboard_1.png)
-![Simple UI](media/opp_dashboard_2.png)
+![Simple UI](.github/media/opp_dashboard_1.png)
+![Simple UI](.github/media/opp_dashboard_2.png)
 
 
 ## EASY! Add any source
@@ -197,7 +197,7 @@ def scrape_data_task(flags):
 
 to for example a limited ConcurrentTaskRunner, Keep in mind your hardware capabilities.
 Ray can orchestrate your heavier workflows on a even more distributed level. 
-![prefect flows](media/prefect_flows.png)
+![prefect flows](.github/media/prefect_flows.png)
 
 opol will execute all scripts in the scrapers folder and process the articles. 
 They are vectorized and stored in a Qdrant vector database.
@@ -316,7 +316,7 @@ You can sort, mix, match and filter over these entitues:
 2. GeoJSON
 
 Produce a set of features derived from the locations present in your data. This can enable visualisations like open politics "Open Globe" interface (with the json intentionally displayed):
-![High Level Architecture](media/opol_globe.png)
+![High Level Architecture](.github/media/opol_globe.png)
 
 
 
