@@ -39,6 +39,7 @@ class Articles(BaseClient):
         print(endpoint)
         request = self.GetArticlesRequest(**kwargs)
         params = request.model_dump(exclude={"pretty"})
+        params = {k: v for k, v in request.model_dump(exclude={"pretty"}).items() if v is not None}
         print(params)
         if request.pretty:
             # print pretty json
