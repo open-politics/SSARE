@@ -9,7 +9,7 @@ jobs:
   pypi-publish:
     name: Upload release to PyPI
     runs-on: ubuntu-latest
-    environment: pypi  # Optional but recommended
+    environment: pypi  
     permissions:
       id-token: write  # Mandatory for Trusted Publishing
 
@@ -25,7 +25,7 @@ jobs:
 
     - name: Build package
       run: |
-        cd ssare/SSARE/api-client
+        cd SSARE/api-client
         python -m build
 
     - name: Publish package distributions to PyPI
