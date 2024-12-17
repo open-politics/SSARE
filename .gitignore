@@ -29,4 +29,3 @@ credentials/
 commands.txt
 helm/values.yaml
 z_dev_scripts
-deployment/
