@@ -1,0 +1,26 @@
+Metadata-Version: 2.1
+Name: opol
+Version: 0.1.1
+Summary: Main API client to interact with all OPOL services.
+Home-page: https://github.com/open-politics/ssare
+Author: Jim Vincent Wagner
+Author-email: Jim Vincent Wagner <jimvw@open-politics.org>
+License: MIT
+Project-URL: Bug Tracker, https://github.com/open-politics/ssare/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: requests
+Requires-Dist: pydantic
+
+This is the python wrapper to interact with all OPOL services.
+
+## Installation
+
+```bash
+pip install opol
+```
+
