@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'opol/python-client/**'
 
 jobs:
   build:
@@ -21,14 +23,14 @@ jobs:
 
     - name: Build package
       run: |
-        cd opol/api-client
+        cd opol/python-client
         python -m build
 
     - name: Upload dist artifacts
       uses: actions/upload-artifact@v3
       with:
         name: dist
-        path: opol/api-client/dist
+        path: opol/python-client/dist
 
   publish:
     name: Upload release to PyPI
@@ -44,9 +46,9 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: dist
-        path: opol/api-client/dist
+        path: opol/python-client/dist
 
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        packages-dir: opol/api-client/dist
+        packages-dir: opol/python-client/dist
