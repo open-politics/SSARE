@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: opol
-Version: 0.1.2
+Version: 0.1.4
 Summary: Main API client to interact with all OPOL services.
 Home-page: https://github.com/open-politics/opol
 Author: Jim Vincent Wagner

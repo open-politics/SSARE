@@ -1,0 +1,17 @@
+LICENSE
+README.md
+pyproject.toml
+setup.cfg
+opol/__init__.py
+opol/main.py
+opol.egg-info/PKG-INFO
+opol.egg-info/SOURCES.txt
+opol.egg-info/dependency_links.txt
+opol.egg-info/requires.txt
+opol.egg-info/top_level.txt
+opol/api/__init__.py
+opol/api/articles.py
+opol/api/classification.py
+opol/api/client_base.py
+opol/api/entities.py
+opol/api/geojson.py
