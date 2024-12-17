@@ -1,14 +1,21 @@
-   <h1>opol 🌐📰🔍🧠🗺️🪡📊🤖🗄️🔧</h1>Open Source Political Intelligence needs a news brain! 
+   <h1> OPOL 🌐📰🔍🧠🗺️🪡📊🤖🗄️🔧</h1>Open Source Political Intelligence needs a news brain! 
 
-Open Politics - especially Opol.io is a running data operation in the name of an open and enabled society.
 
 We are organising methods and infrastructure focusing on political analysis and reasearch.
 
 On a mission to find the **#NeedleInTheHayStack**
 
-**opol** stands for Semantic **Search Article Recommendation Engine**: 
+This is the *data engine* for Open Politics.
+Please also see:
+- [Webapp](https://github.com/open-politics/open-politics)
+- [Technical Documentation](https://docs.opol.io)
+- [Blog](https://blog.opol.io)
 
-an open-source service that comfortably orchestrates: \
+This repository: 
+**opol** stands for.. surprise: Open Politics 
+
+It is an
+an open-source self-hostable stack that comfortably orchestrates: \
     - scraping of arbitrary sourcing scripts \
     - processing into vector representations \
     - Named Entity Recognition (like locations, persons, organisation, geo.-pol. entities) \
