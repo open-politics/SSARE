@@ -1,5 +1,22 @@
 services:
 
+  articles_database:
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      - POSTGRES_USER=${ARTICLES_DB_USER}
+      - POSTGRES_PASSWORD=${ARTICLES_DB_PASSWORD}
+      - POSTGRES_DB=${ARTICLES_DB_NAME}
+      - POSTGRES_CONFIG_FILE=/etc/postgresql.conf
+    volumes:
+      - ./SSARE/core/configs/postgres.conf:/etc/postgresql.conf
+      - ./data/articles_db_data:/var/lib/postgresql/data
+    command: -c shared_preload_libraries='pg_stat_statements' -c pg_stat_statements.max=10000 -c pg_stat_statements.track=all
+    ports:
+      - "${ARTICLES_DB_PORT}:5432"
+    networks:
+      - default
+
   classification-service:
     build: 
       context: ./SSARE
@@ -15,7 +32,7 @@ services:
       - .env
     networks:
       - default
-      - ssare-network
+      
 
   embedding-service:
     build: 
@@ -34,7 +51,7 @@ services:
       - .env
     networks:
       - default
-      - ssare-network
+      
 
   entity-service:
     build: 
@@ -50,16 +67,16 @@ services:
       - PREFECT_API_KEY=${PREFECT_API_KEY}
     networks:
       - default
-      - ssare-network
+     
 
   geo-service:
-    build: 
+    build:
       context: ./SSARE
       dockerfile: ./geo-service/Dockerfile
-    restart: always
+    restart: no
     networks:
       - default
-      - ssare-network
+      
     ports:
       - "${GEO_SERVICE_PORT}:3690"
     expose:
@@ -70,19 +87,19 @@ services:
       - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
       - PREFECT_API_KEY=${PREFECT_API_KEY}
 
-  litellm:
-    build: 
-      context: ./SSARE
-      dockerfile: ./litellm/Dockerfile
-    volumes:
-      - ./SSARE/litellm/config.yaml:/app/config.yaml
-    ports:
-      - "4000:4000"
-    command: >
-      --config '/app/config.yaml' --debug --host 0.0.0.0 --port 4000 --num_workers 8
-    networks:
-      - default
-      - ssare-network
+  # litellm:
+  #   build: 
+  #     context: ./SSARE
+  #     dockerfile: ./litellm/Dockerfile
+  #   volumes:
+  #     - ./SSARE/litellm/config.yaml:/app/config.yaml
+  #   ports:
+  #     - "4000:4000"
+  #   command: >
+  #     --config '/app/config.yaml' --debug --host 0.0.0.0 --port 4000 --num_workers 8
+  #   networks:
+  #     - default
+      
 
   main_core_app:
     build: 
@@ -103,29 +120,29 @@ services:
       - postgres-service
     networks:
       - default
-      - ssare-network
+      
 
-  ollama:
-    build: 
-      context: ./SSARE
-      dockerfile: ./ollama/Dockerfile
-    pull_policy: always
-    deploy:
-      resources:
-        reservations:
-         devices:
-           - driver: nvidia
-             capabilities: ["gpu"]
-             count: all
-    ports:
-      - "11434:11434"
-    volumes:
-      - ./data/ollama:/root/.ollama
-    networks:
-      - default
-      - ssare-network
+  # ollama:
+  #   build: 
+  #     context: ./SSARE
+  #     dockerfile: ./ollama/Dockerfile
+  #   pull_policy: always
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #        devices:
+  #          - driver: nvidia
+  #            capabilities: ["gpu"]
+  #            count: all
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ./data/ollama:/root/.ollama
+  #   networks:
+  #     - default
+      
 
-  pelias_placeholder:
+  pelias-placeholder:
     image: pelias/placeholder
     restart: always
     command: >
@@ -151,12 +168,13 @@ services:
       - ./data/placeholder:/data/placeholder
     networks:
       - default
-      - ssare-network
+      
 
   postgres-service:
     build: 
       context: ./SSARE
       dockerfile: ./postgres-service/Dockerfile
+      target: app
     volumes:
       - ./SSARE/postgres-service/alembic/versions:/app/alembic/versions
       - ./credentials/postgres-service-key.json:/app/credentials/postgres-service-key.json
@@ -168,70 +186,70 @@ services:
       - "${POSTGRES_SERVICE_PORT}:5434"
     networks:
       - default
-      - ssare-network
+      
     
-  cloud-sql-proxy:
-    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy
-    command:
-      - "--credentials-file=/credentials/postgres-service-key.json"
-      - "${CLOUD_SQL_CONNECTION_NAME}"
-    volumes:
-      - ./credentials/postgres-service-key.json:/credentials/postgres-service-key.json:ro
-      - cloudsql:/cloudsql
+  # cloud-sql-proxy:
+  #   image: gcr.io/cloud-sql-connectors/cloud-sql-proxy
+  #   command:
+  #     - "--credentials-file=/credentials/postgres-service-key.json"
+  #     - "${CLOUD_SQL_CONNECTION_NAME}"
+  #   volumes:
+  #     - ./credentials/postgres-service-key.json:/credentials/postgres-service-key.json:ro
+  #     - cloudsql:/cloudsql
 
-  prefect_database:
-    image: postgres:15
-    restart: always
-    environment:
-      - POSTGRES_USER=${PREFECT_DB_USER}
-      - POSTGRES_PASSWORD=${PREFECT_DB_PASSWORD}
-      - POSTGRES_DB=${PREFECT_DB_NAME}
-    volumes:
-      - ./data/prefect_db_data:/var/lib/postgresql/data
-    ports:
-      - "${PREFECT_DB_PORT}:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${PREFECT_DB_USER} -d ${PREFECT_DB_NAME}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - default
-      - ssare-network
+  # prefect_database:
+  #   image: postgres:15
+  #   restart: always
+  #   environment:
+  #     - POSTGRES_USER=${PREFECT_DB_USER}
+  #     - POSTGRES_PASSWORD=${PREFECT_DB_PASSWORD}
+  #     - POSTGRES_DB=${PREFECT_DB_NAME}
+  #   volumes:
+  #     - ./data/prefect_db_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "${PREFECT_DB_PORT}:5432"
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${PREFECT_DB_USER} -d ${PREFECT_DB_NAME}"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - default
+      
 
-  ray_head:
-    build: 
-      context: ./SSARE
-      dockerfile: ./images/RayBase.Dockerfile
-    command: >
-      sh -c "ray start --head --port=6380 --dashboard-host=0.0.0.0 --block"
-    ports:
-      - "6380:6380"
-      - "8265:8265"
-      - "10001:10001"
-    env_file:
-      - .env
-    networks:
-      - default
-      - ssare-network
-    environment:
-      - RAY_HEAD_SERVICE_HOST=ray_head
-      - RAY_HEAD_SERVICE_PORT=6380
-    shm_size: 10.24gb
+  # ray_head:
+  #   build: 
+  #     context: ./SSARE
+  #     dockerfile: ./images/RayBase.Dockerfile
+  #   command: >
+  #     sh -c "ray start --head --port=6380 --dashboard-host=0.0.0.0 --block"
+  #   ports:
+  #     - "6380:6380"
+  #     - "8265:8265"
+  #     - "10001:10001"
+  #   env_file:
+  #     - .env
+  #   networks:
+  #     - default
+      
+  #   environment:
+  #     - RAY_HEAD_SERVICE_HOST=ray_head
+  #     - RAY_HEAD_SERVICE_PORT=6380
+  #   shm_size: 10.24gb
 
   
-  ray_worker:
-    build: 
-      context: ./SSARE
-      dockerfile: ./images/RayBase.Dockerfile
-    command: >
-      sh -c "ray start --address=ray_head:6380 --block"
-    networks:
-      - default
-      - ssare-network
-    depends_on:
-      - ray_head
-    shm_size: 10.24gb
+  # ray_worker:
+  #   build: 
+  #     context: ./SSARE
+  #     dockerfile: ./images/RayBase.Dockerfile
+  #   command: >
+  #     sh -c "ray start --address=ray_head:6380 --block"
+  #   networks:
+  #     - default
+      
+  #   depends_on:
+  #     - ray_head
+  #   shm_size: 10.24gb
     
 
   redis:
@@ -244,7 +262,7 @@ services:
       - "${REDIS_PORT}:${REDIS_PORT}"
     networks:
       - default
-      - ssare-network
+      
 
   scraper-service:
     build: 
@@ -257,7 +275,7 @@ services:
       - PREFECT_API_KEY=${PREFECT_API_KEY}
     networks:
       - default
-      - ssare-network
+      
 
 ## FLOWS
 
@@ -274,7 +292,7 @@ services:
         - .env
       networks:
         - default
-        - ssare-network
+        
 
   scraper_flow:
     build: 
@@ -289,14 +307,14 @@ services:
       - .env
     networks:
       - default
-      - ssare-network
+      
 
   entities_flow:
     build: 
       context: ./SSARE
       dockerfile: ./entity-service/Dockerfile
       target: flow
-    restart: always
+    restart: no
     environment:
       - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
       - PREFECT_API_KEY=${PREFECT_API_KEY}
@@ -304,7 +322,7 @@ services:
       - .env
     networks:
       - default
-      - ssare-network
+      
 
   classification-flow:
     build: 
@@ -319,7 +337,7 @@ services:
       - .env
     networks:
       - default
-      - ssare-network
+      
 
   pipeline_flow:
     build: 
@@ -334,17 +352,69 @@ services:
       - .env
     networks:
       - default
-      - ssare-network
+      
+
+  resolve_entities_flow:
+    build: 
+      context: ./SSARE
+      dockerfile: ./postgres-service/Dockerfile
+      target: flow
+    restart: no
+    environment:
+      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+      - DATABASE_URL= "postgresql://postgres:postgres@postgres-service:5434/postgres"
+    volumes:
+      - ./SSARE/postgres-service/alembic/versions:/app/alembic/versions
+      - ./credentials/postgres-service-key.json:/app/credentials/postgres-service-key.json
+      - cloudsql:/cloudsql
+      - ./backups:/app/backups
+    ports:
+      - "7451:7451"
+    env_file:
+      - .env
+    networks:
+      - default
+      
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./SSARE/core/configs/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - resolve_entities_flow 
+    networks:
+      - default
+      
+  
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"  # Grafana's default port
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin  # Set a secure admin password
+    volumes:
+      - grafana_data:/var/lib/grafana  # Persist Grafana data
+      - ./SSARE/core/configs/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards  # Mount provisioning
+      - ./SSARE/core/configs/grafana/dashboards:/var/lib/grafana/dashboards  # Mount dashboard JSON files
+    depends_on:
+      - prometheus
+    networks:
+      - default
+      
 
 volumes:
   articles_db_data:
   cloudsql:
   prefect_db_data:
+  grafana_data:
   prefect_data:
   r2r_db_data:
 
 networks:
   default:
-    driver: bridge
-  ssare-network:
-    external: true
+    external: false

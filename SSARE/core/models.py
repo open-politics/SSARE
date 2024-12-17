@@ -18,6 +18,19 @@ class ContentEntity(SQLModel, table=True):
     entity_id: uuid.UUID = Field(foreign_key="entity.id", primary_key=True)
     frequency: int = Field(default=1)
 
+class TopContentEntity(SQLModel, table=True):
+    content_id: uuid.UUID = Field(foreign_key="content.id", primary_key=True)
+    entity_id: uuid.UUID = Field(foreign_key="entity.id", primary_key=True)
+
+class ContentLocation(SQLModel, table=True):
+    content_id: uuid.UUID = Field(foreign_key="content.id", primary_key=True)
+    location_id: uuid.UUID = Field(foreign_key="location.id", primary_key=True)
+    frequency: int = Field(default=1)
+
+class TopContentLocation(SQLModel, table=True):
+    content_id: uuid.UUID = Field(foreign_key="content.id", primary_key=True)
+    location_id: uuid.UUID = Field(foreign_key="location.id", primary_key=True)
+
 class ContentTag(SQLModel, table=True):
     content_id: uuid.UUID = Field(foreign_key="content.id", primary_key=True)
     tag_id: uuid.UUID = Field(foreign_key="tag.id", primary_key=True)
@@ -32,10 +45,16 @@ class ContentTopic(SQLModel, table=True):
 
 # Core Models
 class Content(BaseModel, table=True):
+    ## Content Details 
     url: str = Field(unique=True, index=True)
     title: Optional[str] = Field(default=None, index=True)
     content_type: Optional[str] = Field(default='fragment') # e.g., 'article', 'video', 'audio', 'image'
     source: Optional[str] = Field(default=None, index=True)
+
+    # Primary text content for articles and text-based content
+    text_content: Optional[str] = Field(default=None, sa_column=Column(Text))
+
+    ## Content Metadata
     insertion_date: str = Field(default_factory=lambda: datetime.utcnow().isoformat(), index=True)
     content_language: Optional[str] = Field(default=None, index=True)
     author: Optional[str] = Field(default=None, index=True)
@@ -44,17 +63,28 @@ class Content(BaseModel, table=True):
     is_active: bool = Field(default=True)
     summary: Optional[str] = Field(default=None, sa_column=Column(Text))
     meta_summary: Optional[str] = Field(default=None, sa_column=Column(Text))
-    # Primary text content for articles and text-based content
-    text_content: Optional[str] = Field(default=None, sa_column=Column(Text))
 
     # Embeddings at the content level
     embeddings: Optional[List[float]] = Field(default=None, sa_column=Column(Vector(768)))
+
+    # Separate Relationships
+    entities: List["Entity"] = Relationship(
+        back_populates="contents", link_model=ContentEntity
+    )
+    top_entities: List["Entity"] = Relationship(
+        back_populates="top_contents", link_model=TopContentEntity
+    )
+    locations: List["Location"] = Relationship(
+        back_populates="contents", link_model=ContentLocation
+    )
+    top_locations: List["Location"] = Relationship(
+        back_populates="top_contents", link_model=TopContentLocation
+    )
 
     # Relationships
     media_details: Optional["MediaDetails"] = Relationship(
         back_populates="content", sa_relationship_kwargs={"uselist": False}
     )
-    entities: List["Entity"] = Relationship(back_populates="contents", link_model=ContentEntity)
     tags: List["Tag"] = Relationship(back_populates="contents", link_model=ContentTag)
     chunks: List["ContentChunk"] = Relationship(back_populates="content")
 
@@ -115,7 +145,12 @@ class Entity(BaseModel, table=True):
     entity_type: str = Field(index=True)  # e.g., 'Person', 'Organization', 'Location', etc.
 
     # Relationships
-    contents: List[Content] = Relationship(back_populates="entities", link_model=ContentEntity)
+    contents: List[Content] = Relationship(
+        back_populates="entities", link_model=ContentEntity
+    )
+    top_contents: List[Content] = Relationship(
+        back_populates="top_entities", link_model=TopContentEntity
+    )
     locations: List["Location"] = Relationship(back_populates="entities", link_model=EntityLocation)
 
 class Location(BaseModel, table=True):
@@ -125,6 +160,8 @@ class Location(BaseModel, table=True):
     weight: float = Field(default=0.0)
 
     entities: List[Entity] = Relationship(back_populates="locations", link_model=EntityLocation)
+    contents: List[Content] = Relationship(back_populates="locations", link_model=ContentLocation)
+    top_contents: List[Content] = Relationship(back_populates="top_locations", link_model=TopContentLocation)
 
 class Tag(BaseModel, table=True):
     name: str = Field(unique=True, index=True)

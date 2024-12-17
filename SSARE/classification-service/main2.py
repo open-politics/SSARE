@@ -11,6 +11,7 @@ from classification_models import ContentEvaluation, ContentRelevance
 from core.utils import UUIDEncoder, logger
 from core.models import Content, ClassificationDimension, ContentEvaluation
 from core.service_mapping import ServiceConfig
+from classx import create_dynamic_classification_model, build_system_prompt
 from pydantic import BaseModel, Field
 # from prefect import flow, task
 # from prefect.logging import get_run_logger
@@ -23,6 +24,8 @@ from core.adb import get_session
 from core.service_mapping import get_redis_url
 from sqlalchemy.orm import selectinload
 import google.generativeai as genai
+from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 
 app = FastAPI()
 config = ServiceConfig()
@@ -56,7 +59,6 @@ def classify_content(content: Content) -> ContentRelevance:
     
     response = classify_with_model(
         content=content,
-        model_name=model,
         response_model=ContentRelevance,
         system_prompt="You are an AI assistant that analyzes articles for relevance.",
         user_content=f"Evaluate this article for relevance:\n\nHeadline: {content.title}\n\nContent: {content.text_content[:320]}"
@@ -67,15 +69,14 @@ def classify_content(content: Content) -> ContentRelevance:
     return response
 
 # @task(retries=1)
-def evaluate_content(content: Content) -> LLMContentEvaluation:
+def evaluate_content(content: Content) -> ContentEvaluation:
     """Evaluate the content using LLM if it is relevant."""
     # logger = get_run_logger()
     # logger.info(f"Starting detailed evaluation for content: {content.title[:50]}...")
     
     response = classify_with_model(
         content=content,
-        model_name=model,
-        response_model=LLMContentEvaluation,
+        response_model=ContentEvaluation,
         system_prompt="You are an AI assistant that provides comprehensive evaluations.",
         user_content=f"Evaluate this article:\n\nHeadline: {content.title}\n\nContent: {content.text_content[:320]}"
     )
@@ -193,7 +194,6 @@ def get_location_from_query(query: str):
         location: str
 
     response = client.chat.completions.create(
-        model="models/gemini-1.5-flash-latest",
         response_model=LocationFromQuery,
         messages=[
             {"role": "system", "content": "You are an AI assistant embedded as a function in a larger application. You are given a query and you need to return the location name most relevant to the query. Your response should be geo-codable to a region, city, town, country or continent."},
@@ -255,7 +255,6 @@ def split_query(query: str):
     # @task(retries=3)
     def split_query_task(query: str) -> QueryResult:
         response = client.chat.completions.create(
-            model=model_name,
             response_model=QueryResult,
             messages=[
                 {"role": "system", "content": "You are a political intelligence AI."},
@@ -285,3 +284,94 @@ def split_query(query: str):
     #     """
     #     primary_query: str
     #     combined_queries: List[str]
+
+# Define classification dimension model
+class EntityClassificationDimension(BaseModel):
+    name: str
+    type: str
+    description: Optional[str] = None
+
+class EntityClassificationRequest(BaseModel):
+    dimensions: List[EntityClassificationDimension]
+    text: str
+
+@app.post("/classify")
+async def classify(request: EntityClassificationRequest):
+    try:
+        # Create dynamic classification model
+        dimensions = [EntityClassificationDimension(**dim.dict()) for dim in request.dimensions]
+        DynamicClassificationModel = create_dynamic_classification_model(dimensions)
+        
+        # Build system prompt
+        system_prompt = build_system_prompt(dimensions)
+        
+        # Prepare user content
+        user_content = request.text
+        
+        # Classify with model
+        classification_result = classify_with_model(
+            client=client,
+            response_model=DynamicClassificationModel,
+            system_prompt=system_prompt,
+            user_content=user_content
+        )
+        
+        return classification_result.dict()
+    except Exception as e:
+        logging.error(f"Classification error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class DynamicClassificationRequest(BaseModel):
+    dimensions: List[EntityClassificationDimension]
+    texts: str
+
+@app.post("/classify_dynamic")
+def classify_dynamic(request: DynamicClassificationRequest):
+    # Create dynamic classification model
+    try:
+        dimensions = [EntityClassificationDimension(**dim.dict()) for dim in request.dimensions]
+        DynamicClassificationModel = create_dynamic_classification_model(dimensions)
+        
+        # Build system prompt
+        system_prompt = build_system_prompt(dimensions)
+
+
+        
+        user_content = f"Text: {request.texts}\n\n"
+        classification_result = classify_with_model(
+            client=client,
+            response_model=DynamicClassificationModel,
+            system_prompt=system_prompt,
+            user_content=user_content
+        )
+        return classification_result.dict()
+    except Exception as e:
+        logging.error(f"Classification error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def retrieve_similar_entities(entity_name: str, session: AsyncSession):
+    try:
+        # Use plainto_tsquery for better handling of spaces and special characters
+        tsquery = func.plainto_tsquery(entity_name)
+        
+        # Construct the query
+        similar_entities_stmt = select(Entity.id, Entity.name, Entity.entity_type).where(
+            Entity.entity_type == 'LOC',
+            Entity.id != some_uuid,
+            Entity.name.op('@@')(tsquery),
+            func.similarity(Entity.name, entity_name) > 0.3
+        ).limit(5)
+        
+        # Execute the query
+        result = await session.execute(similar_entities_stmt)
+        return result.fetchall()
+    
+    except SQLAlchemyError as e:
+        logging.error(f"Database error: {e}")
+        raise
+
+# Example usage in your main function
+async def process_entity(entity):
+    async with AsyncSession() as session:
+        similar_entities = await retrieve_similar_entities(entity.name, session)
+        # Process similar_entities as needed

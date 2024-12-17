@@ -4,6 +4,10 @@ from core.adb import create_db_and_tables, get_session
 from core.middleware import add_cors_middleware
 from routes.main import api_router
 
+import logfire
+
+logfire.configure()
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 

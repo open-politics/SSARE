@@ -1,0 +1,36 @@
+# Global configuration settings
+global:
+  scrape_interval: 15s  # How frequently to scrape targets by default
+  evaluation_interval: 15s  # How frequently to evaluate rules by default
+  # scrape_timeout is set to the global default (10s).
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#             - alertmanager:9093
+
+# Rule files (optional)
+# rule_files:
+#   - "alert_rules.yml"
+
+# Scrape configurations define how to discover and scrape metrics from targets
+scrape_configs:
+  # Scrape configuration for the Entity Resolution service
+  - job_name: 'entity_resolution_service'
+    scrape_interval: 15s  # Override the global scrape interval for this job
+    static_configs:
+      - targets: ['entity_resolution_flow:7451']  # Service name and port as defined in docker-compose.yml
+
+  # Scrape configuration for the PostgreSQL exporter (if used)
+  # - job_name: 'postgres_exporter'
+  #   static_configs:
+  #     - targets: ['postgres_db:9187']  # Replace with actual exporter port
+
+  # Scrape configuration for the Classification Service (if metrics are exposed)
+  # - job_name: 'classification_service'
+  #   static_configs:
+  #     - targets: ['classification_service:5000']  # Replace with actual metrics port
+
+  # Additional scrape configs can be added here for other services

@@ -28,4 +28,4 @@ SSARE/textgrad
 backups/
 credentials/
 commands.txt
-helm/
+helm/values.yaml

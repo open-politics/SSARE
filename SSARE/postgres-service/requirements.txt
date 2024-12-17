@@ -11,3 +11,6 @@ sqlmodel
 pgvector
 httpx
 tenacity
+prefect
+logfire
+logfire[asyncpg]

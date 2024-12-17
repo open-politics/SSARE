@@ -28,10 +28,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel import Session
 from typing import AsyncGenerator
+from sqlalchemy.dialects.postgresql import insert
 
 from core.adb import engine, get_session, create_db_and_tables
 from core.middleware import add_cors_middleware
-from core.models import Content, ContentEntity, Entity, Location, Tag, ContentEvaluation, EntityLocation, ContentTag, ContentChunk, MediaDetails, Image
+from core.models import Content, ContentEntity, Entity, Location, Tag, ContentEvaluation, EntityLocation, ContentTag, ContentChunk, MediaDetails, Image, TopContentEntity, TopContentLocation
 from core.service_mapping import config
 from core.utils import logger
 from core.service_mapping import get_redis_url
@@ -260,66 +261,109 @@ async def store_contents_with_entities(session: AsyncSession = Depends(get_sessi
         logger.info(f"Retrieved {len(contents)} contents from Redis queue")
         
         async with session.begin():
-            logger.info("Starting database session")
             for index, content_json in enumerate(contents, 1):
                 try:
                     content_data = json.loads(content_json)
                     logger.info(f"Processing content {index}/{len(contents)}: {content_data['url']}")
-                    
-                    # Update content fields excluding entities and id
-                    content_update = {k: v for k, v in content_data.items() if k not in ['entities', 'id']}
-                    stmt = update(Content).where(Content.url == content_data['url']).values(**content_update)
-                    await session.execute(stmt)
-                    
-                    # Handle entities separately
-                    if 'entities' in content_data:
-                        # Get the content id
-                        result = await session.execute(select(Content.id).where(Content.url == content_data['url']))
-                        content_id = result.scalar_one()
-                        
-                        # Delete existing ContentEntity entries for this content
-                        await session.execute(delete(ContentEntity).where(ContentEntity.content_id == content_id))
-                        
-                        for entity_data in content_data['entities']:
-                            # Create or get entity
-                            entity_stmt = select(Entity).where(Entity.name == entity_data['text'], Entity.entity_type == entity_data['tag'])
-                            result = await session.execute(entity_stmt)
-                            entity = result.scalar_one_or_none()
-                            
-                            if not entity:
-                                entity = Entity(name=entity_data['text'], entity_type=entity_data['tag'])
-                                session.add(entity)
-                                await session.flush()  # This will populate the id of the new entity
-                            
-                            # Create or update ContentEntity link
-                            content_entity_stmt = select(ContentEntity).where(
-                                ContentEntity.content_id == content_id,
-                                ContentEntity.entity_id == entity.id
-                            )
-                            result = await session.execute(content_entity_stmt)
-                            existing_content_entity = result.scalar_one_or_none()
 
-                            if existing_content_entity:
-                                existing_content_entity.frequency += 1
-                            else:
-                                content_entity = ContentEntity(content_id=content_id, entity_id=entity.id)
+                    # Find the content by URL and eagerly load the chunks
+                    result = await session.execute(
+                        select(Content).options(selectinload(Content.chunks)).where(Content.url == content_data['url'])
+                    )
+                    content = result.scalar_one_or_none()
+
+                    if content:
+                        # Update the overall content embeddings
+                        content.embeddings = content_data.get('embeddings')
+
+                        # Handle entities
+                        if 'entities' in content_data:
+                            # Get the content id
+                            content_id = content.id
+                            
+                            for entity_data in content_data['entities']:
+                                # Get or create Entity
+                                entity_stmt = select(Entity).where(
+                                    Entity.name == entity_data['text'],
+                                )
+                                result = await session.execute(entity_stmt)
+                                entity = result.scalar_one_or_none()
+
+                                if not entity:
+                                    entity = Entity(name=entity_data['text'], entity_type=entity_data['tag'])
+                                    session.add(entity)
+                                    await session.flush()  # Populate `entity.id`
+
+                                # Upsert ContentEntity
+                                upsert_stmt = insert(ContentEntity).values(
+                                    content_id=content_id,
+                                    entity_id=entity.id,
+                                    frequency=1
+                                ).on_conflict_do_update(
+                                    index_elements=['content_id', 'entity_id'],
+                                    set_={'frequency': ContentEntity.frequency + 1}
+                                )
+                                await session.execute(upsert_stmt)
+
+                        # Handle top entities
+                        if 'top_entities' in content_data:
+                            top_entities = content_data['top_entities']
+                            for entity_name in top_entities:
+                                entity_stmt = select(Entity).where(Entity.name == entity_name)
+                                result = await session.execute(entity_stmt)
+                                entity = result.scalar_one_or_none()
+                                
+                                if not entity:
+                                    entity = Entity(name=entity_name, entity_type="unknown")  # Default type if not known
+                                    session.add(entity)
+                                    await session.flush()
+                                
+                                # Link top entities
+                                content_entity = TopContentEntity(content_id=content.id, entity_id=entity.id)
                                 session.add(content_entity)
+
+                        # Handle top locations
+                        if 'top_locations' in content_data:
+                            top_locations = content_data['top_locations']
+                            for location_name in top_locations:
+                                location_stmt = select(Location).where(Location.name == location_name)
+                                result = await session.execute(location_stmt)
+                                location = result.scalar_one_or_none()
+                                
+                                if not location:
+                                    location = Location(name=location_name, location_type="unknown")
+                                    session.add(location)
+                                    await session.flush()
+                                
+                                # Link top locations
+                                content_location = TopContentLocation(content_id=content.id, location_id=location.id)
+                                session.add(content_location)
                     
+                    else:
+                        logger.error(f"Content not found: {content_data['url']}")
+
                 except ValidationError as e:
                     logger.error(f"Validation error for content {content_data['url']}: {e}")
                 except json.JSONDecodeError as e:
                     logger.error(f"JSON decoding error for content: {e}")
+                except Exception as e:
+                    logger.error(f"Error processing content {content_data.get('url', 'unknown')}: {str(e)}", exc_info=True)
 
-        logger.info("Changes committed to database")
+        await session.commit()
+        logger.info("Stored contents with entities in PostgreSQL")
+
+        # Clear the processed contents from Redis
         await redis_conn.ltrim('contents_with_entities_queue', len(contents), -1)
         logger.info("Redis queue trimmed")
-        logger.info("Closing Redis connection")
         await redis_conn.close()
         logger.info("Contents with entities stored successfully")
         return {"message": "Contents with entities processed and stored successfully."}
     except Exception as e:
-        logger.error(f"Error processing contents with entities: {e}")
+        logger.error(f"Error storing contents with entities: {e}", exc_info=True)
+        await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        await session.close()
 
 ########################################################################################
 ## 4. GEOCODING PIPELINE
@@ -329,183 +373,95 @@ async def create_geocoding_jobs(session: AsyncSession = Depends(get_session)):
     logger.info("Starting to create geocoding jobs.")
     try:
         async with session.begin():
-            # Select contents with entities that are locations and do not have geocoding
-            query = select(Content).options(
-                selectinload(Content.entities).selectinload(Entity.locations)
-            ).where(
-                Content.entities.any(
-                    and_(
-                        or_(
-                            Entity.entity_type == 'LOC',
-                        ),
-                        ~Entity.locations.any()  # Check if the entity has no locations
-                    )
-                )
-            )
-            
-            
+            # Select locations that lack geocoding
+            query = select(Location).where(Location.coordinates == None)
             result = await session.execute(query)
-            contents = result.scalars().all()
-            logger.info(f"Found {len(contents)} contents with entities that need geocoding.")
+            locations = result.scalars().all()
+            logger.info(f"Found {len(locations)} locations needing geocoding.")
 
             redis_conn = await Redis.from_url(get_redis_url(), db=3)
 
-            # Get existing contents in the queue
-            existing_urls = set(await redis_conn.lrange('contents_without_geocoding_queue', 0, -1))
-            existing_urls = {json.loads(url)['url'] for url in existing_urls}
+            # Get existing locations in the queue
+            existing_locations = set(await redis_conn.lrange('locations_without_geocoding_queue', 0, -1))
 
-
-            contents_list = []
+            locations_list = []
             not_pushed_count = 0
-            for content in contents:
-                if content.url not in existing_urls:
-                    location_entities = [entity for entity in content.entities if entity.entity_type in ('LOC') and not entity.locations]
-                    
-                    if location_entities:
-                        content_dict = {
-                            'url': content.url,
-                            'title': content.title,
-                            'text_content': content.text_content,
-                            'entities': [{'text': entity.name, 'tag': entity.entity_type} for entity in location_entities]
-                        }
-                        contents_list.append(json.dumps(content_dict, ensure_ascii=False))
-                        logger.info(f"Content {content.url} has {len(location_entities)} location entities that need geocoding.")
+            for location in locations:
+                if location.name not in existing_locations:
+                    locations_list.append(json.dumps({
+                        'name': location.name
+                    }))
                 else:
                     not_pushed_count += 1
 
-            if contents_list:
-                await redis_conn.rpush('contents_without_geocoding_queue', *contents_list)
-                logger.info(f"Pushed {len(contents_list)} new contents to Redis queue for geocoding.")
-            else:
-                logger.info("No new contents found that need geocoding.")
-            
-            logger.info(f"{not_pushed_count} contents were not pushed to the queue as they were already present.")
+            logger.info(f"{not_pushed_count} locations already in queue, not pushed again.")
 
-            await redis_conn.close()
-            return {"message": f"Geocoding jobs created for {len(contents_list)} new contents. {not_pushed_count} contents were already in the queue."}
+        if locations_list:
+            await redis_conn.rpush('locations_without_geocoding_queue', *locations_list)
+            logger.info(f"Pushed {len(locations_list)} locations to Redis queue.")
+        else:
+            logger.info("No new locations found that need geocoding.")
+
+        await redis_conn.close()
+        return {"message": f"Geocoding jobs created for {len(locations_list)} locations."}
     except Exception as e:
         logger.error(f"Error creating geocoding jobs: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-    
+
 @router.post("/store_contents_with_geocoding")
 async def store_contents_with_geocoding(session: AsyncSession = Depends(get_session)):
     try:
         logger.info("Starting store_contents_with_geocoding function")
         redis_conn = await Redis.from_url(get_redis_url(), db=4, decode_responses=True)
-        logger.info(f"Connected to Redis on port {config.REDIS_PORT}, db 4")
         geocoded_contents = await redis_conn.lrange('contents_with_geocoding_queue', 0, -1)
-        logger.info(f"Retrieved {len(geocoded_contents)} geocoded contents from Redis queue")
+        logger.info(f"Retrieved {len(geocoded_contents)} geocoded locations from Redis queue")
         
-        for index, geocoded_content in enumerate(geocoded_contents, 1):
-            try:
-                geocoded_data = json.loads(geocoded_content)
-                logger.info(f"Processing geocoded content {index}/{len(geocoded_contents)}: {geocoded_data['url']}")
-                
-                async with session.begin():
-                    content = await session.execute(
-                        select(Content).where(Content.url == geocoded_data['url'])
-                    )
-                    content = content.scalar_one_or_none()
+        async with session.begin():
+            for index, geocoded_content in enumerate(geocoded_contents, 1):
+                try:
+                    geocode_data = json.loads(geocoded_content)
+                    location_name = geocode_data['name']
+                    
+                    # Update or create the Location entry
+                    stmt = select(Location).where(Location.name == location_name)
+                    result = await session.execute(stmt)
+                    location = result.scalar_one_or_none()
 
-                    if content:
-                        for location_data in geocoded_data['geocoded_locations']:
-                            entity = await session.execute(
-                                select(Entity).where(Entity.name == location_data['name'], Entity.entity_type == "location")
-                            )
-                            entity = entity.scalar_one_or_none()
-                            
-                            if not entity:
-                                entity = Entity(name=location_data['name'], entity_type="location")
-                                session.add(entity)
-                                await session.flush()  # Flush to get the entity ID
-                            
-                            location = await session.execute(
-                                select(Location).where(Location.name == location_data['name'])
-                            )
-                            location = location.scalar_one_or_none()
-                            
-                            if not location:
-                                location = Location(
-                                    name=location_data['name'],
-                                    location_type=location_data.get('location_type', 'location'),  # Ensure a default value
-                                    coordinates=location_data['coordinates']['coordinates'],
-                                    weight=location_data['weight']
-                                )
-                                session.add(location)
-                                await session.flush()  # Flush to get the location ID
-                            else:
-                                # Update the weight if the new weight is higher
-                                location.weight = max(location.weight, location_data['weight'])
-                            
-                            # Check if ContentEntity already exists
-                            existing_content_entity = await session.execute(
-                                select(ContentEntity).where(
-                                    ContentEntity.content_id == content.id,
-                                    ContentEntity.entity_id == entity.id
-                                )
-                            )
-                            existing_content_entity = existing_content_entity.scalar_one_or_none()
-
-                            if existing_content_entity:
-                                # Update frequency if it already exists
-                                await session.execute(
-                                    update(ContentEntity).
-                                    where(ContentEntity.content_id == content.id, ContentEntity.entity_id == entity.id).
-                                    values(frequency=ContentEntity.frequency + 1)
-                                )
-                            else:
-                                # Create new ContentEntity if it doesn't exist
-                                content_entity = ContentEntity(content_id=content.id, entity_id=entity.id)
-                                session.add(content_entity)
-
-                            # Check if EntityLocation already exists
-                            existing_entity_location = await session.execute(
-                                select(EntityLocation).where(
-                                    EntityLocation.entity_id == entity.id,
-                                    EntityLocation.location_id == location.id
-                                )
-                            )
-                            existing_entity_location = existing_entity_location.scalar_one_or_none()
-
-                            if not existing_entity_location:
-                                entity_location = EntityLocation(entity_id=entity.id, location_id=location.id)
-                                session.add(entity_location)
-                        
-                        # Add the "geocoded" tag
-                        tag = await session.execute(select(Tag).where(Tag.name == "geocoded"))
-                        tag = tag.scalar_one_or_none()
-                        if not tag:
-                            tag = Tag(name="geocoded")
-                            session.add(tag)
-                            await session.flush()  # Flush to get the tag ID
-                        
-                        # Check if ContentTag already exists
-                        existing_content_tag = await session.execute(
-                            select(ContentTag).where(
-                                ContentTag.content_id == content.id,
-                                ContentTag.tag_id == tag.id
-                            )
+                    if not location:
+                        location = Location(
+                            name=location_name,
+                            location_type=geocode_data.get('type', 'unknown'),
+                            coordinates=geocode_data.get('coordinates'),
+                            bbox=geocode_data.get('bbox'),
+                            area=geocode_data.get('area'),
+                            weight=geocode_data.get('weight', 1.0)
                         )
-                        existing_content_tag = existing_content_tag.scalar_one_or_none()
-
-                        if not existing_content_tag:
-                            content_tag = ContentTag(content_id=content.id, tag_id=tag.id)
-                            session.add(content_tag)
+                        session.add(location)
+                        logger.info(f"Added new location: {location_name}")
                     else:
-                        logger.error(f"Content not found: {geocoded_data['url']}")
-                
-            except Exception as e:
-                logger.error(f"Error processing geocoded content {geocoded_data['url']}: {str(e)}")
-                # Continue processing other contents
+                        # Update existing location details if necessary
+                        location.coordinates = geocode_data.get('coordinates', location.coordinates)
+                        # location.bbox = geocode_data.get('bbox', location.bbox)
+                        # location.area = geocode_data.get('area', location.area)
+                        location.weight = max(location.weight, geocode_data.get('weight', location.weight))
+                        logger.info(f"Updated location: {location_name}")
 
+                except Exception as e:
+                    logger.error(f"Error processing geocoded location {geocode_data.get('name', 'unknown')}: {e}", exc_info=True)
+
+        await session.commit()
+        logger.info("Stored geocoded locations in PostgreSQL")
+
+        # Clear the processed geocoded contents from Redis
         await redis_conn.ltrim('contents_with_geocoding_queue', len(geocoded_contents), -1)
-        logger.info("Cleared Redis queue")
         await redis_conn.close()
-        logger.info("Closed Redis connection")
-        return {"message": "Geocoded contents stored successfully in PostgreSQL."}
+        return {"message": "Geocoded locations stored successfully in PostgreSQL."}
     except Exception as e:
-        logger.error(f"Error storing geocoded contents: {e}")
+        logger.error(f"Error storing geocoded locations: {e}", exc_info=True)
+        await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        await session.close()
 
 ########################################################################################
 ## 5. LLM CLASSIFICATION PIPELINE
@@ -606,6 +562,9 @@ async def store_contents_with_classification(session: AsyncSession = Depends(get
                     await session.flush()
                     logger.info(f"Updated content and evaluation: {content_data['url']}")
                 else:
+                    # if not existing, insert new content
+                    content = Content(**content_data)
+                    session.add(content)
                     logger.warning(f"Content not found in database: {content_data['url']}")
 
             except Exception as e:

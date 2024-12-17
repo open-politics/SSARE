@@ -545,3 +545,16 @@ async def get_articles_with_top_image(session: AsyncSession = Depends(get_sessio
     except Exception as e:
         logger.error(f"Error retrieving articles with top image: {e}")
         raise HTTPException(status_code=500, detail="Error retrieving articles with top image")
+
+
+@router.get("/failed_geocodes")
+async def get_failed_geocodes():
+    try:
+        redis_conn = await Redis.from_url(get_redis_url(), db=6, decode_responses=True)
+        failed_geocodes = await redis_conn.lrange('failed_geocodes_queue', 0, -1)
+        failed_locations = [json.loads(fail) for fail in failed_geocodes]
+        await redis_conn.close()
+        return {"failed_geocodes": failed_locations}
+    except Exception as e:
+        logger.error(f"Error retrieving failed geocodes: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e))

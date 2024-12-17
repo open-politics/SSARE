@@ -13,8 +13,8 @@ COPY core ./core
 
 # Flow service stage
 FROM base AS flow
-COPY embedding-service/flows/generate_embeddings.py .
-CMD ["python", "generate_embeddings.py"]
+COPY embedding-service/flows/generate_embeddings_onebatch.py .
+CMD ["python", "generate_embeddings_onebatch.py"]
 
 # API service stage
 FROM base AS api

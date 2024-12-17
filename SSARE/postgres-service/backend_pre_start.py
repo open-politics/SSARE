@@ -39,6 +39,8 @@ async def init() -> None:
         async with async_session() as session:
             # Create vector extension first
             await session.execute(text('CREATE EXTENSION IF NOT EXISTS vector'))
+            # Create trigram extension
+            await session.execute(text('CREATE EXTENSION IF NOT EXISTS pg_trgm;'))
             await session.commit()
             # Then check connection
             await session.execute(select(1))

@@ -92,6 +92,8 @@ class ServiceConfig:
             "main_core-app": f"http://main-core-app:{MAIN_CORE_APP_PORT}",
             "postgres-service": f"http://postgres-service:{POSTGRES_SERVICE_PORT}",
             "embedding-service": f"http://embedding-service:{EMBEDDING_SERVICE_PORT}",
+            "postgres-service": f"http://postgres-service:{POSTGRES_SERVICE_PORT}",
+            "classification-service": f"http://classification-service:{CLASSIFICATION_SERVICE_PORT}",
             "qdrant-service": f"http://qdrant-service:{QDRANT_SERVICE_PORT}",
             "qdrant-storage": f"http://qdrant-storage:{QDRANT_STORAGE_PORT}",
             "scraper-service": f"http://scraper-service:{SCRAPER_SERVICE_PORT}",
@@ -119,13 +121,14 @@ class ServiceConfig:
         "raw_contents_queue": {"db": 1, "key": "raw_contents_queue", "type": "list"},
         "contents_with_embeddings": {"db": 6, "key": "contents_with_embeddings", "type": "list"},
         "contents_without_entities_queue": {"db": 2, "key": "contents_without_entities_queue", "type": "list"},
-        "contents_without_geocoding_queue": {"db": 3, "key": "contents_without_geocoding_queue", "type": "list"},
+        "contents_without_geocoding_queue": {"db": 3, "key": "locations_without_geocoding_queue", "type": "list"},
         "contents_with_geocoding_queue": {"db": 4, "key": "contents_with_geocoding_queue", "type": "list"},
         "contents_without_classification_queue": {"db": 4, "key": "contents_without_classification_queue", "type": "list"},
         "contents_with_classification_queue": {"db": 4, "key": "contents_with_classification_queue", "type": "list"},
         "Orchestration_in_progress": {"db": 1, "key": "Orchestration_in_progress", "type": "string"},
         "scrapers_running": {"db": 1, "key": "scrapers_running", "type": "string"},
-        "outward_irrelevant_queue": {"db": 7, "key": "outward_irrelevant_queue", "type": "list"}
+        "outward_irrelevant_queue": {"db": 7, "key": "outward_irrelevant_queue", "type": "list"},
+        "failed_geocodes_queue": {"db": 6, "key": "failed_geocodes_queue", "type": "list"},
     }
 
 

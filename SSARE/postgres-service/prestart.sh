@@ -4,7 +4,7 @@
 python backend_pre_start.py
 
 # Run migrations 
-# alembic revision --autogenerate -m "Add meta_summary to Content"
+# alembic revision --autogenerate -m "Adding top locations and entities to content"
 
-# Migrate
-# alembic -c alembic.ini upgrade head
+# # Migrate
+alembic upgrade head

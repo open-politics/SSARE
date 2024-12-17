@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim AS base
 
 WORKDIR /app/
 
@@ -19,8 +19,16 @@ COPY postgres-service .
 
 # Copy the core directory
 COPY core ./core
+COPY postgres-service/flows ./
+
+# Copy the alembic directory
+COPY postgres-service/alembic ./alembic
 
 # Make the start script executable
 RUN chmod +x /app/start.sh
 
+FROM base AS flow
+CMD ["python", "resolve_location_entities.py"]
+
+FROM base AS app
 CMD ["/app/start.sh"]

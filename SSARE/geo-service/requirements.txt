@@ -12,3 +12,5 @@ sqlmodel
 prefect
 geojson
 httpx
+logfire
+logfire[asyncpg]

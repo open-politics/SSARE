@@ -1,22 +1,22 @@
 services:
 
-  # articles_database:
-  #   image: pgvector/pgvector:pg16
-  #   restart: always
-  #   environment:
-  #     - POSTGRES_USER=${ARTICLES_DB_USER}
-  #     - POSTGRES_PASSWORD=${ARTICLES_DB_PASSWORD}
-  #     - POSTGRES_DB=${ARTICLES_DB_NAME}
-  #     - POSTGRES_CONFIG_FILE=/etc/postgresql.conf
-  #   volumes:
-  #     - ./SSARE/articles_db/postgres.conf:/etc/postgresql.conf
-  #     - ./data/articles_db_data:/var/lib/postgresql/data
-  #   command: -c shared_preload_libraries='pg_stat_statements' -c pg_stat_statements.max=10000 -c pg_stat_statements.track=all
-  #   ports:
-  #     - "${ARTICLES_DB_PORT}:5473"
-  #   networks:
-  #     - default
-  #     - ssare-network
+  articles_database:
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      - POSTGRES_USER=${ARTICLES_DB_USER}
+      - POSTGRES_PASSWORD=${ARTICLES_DB_PASSWORD}
+      - POSTGRES_DB=${ARTICLES_DB_NAME}
+      - POSTGRES_CONFIG_FILE=/etc/postgresql.conf
+    volumes:
+      - ./SSARE/articles_db/postgres.conf:/etc/postgresql.conf
+      - ./data/articles_db_data:/var/lib/postgresql/data
+    command: -c shared_preload_libraries='pg_stat_statements' -c pg_stat_statements.max=10000 -c pg_stat_statements.track=all
+    ports:
+      - "${ARTICLES_DB_PORT}:5473"
+    networks:
+      - default
+      - ssare-network
 
   classification_service:
     build: 

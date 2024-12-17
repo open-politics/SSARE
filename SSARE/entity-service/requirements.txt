@@ -7,3 +7,4 @@ sqlmodel
 prefect
 prefect-ray
 pgvector
+gliner

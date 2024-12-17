@@ -1,8 +1,8 @@
-"""Add meta_summary to Content
+"""Adding top locations and entities to content
 
-Revision ID: ffd359d93d3a
-Revises: f616907b0d60
-Create Date: 2024-11-26 17:56:12.241184
+Revision ID: 0d4d3d9cb61b
+Revises: 9955f0b63b23
+Create Date: 2024-12-04 19:38:00.376730
 
 """
 from alembic import op
@@ -14,8 +14,8 @@ from pgvector.sqlalchemy import Vector
 
 
 # revision identifiers, used by Alembic.
-revision = 'ffd359d93d3a'
-down_revision = 'f616907b0d60'
+revision = '0d4d3d9cb61b'
+down_revision = '9955f0b63b23'
 branch_labels = None
 depends_on = None
 

@@ -3,7 +3,10 @@ from sqlmodel import SQLModel
 from .service_mapping import config, get_db_url
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
+import logfire
 
+logfire.configure()
+logfire.instrument_asyncpg()
 
 DATABASE_URL = get_db_url()
 

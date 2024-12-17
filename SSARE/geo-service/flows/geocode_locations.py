@@ -2,11 +2,21 @@ import json
 import logging
 from typing import List, Dict, Any
 from redis import Redis
-from core.utils import logger, UUIDEncoder, get_redis_url
+from core.utils import UUIDEncoder, get_redis_url
 from prefect import task, flow
 from collections import Counter
 import requests
 from core.service_mapping import config
+import os
+
+from logging import basicConfig, getLogger
+
+import logfire
+
+logfire.configure()
+basicConfig(handlers=[logfire.LogfireLoggingHandler()])
+
+logger = getLogger(__name__)
 
 # Helper function to get Redis cache connection
 def get_redis_cache():
@@ -41,6 +51,7 @@ def call_pelias_api(location, lang=None):
         return custom_mappings[location.lower()]
 
     try:
+        print(os.getenv('PELIAS_PLACEHOLDER_PORT'))
         pelias_url = config.service_urls['pelias-placeholder']
         url = f"{pelias_url}/parser/search?text={location}"
         if lang:
@@ -63,7 +74,8 @@ def call_pelias_api(location, lang=None):
                         'area': area
                     }
                 else:
-                    logger.warning(f"No geometry found for location: {location}")
+                    looger.warning(f"No geometry found for location: {location}")
+
             else:
                 logger.warning(f"No data returned from API for location: {location}")
         else:
@@ -74,37 +86,25 @@ def call_pelias_api(location, lang=None):
         logger.error(f"Unexpected error for location {location}: {str(e)}")
     return None
 
-# Function to process content and geocode locations
-def process_content(content: Dict[str, Any]) -> Dict[str, Any]:
-    entities = content.get('entities', [])
-    # Filter entities where tag is "LOC"
-    location_entities = [entity for entity in entities if entity.get('tag') == "LOC"]
-    
-    logger.warning(f"Location entities: {location_entities}")
-    location_counts = Counter(entity['text'] for entity in location_entities)
-    total_locations = len(location_entities)
-    location_weights = {location: count / total_locations for location, count in location_counts.items()}
+# Function to process individual location and geocode
+def process_location(location: Dict[str, Any]) -> Dict[str, Any]:
+    location_name = location.get('name')
+    if not location_name:
+        logger.warning("No location name provided.")
+        return {}
 
-    geocoded_locations = []
-    for location, weight in location_weights.items():
-        coordinates = call_pelias_api(location, lang='en')
-        if coordinates:
-            if weight > 0.03:
-                geocoded_locations.append({
-                    'name': location,
-                    'type': "location",
-                    'coordinates': coordinates,
-                    'weight': weight
-                })
-                logger.info(f"Geocoded location {location} with coordinates {coordinates} and weight {weight}.")
-            else:
-                logger.info(f"Skipped low-weight location: {location} (weight: {weight})")
-        else:
-            logger.warning(f"Unable to geocode location: {location}")
+    geocode_result = call_pelias_api(location_name, lang='en')
 
-    # Attach geocoded locations to the content dictionary
-    content['geocoded_locations'] = geocoded_locations
-    return content
+    if geocode_result:
+        geocode_result['name'] = location_name
+        geocode_result['type'] = geocode_result.get('location_type', 'unknown')
+        logger.info(f"Geocoded location {location_name}: {geocode_result}")
+        return geocode_result
+    else:
+        logger.warning(f"Unable to geocode location: {location_name}")
+        redis_conn = Redis.from_url(get_redis_url(), db=6)
+        redis_conn.lpush('failed_geocodes_queue', json.dumps({'name': location_name}))
+        return {'name': location_name, 'error': 'Geocoding failed'}
 
 # Function to push geocoded contents to Redis
 @task(log_prints=True)
@@ -113,28 +113,60 @@ def push_geocoded_contents(contents_with_geocoding: List[Dict[str, Any]]):
     try:
         for content in contents_with_geocoding:
             redis_conn.lpush('contents_with_geocoding_queue', json.dumps(content, cls=UUIDEncoder))
-            logger.info(f"Content with geocoding pushed to queue: {content['url']}")
+            logger.info(f"Content with geocoding pushed to queue: {content}")
     except Exception as e:
         logger.error(f"Error pushing contents with geocoding to queue: {str(e)}")
     finally:
         redis_conn.close()
 
+# Function to handle failed geocoding attempts
+def handle_failed_geocodes(failed_locations: List[str]):
+    redis_conn = Redis.from_url(get_redis_url(), db=6)  # Using db 6 for failed geocodes
+    try:
+        for loc in failed_locations:
+            redis_conn.lpush('failed_geocodes_queue', json.dumps({'name': loc}))
+            logger.info(f"Failed to geocode location pushed to queue: {loc}")
+    except Exception as e:
+        logger.error(f"Error pushing failed geocodes to queue: {e}")
+    finally:
+        redis_conn.close()
+
 @flow
-def geocode_locations_flow(batch_size: int = 50):
-    logger.info("Starting geocoding process")
-    contents = retrieve_contents_from_redis(batch_size)
-    if contents:
-        contents_with_geocoding = []
-        for content in contents:
-            processed_content = process_content(content)
-            if processed_content:
-                contents_with_geocoding.append(processed_content)
-        push_geocoded_contents(contents_with_geocoding)
-        logger.info(f"Geocoding completed for {len(contents_with_geocoding)} contents.")
-    else:
-        logger.info("No contents found in the queue.")
-    logger.info("Geocoding process completed")
-    return {"message": "Geocoding completed"}
+def geocode_locations_flow(batch_size: int = 100):
+    logger.info("Starting geocoding process for locations")
+    redis_conn = Redis.from_url(get_redis_url(), db=3, decode_responses=True)
+    try:
+        locations_batch = redis_conn.lrange('locations_without_geocoding_queue', 0, batch_size - 1)
+        redis_conn.ltrim('locations_without_geocoding_queue', batch_size, -1)
+
+        locations = [json.loads(loc) for loc in locations_batch]
+        if not locations:
+            logger.info("No locations found in the queue.")
+            return {"message": "No locations to process."}
+
+        geocoded_locations = []
+        failed_geocodes = []
+
+        for loc in locations:
+            result = process_location(loc)
+            if 'error' in result:
+                failed_geocodes.append(result['name'])
+            else:
+                geocoded_locations.append(result)
+
+        # Push successful geocodes to the next queue
+        if geocoded_locations:
+            push_geocoded_contents(geocoded_locations)
+
+        # Optionally, handle failed geocodes
+        if failed_geocodes:
+            handle_failed_geocodes(failed_geocodes)
+
+        logger.info(f"Geocoding completed for {len(geocoded_locations)} locations.")
+        return {"message": f"Geocoding completed for {len(geocoded_locations)} locations.", "failed": len(failed_geocodes)}
+    finally:
+        redis_conn.close()
+        logger.info("Geocoding process completed.")
 
 if __name__ == "__main__":
     geocode_locations_flow.serve(

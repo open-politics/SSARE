@@ -11,6 +11,7 @@ COPY core ./core
 
 # Copy the main.py and other files from postgres-service
 COPY geo-service/main.py .
+COPY geo-service/run_with_logfire.py .
 COPY geo-service/flows ./flows
 
 COPY geo-service/start.sh .

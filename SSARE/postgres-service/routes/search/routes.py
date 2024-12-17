@@ -14,7 +14,7 @@ from sqlalchemy import and_, func, or_, desc, distinct, exists
 from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-
+from datetime import datetime
 from core.adb import get_session
 from core.models import Content, Entity, Location, ContentEvaluation, ContentEntity, ContentChunk, EntityLocation
 from core.service_mapping import config
@@ -47,17 +47,19 @@ async def get_contents(
     news_category: Optional[str] = Query(None, description="Filter by news category"),
     secondary_category: Optional[str] = Query(None, description="Filter by secondary category"),
     keyword: Optional[str] = Query(None, description="Filter by keyword"),
-    entities: Optional[str] = Query(None, description="Comma-separated list of entities"),
+    entities: Optional[List[str]] = Query(None, description="PYTHON list of entities"),
     locations: Optional[str] = Query(None, description="Comma-separated list of locations"),
     topics: Optional[str] = Query(None, description="Comma-separated list of topics"),
     classification_scores: Optional[str] = Query(None, description="JSON string of classification score ranges"),
     keyword_weights: Optional[str] = Query(None, description="JSON string of keyword weights"),
     exclude_keywords: Optional[str] = Query(None, description="Comma-separated list of exclude keywords"),
+    from_date: Optional[str] = Query(None, description="Start date for search"),
+    to_date: Optional[str] = Query(None, description="End date for search"),
 ):
     try:
         # Parse filters and parameters
         filter_dict = json.loads(filters) if filters else {}
-        entity_list = entities.split(",") if entities else []
+        entity_list = entities if entities else []
         location_list = locations.split(",") if locations else []
         topic_list = topics.split(",") if topics else []
         score_filters = json.loads(classification_scores) if classification_scores else {}

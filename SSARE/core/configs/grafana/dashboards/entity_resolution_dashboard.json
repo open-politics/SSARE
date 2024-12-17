@@ -1,0 +1,100 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Entity Resolution Dashboard",
+    "uid": "entity-resolution-dashboard",
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 0,
+    "panels": [
+      {
+        "type": "graph",
+        "title": "Total Entity Resolutions",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "entity_resolutions_total",
+            "legendFormat": "{{action}} - {{entity_type}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        }
+      },
+      {
+        "type": "gauge",
+        "title": "Entity Resolution Time",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "entity_resolution_time_seconds",
+            "legendFormat": "{{entity_type}}",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {
+          "x": 12,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        "options": {
+          "min": 0,
+          "max": 60,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "table",
+        "title": "Similarity Scores",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "entity_similarity_score",
+            "format": "table",
+            "instant": false,
+            "refId": "C"
+          }
+        ],
+        "columns": [
+          {
+            "text": "Entity ID",
+            "value": "entity_id"
+          },
+          {
+            "text": "Similar Entity ID",
+            "value": "similar_entity_id"
+          },
+          {
+            "text": "Similarity Score",
+            "value": "value"
+          }
+        ],
+        "gridPos": {
+          "x": 0,
+          "y": 8,
+          "w": 24,
+          "h": 8
+        }
+      }
+    ]
+  },
+  "folderId": 0,
+  "overwrite": true
+}

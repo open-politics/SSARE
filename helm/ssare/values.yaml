@@ -1,20 +1,20 @@
 namespace: ssare
 
 replicaCount:
-  classificationService: 2
-  embeddingService: 2
-  entityService: 2
-  geoService: 2
+  classificationService: 1
+  embeddingService: 1
+  entityService: 1
+  geoService: 1
   litellm: 1
-  mainCoreApp: 2
+  mainCoreApp: 1
   ollama: 1
   peliasPlaceholder: 1
   postgresService: 1
   cloudSqlProxy: 1
   prefectDatabase: 1
-  scraperService: 2
+  scraperService: 1
   rayHead: 1
-  rayWorker: 3
+  rayWorker: 1
   traefik: 1
   redis: 1
 

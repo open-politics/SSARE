@@ -94,49 +94,53 @@ async def read_root(request: Request):
 
 ## Main Application Routes
 @app.get("/dashboardx", response_class=HTMLResponse)
-async def read_root(request: Request, query: str = "culture and arts"):
+async def read_root(background_tasks: BackgroundTasks, request: Request, query: str = "culture and arts"):
     try:
         postgres_service_url = f"{config.service_urls['postgres-service']}/contents"
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                postgres_service_url,
-                params={
-                    "search_query": query,
-                    "search_type": "semantic",
-                    "skip": 0,
-                    "limit": 10
-                }
-            )
+        
+        # Add the query task to the background
+        background_tasks.add_task(fetch_contents, postgres_service_url, query, request)
 
-        if response.status_code == 200:
-            contents = response.json()
-            contents = [{
-                'score': content.get('similarity', 0),
-                'headline': content['title'],
-                'paragraphs': content['text_content'],
-                'url': content['url']
-            } for content in contents]
+        use_local_prefect_server = os.getenv("LOCAL_PREFECT", "false").lower() == "true"
+        if use_local_prefect_server:
+            prefect_dashboard_url = "http://localhost:4200/dashboard"
         else:
-            contents = []     
+            workspace_id = os.getenv("PREFECT_WORKSPACE_ID")
+            workspace = os.getenv("PREFECT_WORKSPACE")
+            prefect_dashboard_url = f"https://app.prefect.cloud/account/{workspace_id}/workspace/{workspace}/dashboard"
 
-        if "HX-Request" in request.headers:
-            return templates.TemplateResponse("partials/contents_list.html", {"request": request, "contents": contents})
-        else:
-            use_local_prefect_server = os.getenv("LOCAL_PREFECT", "false").lower() == "true"
-            if use_local_prefect_server:
-                prefect_dashboard_url = "http://localhost:4200/dashboard"
-            else:
-                workspace_id = os.getenv("PREFECT_WORKSPACE_ID")
-                workspace = os.getenv("PREFECT_WORKSPACE")
-                prefect_dashboard_url = f"https://app.prefect.cloud/account/{workspace_id}/workspace/{workspace}/dashboard"
-
-            return templates.TemplateResponse("index.html", {
-                "request": request,
-                "search_query": query,
-                "prefect_dashboard_url": prefect_dashboard_url
-            })
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "search_query": query,
+            "prefect_dashboard_url": prefect_dashboard_url
+        })
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch contents: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load dashboard: {str(e)}")
+
+async def fetch_contents(postgres_service_url, query, request):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            postgres_service_url,
+            params={
+                "search_query": query,
+                "search_type": "semantic",
+                "skip": 0,
+                "limit": 10
+            }
+        )
+
+    if response.status_code == 200:
+        contents = response.json()
+        contents = [{
+            'score': content.get('similarity', 0),
+            'headline': content['title'],
+            'paragraphs': content['text_content'],
+            'url': content['url']
+        } for content in contents]
+        # You might want to store or process the contents here
+    else:
+        # Handle the error or log it
+        pass
 
 @app.get("/contents", response_class=HTMLResponse)
 async def search_contents(
@@ -335,7 +339,8 @@ async def check_channels(request: Request, flow_name: str):
             "entity_extraction": ["contents_without_entities_queue", "contents_with_entities_queue"],
             "geocoding": ["contents_without_geocoding_queue", "contents_with_geocoding_queue"],
             "semantics": ["contents_without_tags_queue", "contents_with_tags_queue"],
-            "classification": ["contents_without_classification_queue", "contents_with_classification_queue"]
+            "classification": ["contents_without_classification_queue", "contents_with_classification_queue"],
+            "failed_geocodes": ["failed_geocodes_queue"]
         }
         
         if flow_name not in flow_channels:
@@ -492,3 +497,9 @@ def is_number(value):
 templates.env.tests['is_number'] = is_number
 
 
+# Read rejected Geocodes
+@app.get("/read_failed_geocodes")
+async def read_failed_geocodes():
+    redis_conn = await setup_redis_connection()
+    failed_geocodes = await redis_conn.lrange('failed_geocodes_queue', 0, -1)
+    return {"failed_geocodes": failed_geocodes}

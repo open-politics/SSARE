@@ -1,5 +1,6 @@
 from typing import List, Dict, Any
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import json
@@ -7,7 +8,7 @@ from redis import Redis
 import logging
 from collections import Counter
 import requests
-from prefect import task, flow
+# from prefect import task, flow
 from geojson import Feature, FeatureCollection, Point
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import selectinload
@@ -21,7 +22,10 @@ import pickle
 from datetime import timedelta
 import asyncio
 from datetime import datetime
+import logfire
+import uvicorn
 
+logfire.configure()
 config = ServiceConfig()
 
 # Constants for Redis cache configuration
@@ -49,6 +53,7 @@ async def warm_cache(session: AsyncSession):
         
         # Generate and cache common event types
         event_types = ["protest", "conflict", "disaster"]
+        logger.error(f"Generating event GeoJSON for {event_types}")
         for event_type in event_types:
             feature_collection = await generate_event_geojson(session, event_type)
             redis_cache.setex(
@@ -70,23 +75,23 @@ async def warm_cache(session: AsyncSession):
 async def lifespan(app: FastAPI):
     logger.warning("Starting lifespan")
     
-    # Start background cache warming task
-    async def periodic_cache_warm():
-        while True:
-            try:
-                # Create a new session for each warm-up cycle
-                async for session in get_session():
-                    try:
-                        await warm_cache(session)
-                    except Exception as e:
-                        logger.error(f"Error during cache warm-up: {e}")
-                await asyncio.sleep(CACHE_WARM_INTERVAL.total_seconds())
-            except Exception as e:
-                logger.error(f"Error in periodic cache warming: {e}")
-                await asyncio.sleep(60)  # Wait a minute before retrying
+    # # Start background cache warming task
+    # async def periodic_cache_warm():
+    #     while True:
+    #         try:
+    #             # Create a new session for each warm-up cycle
+    #             async for session in get_session():
+    #                 try:
+    #                     await warm_cache(session)
+    #                 except Exception as e:
+    #                     logger.error(f"Error during cache warm-up: {e}")
+    #             await asyncio.sleep(CACHE_WARM_INTERVAL.total_seconds())
+    #         except Exception as e:
+    #             logger.error(f"Error in periodic cache warming: {e}")
+    #             await asyncio.sleep(60)  # Wait a minute before retrying
     
-    # Start the background task
-    asyncio.create_task(periodic_cache_warm())
+    # # Start the background task
+    # asyncio.create_task(periodic_cache_warm())
     
     yield
 
@@ -175,14 +180,14 @@ def process_content(content_data):
     return {**content_data, 'geocoded_locations': geocoded_locations}
 
 # Function to push geocoded contents to Redis
-@task
+# @task
 def push_geocoded_contents(redis_conn, geocoded_contents):
     for content in geocoded_contents:
         redis_conn.lpush('contents_with_geocoding_queue', json.dumps(content))
     logger.info(f"Pushed {len(geocoded_contents)} geocoded contents to Redis queue.")
 
 # Flow to geocode contents
-@flow
+# @flow
 def geocode_contents_flow(batch_size: int):
     logger.info("Starting geocoding process")
     redis_conn_raw = Redis.from_url(get_redis_url(), db=3, decode_responses=True)
@@ -244,7 +249,7 @@ def healthcheck():
     return {"message": "ok"}, 200
 
 # Task to log GeoJSON generation
-@task
+# @task
 async def logging_geojson(position):
     logger.info("Starting GeoJSON generation")
     print(f"GeoJSON {position} ")
@@ -289,7 +294,7 @@ async def get_locations_geojson(
 
 # Get event-specific GeoJSON
 @app.get("/geojson_events/{event_type}")
-async def get_geojson_by_event_type(event_type: str, session: AsyncSession = Depends(get_session)):
+async def get_geojson_by_event_type(event_type: str, limit: int = 100, session: AsyncSession = Depends(get_session)):
     redis_cache = get_redis_cache()
     cache_key = f"geojson_events_{event_type}"
     
@@ -299,7 +304,7 @@ async def get_geojson_by_event_type(event_type: str, session: AsyncSession = Dep
             logger.info(f"Returning {event_type} GeoJSON from cache")
             return JSONResponse(content=pickle.loads(cached_data))
             
-        feature_collection = await generate_event_geojson(session, event_type)
+        feature_collection = await generate_event_geojson(session, event_type, limit)
         
         redis_cache.setex(
             cache_key,
@@ -315,15 +320,18 @@ async def get_geojson_by_event_type(event_type: str, session: AsyncSession = Dep
     finally:
         redis_cache.close()
 
+class ByIdRequest(BaseModel):
+    content_ids: List[str]
+
 @app.post("/geojson_by_content_ids")
 async def get_geojson_by_content_ids(
-    content_ids: List[str],
+    request: ByIdRequest,
     session: AsyncSession = Depends(get_session)
 ):
     logger.warning("Starting GeoJSON generation for specified content IDs")
-    logger.warning(f"Content IDs: {content_ids}")
+    logger.warning(f"Content IDs: {request.content_ids}")
     try:
-        content_uuids = [uuid.UUID(content_id) for content_id in content_ids]
+        content_uuids = [uuid.UUID(content_id) for content_id in request.content_ids]
 
         query = (
             select(Content)
@@ -357,9 +365,8 @@ async def get_geojson_by_content_ids(
                     )
                     features.append(feature)
 
-        feature_collection = FeatureCollection(features)
         logger.warning(f"Created FeatureCollection with {len(features)} features for specified contents")
-        return JSONResponse(content=feature_collection)
+        return JSONResponse(content=FeatureCollection(features))
 
     except Exception as e:
         logger.error(f"Error creating GeoJSON for specified contents: {e}")
@@ -372,23 +379,32 @@ async def generate_geojson(session: AsyncSession) -> dict:
     )
     result = await session.execute(query)
     locations = result.scalars().unique().all()
+    logger.error(f"Retrieved {len(locations)} locations from database\n{locations}")
     
     features = []
     for location in locations:
-        logger.debug(f"Processing location: {location.name}")
-        coordinates = [float(coord) for coord in location.coordinates]
-        point = Point((coordinates[1], coordinates[0]))
+        logger.error(f"Processing location: {location.name}")
+        coordinates = [float(coord) for coord in location.coordinates] if location.coordinates else None
+        point = Point((coordinates[1], coordinates[0])) if coordinates else None    
+
+        logger.error(f"Point: {point}")
 
         contents = []
         for entity in location.entities:
-            for content in entity.contents:
-                contents.append({
-                    "url": content.url,
-                    "title": content.title,
-                    "source": content.source,
-                    "insertion_date": content.insertion_date
-                })
-        logger.debug(f"Found {len(contents)} contents for location: {location.name}")
+
+            if len(entity.contents) > 0:
+                for content in entity.contents:
+                    logger.error(f"Processing content: {content.title}")
+                    logger.error(f"Content evaluation: {content}")
+                    contents.append({
+                        "url": content.url,
+                        "title": content.title,
+                        "source": content.source,
+                        "insertion_date": content.insertion_date
+                    })
+            else:
+                logger.error(f"No contents found for entity: {entity.id}")
+        logger.error(f"Found {len(contents)} contents for location: {location.name}")
 
         feature = Feature(
             geometry=point,
@@ -409,7 +425,7 @@ async def generate_geojson(session: AsyncSession) -> dict:
     return feature_collection
 
 # Helper function to generate event-specific GeoJSON
-async def generate_event_geojson(session: AsyncSession, event_type: str) -> dict:
+async def generate_event_geojson(session: AsyncSession, event_type: str, limit: int = 100) -> dict:
     query = (
         select(Location)
         .options(selectinload(Location.entities).selectinload(Entity.contents))
@@ -419,6 +435,8 @@ async def generate_event_geojson(session: AsyncSession, event_type: str) -> dict
         .join(Content, Content.id == ContentEntity.content_id)
         .join(ContentEvaluation, ContentEvaluation.content_id == Content.id)
         .where(ContentEvaluation.event_type == event_type)
+        .order_by(Content.insertion_date.desc())
+        .limit(limit)
     )
     result = await session.execute(query)
     locations = result.scalars().unique().all()
@@ -458,4 +476,5 @@ async def generate_event_geojson(session: AsyncSession, event_type: str) -> dict
 
     logger.info("GeoJSON generation completed successfully")
     return feature_collection
+
 

@@ -12,7 +12,7 @@ COPY core ./core
 # Flow service stage
 FROM base AS flow
 COPY entity-service/main.py .
-COPY entity-service/flows/extract_entities.py .
+COPY entity-service/flows .
 CMD ["python", "extract_entities.py"]
 
 # API service stage
