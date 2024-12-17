@@ -9,7 +9,7 @@ services:
       - POSTGRES_DB=${ARTICLES_DB_NAME}
       - POSTGRES_CONFIG_FILE=/etc/postgresql.conf
     volumes:
-      - ./SSARE/core/configs/postgres.conf:/etc/postgresql.conf
+      - ./opol/core/configs/postgres.conf:/etc/postgresql.conf
       - ./data/articles_db_data:/var/lib/postgresql/data
     command: -c shared_preload_libraries='pg_stat_statements' -c pg_stat_statements.max=10000 -c pg_stat_statements.track=all
     ports:
@@ -19,7 +19,7 @@ services:
 
   classification-service:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./classification-service/Dockerfile
     ports:
       - "${CLASSIFICATION_SERVICE_PORT}:5688"
@@ -36,7 +36,7 @@ services:
 
   embedding-service:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./embedding-service/Dockerfile
       target: api
     restart: always
@@ -55,7 +55,7 @@ services:
 
   entity-service:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./entity-service/Dockerfile
     restart: always
     ports:
@@ -71,7 +71,7 @@ services:
 
   geo-service:
     build:
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./geo-service/Dockerfile
     restart: no
     networks:
@@ -89,10 +89,10 @@ services:
 
   # litellm:
   #   build: 
-  #     context: ./SSARE
+  #     context: ./opol
   #     dockerfile: ./litellm/Dockerfile
   #   volumes:
-  #     - ./SSARE/litellm/config.yaml:/app/config.yaml
+  #     - ./opol/litellm/config.yaml:/app/config.yaml
   #   ports:
   #     - "4000:4000"
   #   command: >
@@ -103,7 +103,7 @@ services:
 
   main_core_app:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./app/Dockerfile
       target: app
     ports:
@@ -124,7 +124,7 @@ services:
 
   # ollama:
   #   build: 
-  #     context: ./SSARE
+  #     context: ./opol
   #     dockerfile: ./ollama/Dockerfile
   #   pull_policy: always
   #   deploy:
@@ -172,11 +172,11 @@ services:
 
   postgres-service:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./postgres-service/Dockerfile
       target: app
     volumes:
-      - ./SSARE/postgres-service/alembic/versions:/app/alembic/versions
+      - ./opol/postgres-service/alembic/versions:/app/alembic/versions
       - ./credentials/postgres-service-key.json:/app/credentials/postgres-service-key.json
       - cloudsql:/cloudsql
       - ./backups:/app/backups
@@ -219,7 +219,7 @@ services:
 
   # ray_head:
   #   build: 
-  #     context: ./SSARE
+  #     context: ./opol
   #     dockerfile: ./images/RayBase.Dockerfile
   #   command: >
   #     sh -c "ray start --head --port=6380 --dashboard-host=0.0.0.0 --block"
@@ -240,7 +240,7 @@ services:
   
   # ray_worker:
   #   build: 
-  #     context: ./SSARE
+  #     context: ./opol
   #     dockerfile: ./images/RayBase.Dockerfile
   #   command: >
   #     sh -c "ray start --address=ray_head:6380 --block"
@@ -256,7 +256,7 @@ services:
     image: redis:latest
     command: redis-server /usr/local/etc/redis/redis.conf
     volumes:
-      - ./SSARE/core/configs/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./opol/core/configs/redis.conf:/usr/local/etc/redis/redis.conf
       - ./data/redis:/data
     ports:
       - "${REDIS_PORT}:${REDIS_PORT}"
@@ -266,7 +266,7 @@ services:
 
   scraper-service:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./scraper-service/Dockerfile
     ports:
       - "${SCRAPER_SERVICE_PORT}:8081"
@@ -281,7 +281,7 @@ services:
 
   embedding_flow:
       build: 
-        context: ./SSARE
+        context: ./opol
         dockerfile: ./embedding-service/Dockerfile
         target: flow
       restart: always
@@ -296,7 +296,7 @@ services:
 
   scraper_flow:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./scraper-service/Dockerfile
       target: flow
     restart: always
@@ -311,7 +311,7 @@ services:
 
   entities_flow:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./entity-service/Dockerfile
       target: flow
     restart: no
@@ -326,7 +326,7 @@ services:
 
   classification-flow:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./classification-service/Dockerfile
       target: flow
     restart: always
@@ -341,7 +341,7 @@ services:
 
   pipeline_flow:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./app/Dockerfile
       target: flow
     restart: always
@@ -356,7 +356,7 @@ services:
 
   resolve_entities_flow:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./postgres-service/Dockerfile
       target: flow
     restart: no
@@ -365,7 +365,7 @@ services:
       - PREFECT_API_KEY=${PREFECT_API_KEY}
       - DATABASE_URL= "postgresql://postgres:postgres@postgres-service:5434/postgres"
     volumes:
-      - ./SSARE/postgres-service/alembic/versions:/app/alembic/versions
+      - ./opol/postgres-service/alembic/versions:/app/alembic/versions
       - ./credentials/postgres-service-key.json:/app/credentials/postgres-service-key.json
       - cloudsql:/cloudsql
       - ./backups:/app/backups
@@ -381,7 +381,7 @@ services:
     image: prom/prometheus:latest
     container_name: prometheus
     volumes:
-      - ./SSARE/core/configs/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./opol/core/configs/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
     depends_on:
@@ -399,8 +399,8 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin  # Set a secure admin password
     volumes:
       - grafana_data:/var/lib/grafana  # Persist Grafana data
-      - ./SSARE/core/configs/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards  # Mount provisioning
-      - ./SSARE/core/configs/grafana/dashboards:/var/lib/grafana/dashboards  # Mount dashboard JSON files
+      - ./opol/core/configs/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards  # Mount provisioning
+      - ./opol/core/configs/grafana/dashboards:/var/lib/grafana/dashboards  # Mount dashboard JSON files
     depends_on:
       - prometheus
     networks:

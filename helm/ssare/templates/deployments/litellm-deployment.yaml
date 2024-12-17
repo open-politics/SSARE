@@ -36,7 +36,7 @@ spec:
       volumes:
         - name: litellm-config
           configMap:
-            name: ssare-config
+            name: opol-config
             items:
               - key: litellm-config.yaml
                 path: config.yaml

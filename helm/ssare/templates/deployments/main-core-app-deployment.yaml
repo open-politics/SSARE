@@ -20,9 +20,9 @@ spec:
             - containerPort: 8089
           envFrom:
             - configMapRef:
-                name: ssare-config
+                name: opol-config
             - secretRef:
-                name: ssare-secrets
+                name: opol-secrets
           volumeMounts:
             - name: backups
               mountPath: /app/backups

@@ -1,4 +1,4 @@
-namespace: ssare
+namespace: opol
 
 replicaCount:
   classificationService: 1
@@ -181,7 +181,7 @@ ingress:
   tls:
     - hosts:
         - opol.io
-      secretName: ssare-tls
+      secretName: opol-tls
 
 cloudSqlProxy:
   connectionName: open-politics-proje:us-central1:opp-production-1

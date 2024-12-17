@@ -1,6 +1,6 @@
 apiVersion: v2
-name: ssare
-description: A Helm chart for deploying the SSARE stack
+name: opol
+description: A Helm chart for deploying the opol stack
 type: application
 version: 0.1.0
 appVersion: "1.0"

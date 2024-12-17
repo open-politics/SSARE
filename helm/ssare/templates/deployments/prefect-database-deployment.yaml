@@ -22,12 +22,12 @@ spec:
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: ssare-secrets
+                  name: opol-secrets
                   key: POSTGRES_USER
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: ssare-secrets
+                  name: opol-secrets
                   key: POSTGRES_PASSWORD
             - name: POSTGRES_DB
               value: "prefect_db"

@@ -20,9 +20,9 @@ spec:
             - containerPort: 3690
           envFrom:
             - configMapRef:
-                name: ssare-config
+                name: opol-config
             - secretRef:
-                name: ssare-secrets
+                name: opol-secrets
           expose:
             - 3690
           volumeMounts:

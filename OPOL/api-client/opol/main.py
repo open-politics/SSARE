@@ -6,7 +6,7 @@ from .api.client_base import BaseClient
 
 class OPOL(BaseClient):
     """
-    Main API client to interact with all SSARE services.
+    Main API client to interact with all opol services.
     """
     def __init__(self, mode: str = "remote", base_url: str = None, api_key: str = None, timeout: int = 60):
         if mode == "remote":

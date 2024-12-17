@@ -20,26 +20,26 @@ spec:
             - containerPort: 8081
           envFrom:
             - configMapRef:
-                name: ssare-config
+                name: opol-config
             - secretRef:
-                name: ssare-secrets
+                name: opol-secrets
           env:
             - name: PREFECT_API_URL
               value: "{{ .Values.env.config.PREFECT_API_URL }}"
             - name: PREFECT_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: ssare-secrets
+                  name: opol-secrets
                   key: PREFECT_API_KEY
             - name: PREFECT_WORKSPACE_ID
               valueFrom:
                 secretKeyRef:
-                  name: ssare-secrets
+                  name: opol-secrets
                   key: PREFECT_WORKSPACE_ID
             - name: PREFECT_WORKSPACE
               valueFrom:
                 secretKeyRef:
-                  name: ssare-secrets
+                  name: opol-secrets
                   key: PREFECT_WORKSPACE
           resources:
             requests:

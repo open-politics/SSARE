@@ -20,9 +20,9 @@ spec:
             - containerPort: 420
           envFrom:
             - configMapRef:
-                name: ssare-config
+                name: opol-config
             - secretRef:
-                name: ssare-secrets
+                name: opol-secrets
           resources:
             requests:
               memory: "256Mi"

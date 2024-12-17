@@ -22,15 +22,15 @@ spec:
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: ssare-secrets
+                  name: opol-secrets
                   key: POSTGRES_USER
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: ssare-secrets
+                  name: opol-secrets
                   key: POSTGRES_PASSWORD
             - name: POSTGRES_DB
-              value: "ssare_db"
+              value: "opol_db"
           volumeMounts:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data

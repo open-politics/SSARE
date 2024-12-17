@@ -19,17 +19,17 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./letsencrypt:/letsencrypt
     networks:
-      - ssare_network
+      - opol_network
 
   main_core_app:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./app/Dockerfile
     networks:
-      - ssare_network
+      - opol_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.main-core-app.rule=Host(`ssare-api.open-politics.org`)"
+      - "traefik.http.routers.main-core-app.rule=Host(`opol-api.open-politics.org`)"
       - "traefik.http.routers.main-core-app.entrypoints=websecure"
       - "traefik.http.routers.main-core-app.tls=true"
       - "traefik.http.routers.main-core-app.tls.certresolver=myresolver"
@@ -50,13 +50,13 @@ services:
 
   geo_service:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./geo_service/Dockerfile
     networks:
-      - ssare_network
+      - opol_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.geo-service.rule=Host(`geo.ssare-api.open-politics.org`)"
+      - "traefik.http.routers.geo-service.rule=Host(`geo.opol-api.open-politics.org`)"
       - "traefik.http.routers.geo-service.entrypoints=web"
       - "traefik.http.routers.geo-service.tls=true"
       - "traefik.http.routers.geo-service.tls.certresolver=myresolver"
@@ -76,15 +76,15 @@ services:
 
   postgres_service:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./postgres_service/Dockerfile
     volumes:
-      - ./SSARE/postgres_service/alembic/versions:/app/alembic/versions
+      - ./opol/postgres_service/alembic/versions:/app/alembic/versions
     networks:
-      - ssare_network
+      - opol_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.postgres-service.rule=Host(`postgres.ssare-api.open-politics.org`)"
+      - "traefik.http.routers.postgres-service.rule=Host(`postgres.opol-api.open-politics.org`)"
       - "traefik.http.routers.postgres-service.entrypoints=websecure"
       - "traefik.http.routers.postgres-service.tls=true"
       - "traefik.http.routers.postgres-service.tls.certresolver=myresolver"
@@ -108,14 +108,14 @@ services:
     volumes:
       - ./data/articles_db_data:/var/lib/postgresql/data
     networks:
-      - ssare_network
+      - opol_network
 
   classification_service:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./classification_service/Dockerfile
     networks:
-      - ssare_network
+      - opol_network
     environment:
       - LOCAL_LLM=${LOCAL_LLM}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -123,11 +123,11 @@ services:
 
   embedding_service:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./embedding_service/Dockerfile
     restart: always
     networks:
-      - ssare_network
+      - opol_network
     environment:
       - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
     depends_on:
@@ -160,11 +160,11 @@ services:
 
   entity_service:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./entity_service/Dockerfile
     restart: always
     networks:
-      - ssare_network
+      - opol_network
     environment:
       - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
     depends_on:
@@ -173,10 +173,10 @@ services:
 
   r2r:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./r2r_server/Dockerfile
     networks:
-      - ssare_network
+      - opol_network
     environment:
       - HOST=0.0.0.0
       - PORT=8001
@@ -202,17 +202,17 @@ services:
     volumes:
       - ./data/r2r_db_data:/var/lib/postgresql/data
     networks:
-      - ssare_network
+      - opol_network
 
   rag_service:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./rag_service/Dockerfile
     restart: always
     networks:
-      - ssare_network
+      - opol_network
     volumes:
-      - ./SSARE/rag_service/main.py:/app/main.py
+      - ./opol/rag_service/main.py:/app/main.py
     environment:
       - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
       - POSTGRES_HOST=r2r_database
@@ -232,18 +232,18 @@ services:
     image: redis:latest
     command: redis-server /usr/local/etc/redis/redis.conf
     volumes:
-      - ./SSARE/core/configs/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./opol/core/configs/redis.conf:/usr/local/etc/redis/redis.conf
     networks:
-      - ssare_network
+      - opol_network
 
   scraper_service:
     build: 
-      context: ./SSARE
+      context: ./opol
       dockerfile: ./scraper_service/Dockerfile
     environment:
       - PREFECT_API_URL=http://prefect_server:${PREFECT_SERVER_PORT}/api
     networks:
-      - ssare_network
+      - opol_network
     depends_on:
       - redis
 
@@ -259,7 +259,7 @@ services:
       - PREFECT_SERVER_API_HOST=0.0.0.0
       - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://${PREFECT_DB_USER}:${PREFECT_DB_PASSWORD}@prefect_database:5432/${PREFECT_DB_NAME}
     networks:
-      - ssare_network
+      - opol_network
     depends_on:
       - prefect_database
 
@@ -271,13 +271,13 @@ services:
       - POSTGRES_PASSWORD=${PREFECT_DB_PASSWORD}
       - POSTGRES_DB=${PREFECT_DB_NAME}
     volumes:
-      - ./SSARE/app:/app
+      - ./opol/app:/app
       - prefect_db_data:/var/lib/postgresql/data
     networks:
-      - ssare_network
+      - opol_network
 
 networks:
-  ssare_network:
+  opol_network:
     external: true
 
 volumes:

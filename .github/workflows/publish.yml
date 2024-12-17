@@ -21,14 +21,14 @@ jobs:
 
     - name: Build package
       run: |
-        cd SSARE/api-client
+        cd opol/api-client
         python -m build
 
     - name: Upload dist artifacts
       uses: actions/upload-artifact@v3
       with:
         name: dist
-        path: SSARE/api-client/dist
+        path: opol/api-client/dist
 
   publish:
     name: Upload release to PyPI
@@ -44,9 +44,9 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: dist
-        path: SSARE/api-client/dist
+        path: opol/api-client/dist
 
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        packages-dir: SSARE/api-client/dist
+        packages-dir: opol/api-client/dist

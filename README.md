@@ -1,4 +1,4 @@
-   <h1>SSARE 🌐📰🔍🧠🗺️🪡📊🤖🗄️🔧</h1>Open Source Political Intelligence needs a news brain! 
+   <h1>opol 🌐📰🔍🧠🗺️🪡📊🤖🗄️🔧</h1>Open Source Political Intelligence needs a news brain! 
 
 Open Politics - especially Opol.io is a running data operation in the name of an open and enabled society.
 
@@ -6,7 +6,7 @@ We are organising methods and infrastructure focusing on political analysis and 
 
 On a mission to find the **#NeedleInTheHayStack**
 
-**SSARE** stands for Semantic **Search Article Recommendation Engine**: 
+**opol** stands for Semantic **Search Article Recommendation Engine**: 
 
 an open-source service that comfortably orchestrates: \
     - scraping of arbitrary sourcing scripts \
@@ -47,16 +47,16 @@ an open-source service that comfortably orchestrates: \
 
 
 
-![SSARE](media/banner.jpg)
+![opol](media/banner.jpg)
 
 ## Introduction
 
-SSARE serves as an efficient and scalable resource for semantic search and article recommendations, catering primarily to political news data.
+opol serves as an efficient and scalable resource for semantic search and article recommendations, catering primarily to political news data.
 
 The engine is adaptable to any article/ document, requiring only a sourcing script that outputs the data in the format of a dataframe with the columns: 
 
 **|| url | headline | paragraphs | source ||** < - This is all your script needs to produce
-Once integrated, SSARE processes these articles using embeddings models of your choice (upcoming, currently hardcoded), stores their vector representations in a Qdrant vector database, and maintains a full copy in a PostgreSQL database. 
+Once integrated, opol processes these articles using embeddings models of your choice (upcoming, currently hardcoded), stores their vector representations in a Qdrant vector database, and maintains a full copy in a PostgreSQL database. 
 
 Furthermore all articles' text is undergoing Named Entity Recognition (NER) where entities such as geo-political entities, affiliations, persons or organisation names.
 
@@ -73,7 +73,7 @@ We aim to provide numerous search entrypoints from Elastic Search, Keyword Match
 ![Simple UI](media/opp_dashboard_0.png)
 
 Which yields results like this:
-![Results](media/ssare_results_new.png)
+![Results](media/opol_results_new.png)
 
 Please note that the current classifications are derived from unoptimized prompts and arbitrary scales (some for testing purposes) using Llama 3.1 from Ollama as the classifier. In future updates, the prompt engineering for these classifications will be moved to environment files or similar configurable setups, allowing for easy customization of your system. Additionally, we plan to implement TextGrad as a background engine to automatically optimize prompts, further enhancing the classification process.
 
@@ -83,7 +83,7 @@ That can be used in a lot of ways already, have fun!
 
 ## High Level Diagramm:
 
-![High Level Architecture](media/ssare_high_level_diagramm_github.png)
+![High Level Architecture](media/opol_high_level_diagramm_github.png)
 This diagram is currently outdated. Key updates include:
 - Embeddings are now stored in PostgreSQL using the pgvector extension
 - Named Entity Recognition (NER) and Geocoding processes have been added
@@ -96,11 +96,11 @@ Before we can make use of our own scraping intelligence brain. Let's install it.
 ### Install
 1. Download the source code by cloning the repository.
     ```bash
-    git clone https://github.com/JimVincentW/SSARE.git
+    git clone https://github.com/JimVincentW/opol.git
     ``` 
 2. Initiate the setup:
    ```bash
-   cd SSARE
+   cd opol
    docker-compose up --build
    ```
 2. Go to the dashboard under
@@ -161,7 +161,7 @@ cnn_articles_df = scrape_cnn_articles()
 cnn_articles_df.to_csv('cnn_articles.csv', index=False)
 ```
 ## Architecture and Storage
-SSARE's architecture fosters communication through a decoupled microservices design, ensuring scalability and maintainability.Redis stores task queues. The system is composed of the following services:
+opol's architecture fosters communication through a decoupled microservices design, ensuring scalability and maintainability.Redis stores task queues. The system is composed of the following services:
 -  Scraper Service
 -  Vectorization/Embedding Service
 -  PostgreSQL Service (manages pipelines and has rudimentary search functions)
@@ -173,7 +173,7 @@ Services communicate and signal each other by producing flags and pushings tasks
 
 The scrape jobs are parallelized with Celery (fading out), Prefect (fading in) and async functions where possible. 
 
-Regarding storage, SSARE employs PostgreSQL for data retention and Qdrant as a vector storage.
+Regarding storage, opol employs PostgreSQL for data retention and Qdrant as a vector storage.
 
 A simpler and wholistic data contract solution for project-wide usage would be greatly appreciated.
 
@@ -192,7 +192,7 @@ to for example a limited ConcurrentTaskRunner, Keep in mind your hardware capabi
 Ray can orchestrate your heavier workflows on a even more distributed level. 
 ![prefect flows](media/prefect_flows.png)
 
-SSARE will execute all scripts in the scrapers folder and process the articles. 
+opol will execute all scripts in the scrapers folder and process the articles. 
 They are vectorized and stored in a Qdrant vector database.
 The API endpoint can be queried for semantic search and article recommendations for your LLM or research project.
 
@@ -341,4 +341,4 @@ Current limitations include the limited number of scrapers, alongside the unavai
 
 
 ## Licensing
-SSARE is distributed under the MIT License, with the license document available for reference within the project repository.
+opol is distributed under the MIT License, with the license document available for reference within the project repository.

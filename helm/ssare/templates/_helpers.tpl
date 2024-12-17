@@ -1,13 +1,13 @@
 {{/*
 Return the full name of the resource
 */}}
-{{- define "ssare.fullname" -}}
-{{ include "ssare.name" . }}-{{ .Chart.Name }}
+{{- define "opol.fullname" -}}
+{{ include "opol.name" . }}-{{ .Chart.Name }}
 {{- end }}
 
 {{/*
 Return the name of the resource
 */}}
-{{- define "ssare.name" -}}
+{{- define "opol.name" -}}
 {{ .Release.Name }}
 {{- end }}

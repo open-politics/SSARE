@@ -20,7 +20,7 @@ jobs:
       
       - name: Build and Push Embedding Flow
         run: |
-          cd SSARE
+          cd opol
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/embedding-flow:${{ github.sha }} -f ./embedding-service/Dockerfile --target flow .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/embedding-flow:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/embedding-flow:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/embedding-flow:latest
@@ -28,7 +28,7 @@ jobs:
 
       - name: Build and Push Scraper Flow
         run: |
-          cd SSARE
+          cd opol
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/scraper-flow:${{ github.sha }} -f ./scraper-service/Dockerfile --target flow .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper-flow:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/scraper-flow:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/scraper-flow:latest
@@ -36,7 +36,7 @@ jobs:
 
       - name: Build and Push Entities Flow
         run: |
-          cd SSARE
+          cd opol
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:${{ github.sha }} -f ./entity-service/Dockerfile --target flow .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:latest
@@ -44,7 +44,7 @@ jobs:
 
       - name: Build and Push Custom LiteLLM
         run: |
-          cd SSARE
+          cd opol
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:${{ github.sha }} -f ./entity-service/Dockerfile --target flow .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/entities-flow:latest
@@ -52,7 +52,7 @@ jobs:
 
       - name: Build and Push Custom LiteLLM
         run: |
-          cd SSARE
+          cd opol
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/custom-litellm:${{ github.sha }} -f ./litellm/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/custom-litellm:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/custom-litellm:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/custom-litellm:latest
@@ -60,7 +60,7 @@ jobs:
 
       - name: Build and Push Entity Service
         run: |
-          cd SSARE
+          cd opol
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/entity-service:${{ github.sha }} -f ./entity-service/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/entity-service:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/entity-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/entity-service:latest
@@ -68,7 +68,7 @@ jobs:
 
       - name: Build and Push Geo Service
         run: |
-          cd SSARE
+          cd opol
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/geo-service:${{ github.sha }} -f ./geo-service/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/geo-service:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/geo-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/geo-service:latest
@@ -76,7 +76,7 @@ jobs:
 
       - name: Build and Push Main Core App
         run: |
-          cd SSARE
+          cd opol
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/opol-core-app:${{ github.sha }} -f ./app/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/opol-core-app:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/opol-core-app:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/opol-core-app:latest
@@ -84,7 +84,7 @@ jobs:
 
       - name: Build and Push Embedding Service
         run: |
-          cd SSARE
+          cd opol
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/embedding-service:${{ github.sha }} -f ./embedding-service/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/embedding-service:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/embedding-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/embedding-service:latest
@@ -92,7 +92,7 @@ jobs:
 
       - name: Build and Push Postgres Service
         run: |
-          cd SSARE
+          cd opol
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/postgres-service:${{ github.sha }} -f ./postgres-service/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/postgres-service:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/postgres-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/postgres-service:latest
@@ -101,7 +101,7 @@ jobs:
 
       - name: Build and Push Scraper Service
         run: |
-          cd SSARE
+          cd opol
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/scraper-service:${{ github.sha }} -f ./scraper-service/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper-service:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/scraper-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/scraper-service:latest
@@ -109,7 +109,7 @@ jobs:
 
       - name: Build and Push Classification Service
         run: |
-          cd SSARE
+          cd opol
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/classification-service:${{ github.sha }} -f ./classification-service/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/classification-service:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/classification-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/classification-service:latest

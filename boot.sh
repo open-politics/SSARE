@@ -7,4 +7,4 @@ sudo docker compose up --build -d
 
 sleep 10
 
-sudo docker exec -it ssare-ollama-1 ollama pull llama3.1
+sudo docker exec -it opol-ollama-1 ollama pull llama3.1

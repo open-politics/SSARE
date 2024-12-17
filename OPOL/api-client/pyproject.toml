@@ -23,6 +23,6 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 
-urls = { "Bug Tracker" = "https://github.com/open-politics/ssare/issues" }
+urls = { "Bug Tracker" = "https://github.com/open-politics/opol/issues" }
 
 requires-python = ">=3.10"
