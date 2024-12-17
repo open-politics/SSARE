@@ -6,13 +6,9 @@ on:
       - main
 
 jobs:
-  pypi-publish:
-    name: Upload release to PyPI
+  build:
+    name: Build Package
     runs-on: ubuntu-latest
-    environment: pypi  # Optional but recommended
-    permissions:
-      id-token: write  # Mandatory for Trusted Publishing
-
     steps:
     - uses: actions/checkout@v3
 
@@ -28,8 +24,28 @@ jobs:
         cd SSARE/api-client
         python -m build
 
+    - name: Upload dist artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: dist
+        path: SSARE/api-client/dist
+
+  publish:
+    name: Upload release to PyPI
+    runs-on: ubuntu-latest
+    needs: build
+    environment: pypi  # Optional but recommended
+    permissions:
+      id-token: write  # Mandatory for Trusted Publishing
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Download dist artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: dist
+
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        # Ensure the path to the dist directory is correct
-        package: SSARE/api-client/dist/*
+        packages-dir: dist
