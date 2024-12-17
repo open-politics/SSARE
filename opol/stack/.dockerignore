@@ -1,0 +1,13 @@
+dir1/
+media/
+z_dev_scripts/
+
+copy_all.py
+copy_mains.py
+notes.py
+qcheck.py
+all.txt
+mains.txt
+
+__pycache__/
+

@@ -1,0 +1,421 @@
+services:
+
+  app:
+    build: 
+      context: .
+      dockerfile: ./app/Dockerfile
+      target: app
+    ports:
+      - "${MAIN_CORE_APP_PORT}:8089"
+    volumes:
+      - ./.store/backups:/app/backups
+    env_file:
+      - .env
+    environment:
+      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    depends_on:
+      - scraper-service
+      - postgres-service
+    networks:
+      - default
+  
+  articles_database:
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      - POSTGRES_USER=${ARTICLES_DB_USER}
+      - POSTGRES_PASSWORD=${ARTICLES_DB_PASSWORD}
+      - POSTGRES_DB=${ARTICLES_DB_NAME}
+      - POSTGRES_CONFIG_FILE=/etc/postgresql.conf
+    volumes:
+      - ./core/configs/postgres.conf:/etc/postgresql.conf
+      - ./.store/data/articles_db_data:/var/lib/postgresql/data
+    command: -c shared_preload_libraries='pg_stat_statements' -c pg_stat_statements.max=10000 -c pg_stat_statements.track=all
+    ports:
+      - "${ARTICLES_DB_PORT}:5432"
+    networks:
+      - default
+
+  classification-service:
+    build: 
+      context: .
+      dockerfile: ./classification-service/Dockerfile
+    ports:
+      - "${CLASSIFICATION_SERVICE_PORT}:5688"
+    environment:
+      - LOCAL_LLM=${LOCAL_LLM}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - default
+      
+
+  embedding-service:
+    build: 
+      context: .
+      dockerfile: ./embedding-service/Dockerfile
+      target: api
+    restart: always
+    ports:
+      - "${EMBEDDING_SERVICE_PORT}:0420"
+    depends_on:
+      - postgres-service
+    environment:
+      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - default
+      
+
+  entity-service:
+    build: 
+      context: .
+      dockerfile: ./entity-service/Dockerfile
+    restart: always
+    ports:
+      - "${ENTITY_SERVICE_PORT}:1290"
+    depends_on:
+      - postgres-service
+    environment:
+      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    networks:
+      - default
+     
+
+  geo-service:
+    build:
+      context: .
+      dockerfile: ./geo-service/Dockerfile
+    restart: no
+    networks:
+      - default
+    ports:
+      - "${GEO_SERVICE_PORT}:3690"
+    expose:
+      - "3690"
+    env_file:
+      - .env
+    environment:
+      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+
+  # litellm:
+  #   build: 
+  #     context: .
+  #     dockerfile: ./litellm/Dockerfile
+  #   volumes:
+  #     - ./opol/stack/litellm/config.yaml:/app/config.yaml
+  #   ports:
+  #     - "4000:4000"
+  #   command: >
+  #     --config '/app/config.yaml' --debug --host 0.0.0.0 --port 4000 --num_workers 8
+  #   networks:
+  #     - default
+      
+
+  
+      
+
+  # ollama:
+  #   build: 
+  #     context: .
+  #     dockerfile: ./ollama/Dockerfile
+  #   pull_policy: always
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #        devices:
+  #          - driver: nvidia
+  #            capabilities: ["gpu"]
+  #            count: all
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ./data/ollama:/root/.ollama
+  #   networks:
+  #     - default
+      
+
+  pelias-placeholder:
+    image: pelias/placeholder
+    restart: always
+    command: >
+      sh -c '
+        if [ ! -s /data/placeholder/store.sqlite3 ]; then
+          echo "Placeholder data not found or empty. Downloading..."
+          rm -f /data/placeholder/store.sqlite3
+          mkdir -p /data/placeholder
+          wget -O /data/placeholder/store.sqlite3.gz https://data.geocode.earth/placeholder/store.sqlite3.gz
+          gunzip /data/placeholder/store.sqlite3.gz
+        else
+          echo "Placeholder data found."
+        fi
+        ls -l /data/placeholder
+        ./cmd/server.sh
+      '
+    environment:
+      - PORT=${PELIAS_PLACEHOLDER_PORT}
+      - WORKERS=8
+    ports:
+      - "${PELIAS_PLACEHOLDER_PORT}:${PELIAS_PLACEHOLDER_PORT}"
+    volumes:
+      - .store/data/placeholder:/data/placeholder
+    networks:
+      - default
+      
+
+  postgres-service:
+    build: 
+      context: .
+      dockerfile: ./postgres-service/Dockerfile
+      target: app
+    volumes:
+      - ./postgres-service/alembic/versions:/app/alembic/versions
+      - ./.store/credentials/postgres-service-key.json:/app/credentials/postgres-service-key.json
+      - cloudsql:/cloudsql
+      - ./.store/backups:/app/backups
+    env_file:
+      - .env
+    ports:
+      - "${POSTGRES_SERVICE_PORT}:5434"
+    networks:
+      - default
+      
+    
+  # cloud-sql-proxy:
+  #   image: gcr.io/cloud-sql-connectors/cloud-sql-proxy
+  #   command:
+  #     - "--credentials-file=/credentials/postgres-service-key.json"
+  #     - "${CLOUD_SQL_CONNECTION_NAME}"
+  #   volumes:
+  #     - ./credentials/postgres-service-key.json:/credentials/postgres-service-key.json:ro
+  #     - cloudsql:/cloudsql
+
+  # prefect_database:
+  #   image: postgres:15
+  #   restart: always
+  #   environment:
+  #     - POSTGRES_USER=${PREFECT_DB_USER}
+  #     - POSTGRES_PASSWORD=${PREFECT_DB_PASSWORD}
+  #     - POSTGRES_DB=${PREFECT_DB_NAME}
+  #   volumes:
+  #     - ./data/prefect_db_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "${PREFECT_DB_PORT}:5432"
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${PREFECT_DB_USER} -d ${PREFECT_DB_NAME}"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - default
+      
+
+  # ray_head:
+  #   build: 
+  #     context: .
+  #     dockerfile: ./images/RayBase.Dockerfile
+  #   command: >
+  #     sh -c "ray start --head --port=6380 --dashboard-host=0.0.0.0 --block"
+  #   ports:
+  #     - "6380:6380"
+  #     - "8265:8265"
+  #     - "10001:10001"
+  #   env_file:
+  #     - .env
+  #   networks:
+  #     - default
+      
+  #   environment:
+  #     - RAY_HEAD_SERVICE_HOST=ray_head
+  #     - RAY_HEAD_SERVICE_PORT=6380
+  #   shm_size: 10.24gb
+
+  
+  # ray_worker:
+  #   build: 
+  #     context: .
+  #     dockerfile: ./images/RayBase.Dockerfile
+  #   command: >
+  #     sh -c "ray start --address=ray_head:6380 --block"
+  #   networks:
+  #     - default
+      
+  #   depends_on:
+  #     - ray_head
+  #   shm_size: 10.24gb
+    
+
+  redis:
+    image: redis:latest
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - ./core/configs/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./.store/data/redis:/data
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    networks:
+      - default
+      
+
+  scraper-service:
+    build: 
+      context: .
+      dockerfile: ./scraper-service/Dockerfile
+    ports:
+      - "${SCRAPER_SERVICE_PORT}:8081"
+    environment:
+      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/bb0713a4-8ee0-466d-a215-02f392396cb8/workspaces/befbba42-c4cb-4bce-b539-ab6bb67a99c0
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    networks:
+      - default
+      
+
+## FLOWS
+
+  flow-embedding:
+      build: 
+        context: .
+        dockerfile: ./embedding-service/Dockerfile
+        target: flow
+      restart: always
+      environment:
+        - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/bb0713a4-8ee0-466d-a215-02f392396cb8/workspaces/befbba42-c4cb-4bce-b539-ab6bb67a99c0
+        - PREFECT_API_KEY=${PREFECT_API_KEY}
+      env_file:
+        - .env
+      networks:
+        - default
+        
+
+  flow-scraping:
+    build: 
+      context: .
+      dockerfile: ./scraper-service/Dockerfile
+      target: flow
+    restart: always
+    environment:
+      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - default
+      
+
+  flow-entities:
+    build: 
+      context: .
+      dockerfile: ./entity-service/Dockerfile
+      target: flow
+    restart: no
+    environment:
+      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - default
+      
+
+  flow-classification:
+    build: 
+      context: .
+      dockerfile: ./classification-service/Dockerfile
+      target: flow
+    restart: always
+    environment:
+      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - default
+      
+
+  flow-pipeline:
+    build: 
+      context: .
+      dockerfile: ./app/Dockerfile
+      target: flow
+    restart: always
+    environment:
+      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - default
+      
+
+  # resolve_entities_flow:
+  #   build: 
+  #     context: .
+  #     dockerfile: ./postgres-service/Dockerfile
+  #     target: flow
+  #   restart: no
+  #   environment:
+  #     - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+  #     - PREFECT_API_KEY=${PREFECT_API_KEY}
+  #     - DATABASE_URL= "postgresql://postgres:postgres@postgres-service:5434/postgres"
+  #   volumes:
+  #     - ./opol/stack/postgres-service/alembic/versions:/app/alembic/versions
+  #     - ./credentials/postgres-service-key.json:/app/credentials/postgres-service-key.json
+  #     - cloudsql:/cloudsql
+  #     - ./opol/data/backups:/app/backups
+  #   ports:
+  #     - "7451:7451"
+  #   env_file:
+  #     - .env
+  #   networks:
+  #     - default
+      
+
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: prometheus
+  #   volumes:
+  #     - ./opol/stack/core/configs/prometheus.yml:/etc/prometheus/prometheus.yml
+  #   ports:
+  #     - "9090:9090"
+  #   depends_on:
+  #     - resolve_entities_flow 
+  #   networks:
+  #     - default
+      
+  
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   container_name: grafana
+  #   ports:
+  #     - "3000:3000"  # Grafana's default port
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin  # Set a secure admin password
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana  # Persist Grafana data
+  #     - ./opol/stack/core/configs/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards  # Mount provisioning
+  #     - ./opol/stack/core/configs/grafana/dashboards:/var/lib/grafana/dashboards  # Mount dashboard JSON files
+  #   depends_on:
+  #     - prometheus
+  #   networks:
+  #     - default
+      
+
+volumes:
+  articles_db_data:
+  cloudsql:
+  prefect_db_data:
+  grafana_data:
+  prefect_data:
+  r2r_db_data:
+
+networks:
+  default:
+    external: false

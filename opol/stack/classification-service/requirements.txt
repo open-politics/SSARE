@@ -1,0 +1,12 @@
+prefect
+openai
+redis
+fastapi
+sqlmodel
+pgvector
+pydantic
+instructor
+google-generativeai
+jsonref
+logfire
+logfire[asyncpg]
