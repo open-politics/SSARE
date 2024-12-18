@@ -21,113 +21,113 @@ jobs:
       - name: Build and Push Embedding Flow
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-embedding:${{ github.sha }} -f ./flows/embeddings/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-embedding:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-embedding:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-embedding:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-embedding:latest
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flow-embedding:${{ github.sha }} -f ./flows/embeddings/Dockerfile .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-embedding:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flow-embedding:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flow-embedding:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-embedding:latest
 
       - name: Build and Push Scraper Flow
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-scraper:${{ github.sha }} -f ./flows/scraping/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-scraper:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-scraper:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-scraper:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-scraper:latest
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flow-scraper:${{ github.sha }} -f ./flows/scraping/Dockerfile .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-scraper:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flow-scraper:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flow-scraper:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-scraper:latest
 
       - name: Build and Push Entities Flow
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-entities:${{ github.sha }} -f ./flows/entities/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-entities:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-entities:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-entities:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-entities:latest
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flow-entities:${{ github.sha }} -f ./flows/entities/Dockerfile .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-entities:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flow-entities:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flow-entities:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-entities:latest
       
       - name: Build and Push Geocoding Flow
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-geocoding:${{ github.sha }} -f ./flows/geocoding/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-geocoding:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-geocoding:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-geocoding:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-geocoding:latest
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flow-geocoding:${{ github.sha }} -f ./flows/geocoding/Dockerfile .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-geocoding:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flow-geocoding:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flow-geocoding:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-geocoding:latest
       
       - name: Build and Push Orchestration Flow
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-orchestration:${{ github.sha }} -f ./flows/orchestration/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-orchestration:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-orchestration:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-orchestration:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-orchestration:latest
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flow-orchestration:${{ github.sha }} -f ./flows/orchestration/Dockerfile .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-orchestration:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flow-orchestration:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flow-orchestration:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-orchestration:latest
 
       - name: Build and Push Classification Flow
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-classification:${{ github.sha }} -f ./flows/classification/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-classification:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-classification:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-classification:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-classification:latest
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flow-classification:${{ github.sha }} -f ./flows/classification/Dockerfile .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-classification:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flow-classification:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flow-classification:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-classification:latest
 
       # - name: Build and Push Custom LiteLLM
       #   run: |
       #     cd opol/stack
-      #     docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/services/litellm:${{ github.sha }} -f ./services/litellm/Dockerfile .
-      #     docker push ${{ secrets.DOCKERHUB_USERNAME }}/services/litellm:${{ github.sha }}
-      #     docker tag ${{ secrets.DOCKERHUB_USERNAME }}/services/litellm:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/services/litellm:latest
-      #     docker push ${{ secrets.DOCKERHUB_USERNAME }}/services/litellm:latest
+      #     docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/litellm:${{ github.sha }} -f ./services/litellm/Dockerfile .
+      #     docker push ${{ secrets.DOCKERHUB_USERNAME }}/litellm:${{ github.sha }}
+      #     docker tag ${{ secrets.DOCKERHUB_USERNAME }}/litellm:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/litellm:latest
+      #     docker push ${{ secrets.DOCKERHUB_USERNAME }}/litellm:latest
 
       - name: Build and Push Entity Service
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/services/entity-service:${{ github.sha }} -f ./services/entity-service/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/services/entity-service:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/services/entity-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/services/entity-service:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/services/entity-service:latest
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/entity-service:${{ github.sha }} -f ./services/entity-service/Dockerfile .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/entity-service:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/entity-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/entity-service:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/entity-service:latest
 
       - name: Build and Push Geo Service
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/services/geo-service:${{ github.sha }} -f ./services/geo-service/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/services/geo-service:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/services/geo-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/services/geo-service:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/services/geo-service:latest
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/geo-service:${{ github.sha }} -f ./services/geo-service/Dockerfile .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/geo-service:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/geo-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/geo-service:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/geo-service:latest
 
       - name: Build and Push Main Core App
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/services/opol-core-app:${{ github.sha }} -f ./services/app/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/services/opol-core-app:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/services/opol-core-app:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/services/opol-core-app:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/services/opol-core-app:latest
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/opol-core-app:${{ github.sha }} -f ./services/app/Dockerfile .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/opol-core-app:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/opol-core-app:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/opol-core-app:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/opol-core-app:latest
 
       - name: Build and Push Embedding Service
         run: |
           cd opol/stack
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/embedding-service:${{ github.sha }} -f ./services/embedding-service/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/embedding-service:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/services/embedding-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/services/embedding-service:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/services/embedding-service:latest
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/embedding-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/embedding-service:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/embedding-service:latest
 
       - name: Build and Push Postgres Service
         run: |
           cd opol/stack
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/postgres-service:${{ github.sha }} -f ./services/postgres-service/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/services/postgres-service:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/services/postgres-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/services/postgres-service:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/services/postgres-service:latest
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/postgres-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/postgres-service:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/postgres-service:latest
 
       - name: Build and Push Scraper Service
         run: |
           cd opol/stack
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/scraper-service:${{ github.sha }} -f ./services/scraper-service/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/services/scraper-service:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/services/scraper-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/services/scraper-service:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/services/scraper-service:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper-service:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/scraper-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/scraper-service:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/scraper-service:latest
 
       - name: Build and Push Classification Service
         run: |
           cd opol/stack
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/classification-service:${{ github.sha }} -f ./services/classification-service/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/services/classification-service:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/services/classification-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/services/classification-service:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/services/classification-service:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/classification-service:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/classification-service:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/classification-service:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/classification-service:latest
  
           
