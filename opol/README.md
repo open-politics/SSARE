@@ -1,21 +1,41 @@
+
+## Directory Components
+
 This directory contains the following components:
 
-- `dockerfiles/`: A collection of Dockerfiles for our services.
-- `python-client/`: A Python client for seamless interaction with our API.
-- `stack/`: Our services configured in a Docker Compose setup for local execution.
+- **_dockerfiles/**: 
+  - Contains shared Dockerfiles and requirements for building base images.
+  - Includes files like `RayBase.Dockerfile` and `raybaserequirements.txt` to ensure a consistent environment across services and flows.
 
-Within the `stack` directory, you will find the majority of the relevant code for the services.
+- **compose.local.yml & compose.yml**: 
+  - Docker Compose files for configuring and running the entire stack locally.
+  - Facilitates easy orchestration of services and flows.
 
-This setup is a microservice architecture consisting of FastAPI servers and Prefect flows, enabling the complete deployment of Opol on a local machine.
+- **core/**: 
+  - A collection of shared modules and configurations.
+  - Includes database connections, middleware, and utility functions used across different services and flows.
 
-Dependencies are domain-specific and are separated into shared Dockerfiles. For example, the Embedding Service (for real-time embedding creation) and the Prefect embedding flow (for batch embedding creation) are both built from the same Dockerfile and directory (/embedding-service). 
+- **flows/**: 
+  - Contains Prefect flow definitions and Dockerfiles for each flow.
+  - Each subdirectory (e.g., classification, embeddings, entities) includes a Dockerfile and flow scripts for batch processing and task orchestration.
 
-Prefect is used to organize data pipelines & operations into orchestrated flows. Their tasks (from execution, retrying and logging) are automatically handled within Prefects's ressouce allocation capabilities. From local execution to large scale orchestration, Prefect is the backbone of our orchestration layer.
+- **services/**: 
+  - Houses the microservices, each with its own directory.
+  - Each directory contains a Dockerfile, service-specific scripts, and configuration files.
+  - Services are built using FastAPI and handle real-time operations.
 
-For lightweight flows (such as fetching and modifying text pages), simple background tasks are executed using Prefect workers.
+## Prefect for Orchestration
 
-Heavier flows are managed with separate Dockerfiles and are executed using the RayTaskRunner in Prefect, which employs Ray worker nodes for parallel execution.
+- Prefect is used to organize data pipelines and operations into orchestrated flows.
+- It manages task execution, retrying, and logging, leveraging Prefect's resource allocation capabilities.
+- Prefect serves as the backbone of the orchestration layer, from local execution to large-scale orchestration.
 
-While this may not provide a direct advantage on smaller machines where heavy parallel execution is unnecessary, it supports two beneficial patterns:
-- Scaling up processing power by spawning additional Ray workers (adjust the `replicas` value in the compose file).
-- Utilizing common resource pools to which tasks are assigned.
+## Flow Execution
+
+- Lightweight flows, such as fetching and modifying text pages, are executed using Prefect workers.
+- Heavier flows are managed with separate Dockerfiles and executed using the RayTaskRunner in Prefect, which utilizes Ray worker nodes for parallel execution.
+
+## APIs & Services
+
+- APIs are built using FastAPI and are responsible for real-time operations.
+- Services are built using FastAPI and are responsible for real-time operations.

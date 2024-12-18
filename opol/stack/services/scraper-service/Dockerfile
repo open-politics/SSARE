@@ -1,9 +1,9 @@
 # Base stage
-FROM python:3.11 AS base
+FROM python:3.11
 
 WORKDIR /app
 
-COPY scraper-service/requirements.txt .
+COPY services/scraper-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 RUN apt-get update && apt-get install -y wget gnupg2
@@ -14,15 +14,8 @@ RUN apt-get update && apt-get install -y google-chrome-stable
 RUN playwright install
 RUN apt-get install -y supervisor
 
-COPY core/ ./core
-COPY scraper-service/ .
+COPY ../../core/ ./core
+COPY services/scraper-service/ .
 
-# Flow service stage
-FROM base AS flow
-COPY scraper-service/flows/scraping_flow.py .
-CMD ["python", "scraping_flow.py"]
-
-# API service stage
-FROM base AS api
-COPY scraper-service/main.py .
+COPY services/scraper-service/main.py .
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8081"]

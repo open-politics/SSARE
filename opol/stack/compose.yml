@@ -3,8 +3,7 @@ services:
   app:
     build: 
       context: .
-      dockerfile: ./app/Dockerfile
-      target: app
+      dockerfile: ./services/app/Dockerfile
     ports:
       - "${MAIN_CORE_APP_PORT}:8089"
     volumes:
@@ -40,7 +39,7 @@ services:
   classification-service:
     build: 
       context: .
-      dockerfile: ./classification-service/Dockerfile
+      dockerfile: ./services/classification-service/Dockerfile
     ports:
       - "${CLASSIFICATION_SERVICE_PORT}:5688"
     environment:
@@ -57,8 +56,7 @@ services:
   embedding-service:
     build: 
       context: .
-      dockerfile: ./embedding-service/Dockerfile
-      target: api
+      dockerfile: ./services/embedding-service/Dockerfile
     restart: always
     ports:
       - "${EMBEDDING_SERVICE_PORT}:0420"
@@ -76,7 +74,7 @@ services:
   entity-service:
     build: 
       context: .
-      dockerfile: ./entity-service/Dockerfile
+      dockerfile: ./services/entity-service/Dockerfile
     restart: always
     ports:
       - "${ENTITY_SERVICE_PORT}:1290"
@@ -92,7 +90,7 @@ services:
   geo-service:
     build:
       context: .
-      dockerfile: ./geo-service/Dockerfile
+      dockerfile: ./services/geo-service/Dockerfile
     restart: no
     networks:
       - default
@@ -174,10 +172,9 @@ services:
   postgres-service:
     build: 
       context: .
-      dockerfile: ./postgres-service/Dockerfile
-      target: app
+      dockerfile: ./services/postgres-service/Dockerfile
     volumes:
-      - ./postgres-service/alembic/versions:/app/alembic/versions
+      - ./services/postgres-service/alembic/versions:/app/alembic/versions
       - ./.store/credentials/postgres-service-key.json:/app/credentials/postgres-service-key.json
       - cloudsql:/cloudsql
       - ./.store/backups:/app/backups
@@ -268,7 +265,7 @@ services:
   scraper-service:
     build: 
       context: .
-      dockerfile: ./scraper-service/Dockerfile
+      dockerfile: ./services/scraper-service/Dockerfile
     ports:
       - "${SCRAPER_SERVICE_PORT}:8081"
     environment:
@@ -281,25 +278,23 @@ services:
 ## FLOWS
 
   flow-embedding:
-      build: 
-        context: .
-        dockerfile: ./embedding-service/Dockerfile
-        target: flow
-      restart: always
-      environment:
-        - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/bb0713a4-8ee0-466d-a215-02f392396cb8/workspaces/befbba42-c4cb-4bce-b539-ab6bb67a99c0
-        - PREFECT_API_KEY=${PREFECT_API_KEY}
-      env_file:
-        - .env
-      networks:
-        - default
+    build: 
+      context: .
+      dockerfile: ./flows/embeddings/Dockerfile
+    restart: always
+    environment:
+      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/bb0713a4-8ee0-466d-a215-02f392396cb8/workspaces/befbba42-c4cb-4bce-b539-ab6bb67a99c0
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - default
         
 
   flow-scraping:
     build: 
       context: .
-      dockerfile: ./scraper-service/Dockerfile
-      target: flow
+      dockerfile: ./flows/scraping/Dockerfile
     restart: always
     environment:
       - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
@@ -313,8 +308,7 @@ services:
   flow-entities:
     build: 
       context: .
-      dockerfile: ./entity-service/Dockerfile
-      target: flow
+      dockerfile: ./flows/entities/Dockerfile
     restart: no
     environment:
       - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
@@ -328,8 +322,7 @@ services:
   flow-classification:
     build: 
       context: .
-      dockerfile: ./classification-service/Dockerfile
-      target: flow
+      dockerfile: ./flows/classification/Dockerfile
     restart: always
     environment:
       - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
@@ -343,12 +336,24 @@ services:
   flow-pipeline:
     build: 
       context: .
-      dockerfile: ./app/Dockerfile
-      target: flow
+      dockerfile: ./flows/orchestration/Dockerfile
     restart: always
     environment:
       - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
       - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - default
+    
+  flow-geocoding:
+    build: 
+      context: .
+      dockerfile: ./flows/geocoding/Dockerfile
+    restart: always
+    environment:
+      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+      - PREFECT_API_KEY=${PREFECT_API_KEY} 
     env_file:
       - .env
     networks:
@@ -359,7 +364,6 @@ services:
   #   build: 
   #     context: .
   #     dockerfile: ./postgres-service/Dockerfile
-  #     target: flow
   #   restart: no
   #   environment:
   #     - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}

@@ -11,24 +11,18 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements.txt file and install Python dependencies
-COPY postgres-service/requirements.txt /app/
+COPY services/postgres-service/requirements.txt /app/
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy the postgres-service directory
-COPY postgres-service .
+COPY services/postgres-service .
 
 # Copy the core directory
-COPY ../core/ ./core
-COPY postgres-service/flows ./
+COPY ../../core/ ./core
 
 # Copy the alembic directory
-COPY postgres-service/alembic ./alembic
+COPY services/postgres-service/alembic ./alembic
+COPY services/postgres-service/start.sh .
+RUN chmod +x start.sh
 
-# Make the start script executable
-RUN chmod +x /app/start.sh
-
-FROM base AS flow
-CMD ["python", "resolve_location_entities.py"]
-
-FROM base AS app
-CMD ["/app/start.sh"]
+CMD ["./start.sh"]

@@ -1,9 +1,8 @@
-   <h1> OPOL 🌐📰🔍🧠🗺️🪡📊🤖🗄️🔧</h1>Open Source Political Intelligence needs a news brain! 
-
-
-We are organising methods and infrastructure focusing on political analysis and reasearch.
+![opol](.github/media/opol.png)
 
 On a mission to find the **#NeedleInTheHayStack**
+We are organising methods and infrastructure focusing on political analysis and reasearch.
+
 
 This is the *data engine* for Open Politics.
 Please also see:

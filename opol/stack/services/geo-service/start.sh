@@ -20,7 +20,7 @@ while true; do
     exit 1
   fi
 
-  if ! pgrep -f "python -m run" > /dev/null; then
+  if ! pgrep -f "python -m run_with_logfire" > /dev/null; then
     echo "FastAPI server has stopped. Exiting."
     exit 1
   fi

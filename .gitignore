@@ -29,3 +29,6 @@ credentials/
 commands.txt
 helm/values.yaml
 z_dev_scripts
+
+opol/opol/stack/services.sh
+opol/opol/stack/flows.sh
