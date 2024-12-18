@@ -21,7 +21,7 @@ jobs:
       - name: Build and Push Embedding Flow
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-embedding:${{ github.sha }} -f ./flows/embeddings/Dockerfile 
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-embedding:${{ github.sha }} -f ./flows/embeddings/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-embedding:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-embedding:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-embedding:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-embedding:latest
@@ -29,7 +29,7 @@ jobs:
       - name: Build and Push Scraper Flow
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-scraper:${{ github.sha }} -f ./flows/scraping/Dockerfile 
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-scraper:${{ github.sha }} -f ./flows/scraping/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-scraper:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-scraper:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-scraper:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-scraper:latest
@@ -37,7 +37,7 @@ jobs:
       - name: Build and Push Entities Flow
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-entities:${{ github.sha }} -f ./flows/entities/Dockerfile 
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-entities:${{ github.sha }} -f ./flows/entities/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-entities:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-entities:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-entities:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-entities:latest
@@ -45,7 +45,7 @@ jobs:
       - name: Build and Push Geocoding Flow
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-geocoding:${{ github.sha }} -f ./flows/geocoding/Dockerfile 
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-geocoding:${{ github.sha }} -f ./flows/geocoding/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-geocoding:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-geocoding:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-geocoding:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-geocoding:latest
@@ -53,7 +53,7 @@ jobs:
       - name: Build and Push Orchestration Flow
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-orchestration:${{ github.sha }} -f ./flows/orchestration/Dockerfile 
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-orchestration:${{ github.sha }} -f ./flows/orchestration/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-orchestration:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-orchestration:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-orchestration:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-orchestration:latest
@@ -61,7 +61,7 @@ jobs:
       - name: Build and Push Classification Flow
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-classification:${{ github.sha }} -f ./flows/classification/Dockerfile 
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-classification:${{ github.sha }} -f ./flows/classification/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-classification:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-classification:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-classification:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/flows/flow-classification:latest
