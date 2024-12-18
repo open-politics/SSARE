@@ -8,7 +8,7 @@ class ContentRelevance(BaseModel):
     Assess whether the given headline represents a substantial article or merely unwanted scraped material.
     If the headline consists solely of a single keyword such as "Technology," "Asia," "404 - Page not found," or "Data Privacy," it is likely deemed unwanted and should be classified as "Other."
     """
-    type: Literal["Content", "Other"]
+    content_type: Literal["Content", "Other"]
 
 # Comprehensive Evaluation using Literal
 class ContentEvaluation(BaseModel):

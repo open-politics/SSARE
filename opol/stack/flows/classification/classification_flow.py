@@ -6,18 +6,21 @@ from core.utils import UUIDEncoder, logger
 from core.models import Content
 from core.service_mapping import get_redis_url
 from classification_models import ContentEvaluation, ContentRelevance
-from classx import classify_with_model
+from xclass import XClass
 from core.service_mapping import ServiceConfig
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from sqlalchemy.exc import SQLAlchemyError
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.futures import wait
-
 import json
 import os
-from uuid import UUID
 
-# Define the model to use
-model = "gemini-1.5-flash-latest"
-config = ServiceConfig()  # Initialize config
+# Initialize config
+config = ServiceConfig()
+
+# Initialize ClassificationService
+xclass = XClass()
 
 @task(log_prints=True)
 async def retrieve_contents_from_redis(batch_size: int) -> List[Content]:
@@ -40,26 +43,32 @@ async def retrieve_contents_from_redis(batch_size: int) -> List[Content]:
 
 @task(log_prints=True)
 async def classify_content(content: Content) -> dict:
-    """Classify the content using LLM for relevance asynchronously."""
-    response = classify_with_model(
-        content=content,
-        response_model=ContentRelevance,
-        system_prompt="You are an AI assistant that analyzes articles for relevance.",
-        user_content=f"Evaluate this article for relevance:\n\nHeadline: {content.title}\n\nContent: {content.text_content[:320]}"
-    )
-    logger.debug(f"Model response: {response}")
-    return response.dict()  # Convert to dictionary for serialization
+    """Classify the content for relevance asynchronously."""
+    try:
+        user_text = f"Evaluate this article for relevance:\n\nHeadline: {content.title}\n\nContent: {content.text_content[:320]}"
+        classification_result = xclass.classify(
+            response_model=ContentRelevance,
+            text=user_text
+        )
+        logger.debug(f"Model response: {classification_result}")
+        return classification_result.model_dump()
+    except Exception as e:
+        logger.error(f"Error classifying content ID {content.id}: {e}")
+        return {}
 
 @task(log_prints=True)
 async def evaluate_content(content: Content) -> ContentEvaluation:
-    """Evaluate the content using LLM if it is relevant asynchronously."""
-    response = classify_with_model(
-        content=content,
-        response_model=ContentEvaluation,
-        system_prompt="You are an AI assistant that provides comprehensive evaluations.",
-        user_content=f"Evaluate this article:\n\nHeadline: {content.title}\n\nContent: {content.text_content[:320]}"
-    )
-    return response
+    """Evaluate the content if it is relevant asynchronously."""
+    try:
+        user_text = f"Evaluate this article:\n\nHeadline: {content.title}\n\nContent: {content.text_content[:320]}"
+        classification_result = xclass.classify(
+            response_model=ContentEvaluation,
+            text=user_text
+        )
+        return classification_result
+    except Exception as e:
+        logger.error(f"Error evaluating content ID {content.id}: {e}")
+        return ContentEvaluation()
 
 @task(log_prints=True)
 async def write_contents_to_redis(serialized_contents):
@@ -85,10 +94,31 @@ async def classify_contents_flow(batch_size: int):
         return []
 
     futures = [classify_content.submit(content) for content in contents]
-    wait(futures)  # Ensure all tasks are completed
+    # await wait(futures)  # Ensure all tasks are completed
 
     results = [future.result() for future in futures]  # Resolve futures
-    evaluated_contents = [content for content in results if content]
+    evaluated_contents = []
+
+    for content_dict, content in zip(results, contents):
+        if not content_dict:
+            continue
+        if content_dict.get("type") != "Other":
+            llm_evaluation = await evaluate_content(content)
+            db_evaluation = ContentEvaluation(
+                content_id=content.id,
+                **llm_evaluation.model_dump()
+            )
+
+            content_dict_processed = {
+                'url': content.url,
+                'title': content.title,
+                'evaluations': db_evaluation.model_dump(exclude={'id'})
+            }
+            evaluated_contents.append(content_dict_processed)
+        else:
+            logger.info(f"Content classified as irrelevant: {content.title[:50]}...")
+            redis_conn = await Redis.from_url(get_redis_url(), db=4)
+            await redis_conn.rpush('filtered_out_queue', json.dumps(content.model_dump(), cls=UUIDEncoder))
 
     if evaluated_contents:
         logger.info(f"Writing {len(evaluated_contents)} evaluated contents to Redis")
@@ -96,13 +126,16 @@ async def classify_contents_flow(batch_size: int):
     return evaluated_contents
 
 async def process_content(content):
+    """
+    This function can be used for individual content processing if needed.
+    """
     try:
         relevance = await classify_content(content)
         logger.info(f"Relevance result: {relevance}")
-        if relevance.type == "Other":
+        if relevance.get("type") == "Other":
             logger.info(f"Content classified as irrelevant: {content.title[:50]}...")
             redis_conn = await Redis.from_url(get_redis_url(), db=4)
-            await redis_conn.rpush('filtered_out_queue', json.dumps(content.dict(), cls=UUIDEncoder))
+            await redis_conn.rpush('filtered_out_queue', json.dumps(content.model_dump(), cls=UUIDEncoder))
             return None
         else:
             llm_evaluation = await evaluate_content(content)
@@ -110,13 +143,13 @@ async def process_content(content):
             
             db_evaluation = ContentEvaluation(
                 content_id=content.id,
-                **llm_evaluation.dict()
+                **llm_evaluation.model_dump()
             )
 
             content_dict = {
                 'url': content.url,
                 'title': content.title,
-                'evaluations': db_evaluation.dict(exclude={'id'})
+                'evaluations': db_evaluation.model_dump(exclude={'id'})
             }
             return content_dict
     except Exception as e:
@@ -128,5 +161,5 @@ if __name__ == "__main__":
     asyncio.run(classify_contents_flow.serve(
         name="classify-contents-deployment",
         cron="*/10 * * * *", 
-        parameters={"batch_size": 100}
+        parameters={"batch_size": 10}
     ))
