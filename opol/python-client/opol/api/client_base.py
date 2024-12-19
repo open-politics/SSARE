@@ -3,6 +3,7 @@ from typing import Dict, Any
 import httpx
 import logging
 from urllib.parse import urljoin
+import os
 
 from .url_strategy import RemoteURLBuilder, LocalURLBuilder, ContainerURLBuilder
 
@@ -11,7 +12,7 @@ logger = logging.getLogger(__name__)
 class BaseClient(ABC):
     def __init__(self, mode: str, api_key: str = None, timeout: int = 60,
                  service_name: str = None, port: int = None):
-        self.mode = mode
+        self.mode = mode if mode else os.getenv('OPOL_MODE', 'remote')
         self.api_key = api_key
         self.timeout = timeout
         self.service_name = service_name
