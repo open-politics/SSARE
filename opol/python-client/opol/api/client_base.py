@@ -1,61 +1,73 @@
+from abc import ABC
+from typing import Dict, Any
 import httpx
-from typing import Any, Dict
-from urllib.parse import urlparse
 import logging
-import os
+from urllib.parse import urljoin
+
+from .url_strategy import RemoteURLBuilder, LocalURLBuilder, ContainerURLBuilder
 
 logger = logging.getLogger(__name__)
 
-class BaseClient:
-    def __init__(self, mode: str, base_url: str, api_key: str = None, timeout: int = 60):
-        # Validate base URL
-        # parsed_url = urlparse(base_url)
-        # if not parsed_url.scheme or not parsed_url.netloc:
-        #     raise ValueError("Invalid base URL provided.")
-        
-        self.base_url = base_url
+class BaseClient(ABC):
+    def __init__(self, mode: str, api_key: str = None, timeout: int = 60,
+                 service_name: str = None, port: int = None):
+        self.mode = mode
         self.api_key = api_key
-        if not self.api_key and mode == "remote":
-            try:
-                self.api_key = os.environ["OPOL_API_KEY"]
-                assert self.api_key != "", "API key is required."
-            except KeyError:
-                raise ValueError("API key is required.")
-        
         self.timeout = timeout
-        self.client = httpx.Client(timeout=self.timeout)
-        self.mode = mode if mode else os.environ.get("OPOL_MODE") if os.environ.get("OPOL_MODE") else "remote"
+        self.service_name = service_name
+        self.port = port
+        self.client = httpx.Client(timeout=timeout)
+
+        # Choose the URL builder strategy
+        if mode == "remote":
+            self.url_builder = RemoteURLBuilder()
+        elif mode == "local":
+            self.url_builder = LocalURLBuilder()
+        elif mode == "container":
+            self.url_builder = ContainerURLBuilder()
+        else:
+            raise ValueError(f"Unsupported mode: {mode}")
+
+    def get_base_url(self) -> str:
+        return self.url_builder.build_base_url(self.service_name, self.port)
+
+    def build_url(self, endpoint: str) -> str:
+        # Ensure endpoint does not start with a slash
+        endpoint = endpoint.lstrip('/')
+        base_url = self.get_base_url()
+        # Use a simple join since we ensured trailing slash on base and no leading slash on endpoint
+        return base_url + endpoint
 
     def get(self, endpoint: str, params: Dict[str, Any] = None) -> Any:
         headers = {}
         if self.api_key:
             headers['apikey'] = self.api_key  
+        full_url = self.build_url(endpoint)
         try:
-            full_url = f"{self.base_url}{endpoint}"
             response = self.client.get(full_url, params=params, headers=headers)
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as e:
-            print(f"HTTP error occurred: {e} for URL: {full_url}")
+            logger.error(f"HTTP error occurred: {e} for URL: {full_url}")
             raise
         except httpx.RequestError as e:
-            print(f"Request error occurred: {e} for URL: {full_url}")
+            logger.error(f"Request error occurred: {e} for URL: {full_url}")
             raise
 
     def post(self, endpoint: str, json: Dict[str, Any] = None) -> Any:
         headers = {}
         if self.api_key:
             headers['apikey'] = self.api_key  
+        full_url = self.build_url(endpoint)
         try:
-            request = self.client.build_request("POST", f"{self.base_url}{endpoint}", json=json, headers=headers)
-            response = self.client.send(request)
+            response = self.client.post(full_url, json=json, headers=headers)
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as e:
-            print(f"HTTP error occurred: {e}")
+            logger.error(f"HTTP error occurred: {e} for URL: {full_url}")
             raise
         except httpx.RequestError as e:
-            print(f"Request error occurred: {e}")
+            logger.error(f"Request error occurred: {e} for URL: {full_url}")
             raise
 
     def close(self):

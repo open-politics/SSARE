@@ -14,4 +14,6 @@ opol/api/articles.py
 opol/api/classification.py
 opol/api/client_base.py
 opol/api/entities.py
+opol/api/geo.py
 opol/api/geojson.py
+opol/api/url_strategy.py
