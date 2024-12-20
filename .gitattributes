@@ -1,0 +1,8 @@
+# Ignore HTML files
+*.html linguist-vendored
+
+# Ignore CSS files
+*.css linguist-vendored
+
+# Ignore JS files
+*.js linguist-vendored
