@@ -15,15 +15,7 @@ git add .
 # Commit changes with a message
 git commit -m "Updating package"
 
-# Extract version from setup.cfg or pyproject.toml
-if grep -q 'version =' setup.cfg; then
-    VERSION=$(grep -Po '(?<=version = ")[^"]*' setup.cfg)
-elif grep -q 'version =' pyproject.toml; then
-    VERSION=$(grep -Po '(?<=version = ")[^"]*' pyproject.toml)
-else
-    echo "Version not found in setup.cfg or pyproject.toml"
-    exit 1
-fi
+VERSION=$(grep -oP '(?<=version = )\d+\.\d+\.\d+' setup.cfg)
 
 # Check if the tag already exists
 if git rev-parse "v$VERSION" >/dev/null 2>&1; then
