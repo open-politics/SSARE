@@ -13,7 +13,7 @@ python3 -m build  # Use python3 if python is not available
 git add .
 
 # Commit changes with a message
-git commit -m "Updating package"
+git commit -m "Updating package (oops)"
 
 VERSION=$(grep -oP '(?<=version = )\d+\.\d+\.\d+' setup.cfg)
 
