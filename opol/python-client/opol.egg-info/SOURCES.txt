@@ -13,7 +13,11 @@ opol/api/__init__.py
 opol/api/articles.py
 opol/api/classification.py
 opol/api/client_base.py
+opol/api/economic.py
 opol/api/entities.py
+opol/api/fastclass.py
 opol/api/geo.py
 opol/api/geojson.py
+opol/api/legislation.py
+opol/api/scraping.py
 opol/api/url_strategy.py

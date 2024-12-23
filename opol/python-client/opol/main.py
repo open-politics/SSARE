@@ -2,6 +2,8 @@ from .api.articles import Articles
 from .api.entities import Entities
 from .api.geo import Geo
 from .api.classification import Classification
+from .api.scraping import Scraping
+from .api.legislation import Legislation
 import os
 
 class OPOL:
@@ -14,3 +16,5 @@ class OPOL:
         self.articles = Articles(mode, api_key, timeout=timeout)
         self.entities = Entities(mode, api_key, timeout=timeout)
         self.classification = Classification(mode, api_key, timeout=timeout)
+        self.scraping = Scraping(mode, api_key, timeout=timeout)
+        self.legislation = Legislation(mode, api_key, timeout=timeout)
