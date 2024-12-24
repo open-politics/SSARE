@@ -6,3 +6,6 @@
 
 # Ignore JS files
 *.js linguist-vendored
+
+# Ignore Jupyter Notebooks
+*.ipynb linguist-vendored
