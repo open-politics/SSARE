@@ -1,371 +1,163 @@
-![opol](.github/media/opol.png)
+![SSARE](.github/media/opol.png)
 
-On a mission to find the **#NeedleInTheHayStack**
+**On a mission to find the #NeedleInTheHayStack**
 
-This repository holds the code for the opol stack.
+Opol is the data engine for Open Politics—an open-source, self-hostable solution designed to orchestrate public intelligence operations (O(P)SINT). We combine data engineering, political science, and OSINT best practices to collect, process, and analyze a wide variety of open-source data related to politics, geopolitics, economy, legislation, and more. Our goal is to offer a comprehensive resource that supports deep political, data-driven analyses and fosters transparency.
 
-It includes two core components:
+## Table of Contents
+- [Introduction](#introduction)
+- [Features](#features)
+- [Data Coverage](#data-coverage)
+- [This Repository](#this-repository)
+  1. [Python Client](#python-client)
+  2. [The Stack](#the-stack)
+- [Quick Installation and Usage](#quick-installation-and-usage)
+- [Example Usage](#example-usage)
+- [Further Documentation](#further-documentation)
+- [Contributing](#contributing)
+- [License](#license)
 
-- The python client (which this Readme focuses on)
-- The data stack
 
-The python client provides an interface to interact with the tools of opol.
-If you care about how it's done, want to review it or maybe help us build this project please look into
-[opol/stack](opol/stack/README.md) where you will find more documentation.
+## Introduction
+### What is O(P)SINT?
+Open Source Political Intelligence (O(P)SINT) is a specialized form of OSINT, tailored for political analysis. It integrates:
 
+- **Data engineering** for large-scale data processing and management
+- **Political science** for structuring, analyzing, and interpreting politically relevant data
+- **Open-source principles** ensuring community-driven improvements, transparency, and extensibility
 
-For more information on how you can use the python client please look into this [Jupyter Notebook](opol/python-client/prototype.ipynb)
+### Why Opol?
+- **Better Data Access**: A robust platform that centralizes data from multiple sources (news, economic statistics, polls, legislation).
+- **Scalable & Modular**: Microservice architecture, container-based deployment, and a flexible pipeline orchestrated via Prefect.
+- **Extendable**: Easily add your own sources, classification schemes, or transformations.
+- **Transparency & Community**: This is a public intelligence operation—community contributions and reviews are welcomed.
 
-You can install opol with 
-```bash 
+## Features
+Opol tackles the entire data lifecycle—from ingestion to analysis—and exposes interfaces for advanced capabilities:
+
+- **Scraping**: Collect data such as news, economic metrics, polls, and legislation from specified sources.
+- **Embeddings**: Transform text into vector embeddings for semantic search and deeper NLP tasks.
+- **Entity Extraction**: Identify people, locations, organizations, geo-political entities, and more.
+- **Geocoding**: Convert recognized locations into latitude-longitude data for mapping or geospatial analysis.
+- **LLM Classifications**: Classify documents using large language models to annotate content with event types, topics, or relevance scores.
+- **Vector Database**: Index semantic embeddings in a specialized store (e.g., pgvector) for robust text similarity queries.
+- **SQL Database**: Store article metadata (topics, entities, classification scores, events) in a relational database.
+- **Utilities**: Helpers like generating GeoJSON, using SearXng for meta-search, or hooking up to any LLM for contextual retrieval.
+
+## Data Coverage
+Because global coverage is huge, we focus on building reliable, modular methods that can be extended to new geographies and data sets. Current efforts are aimed at:
+
+- **Germany and the European Union (EU)**:
+  - Legislative data (Bundestag, EU Parliament)
+  - Economic and polls
+- **International**:
+  - Focus on the Middle East, Eastern Europe, Africa, and Asia for major geopolitical news
+  - OECD-based economic data ingestion (e.g., GDP and GDP Growth)
+
+We encourage public contributions to add new sources, modules, or classification schemes—ensuring transparency and accountability in how and what we collect.
+
+## This Repository
+This repo (named opol) contains two core components:
+
+### Python Client
+A user-friendly interface to interact with the Opol engine. You can install it from PyPI (`pip install opol`) and integrate it in your Python scripts or Jupyter notebooks.
+
+### The Stack
+A Docker + FastAPI microservice stack orchestrated by Prefect. It powers the ingestion, transformation, classification, geocoding, and search functionalities.
+
+For advanced usage, environment configurations, and microservice definitions, see the opol/stack documentation.
+
+## Quick Installation and Usage
+Below is a minimal quickstart for local setup. For advanced usage, see the [Stack Documentation](opol/stack/README.md).
+
+**Install the Python client:**
+```bash
 pip install opol
 ```
 
-
-## This documentation is being reworked, the following is a bit old:
-
-
-This is the *data engine* for Open Politics.
-Please also see:
-- [Webapp](https://github.com/open-politics/open-politics)
-- [Technical Documentation](https://docs.opol.io)
-- [Blog](https://blog.opol.io)
-
-This repository: 
-**opol** stands for.. surprise: **O**pen **Pol**itics 
-
-It is an
-an open-source self-hostable stack that comfortably orchestrates: \
-    - scraping of arbitrary sourcing scripts \
-    - processing into vector representations \
-    - Named Entity Recognition (like locations, persons, organisation, geo.-pol. entities) \
-    - geocoding of recognized locations \
-    - storing \
-    - and querying of news articles.
-
-**Delivering:**  
-    - An up to date Vector Search news retrieval endpoint for RAG/ LLM applications \
-    - An up to date news SQL database for lots of other applications \
-    - A resource to track entities over arbitrary sources with simple sorting scripts (like affiliations, organisations) \
-    - Geojson for article locations or related entities on a map
-
-**Spin up your own news brain!**
-
-- [Introduction](#introduction)
-- [Installation](#installation)
-- [Adding Sources](#adding-sources)
-- [Architecture and Storage](#architecture-and-storage)
-- [Flow Orchestration with Prefect](#flow-orchestration-with-prefect)
-- [High Level Diagram](#high-level-diagram)
-- [Services](#services)
-- [Usage](#usage)
-- [Use Cases](#use-cases)
-    - [Entity Ranking](#entity-ranking)
-    - [GeoJSON](#geojson)
-- [Future Roadmap](#future-roadmap)
-- [Participation: Script Contributions](#participation-script-contributions)
-- [Important Notes](#important-notes)
-- [Licensing](#licensing)
-
-
-***Semantic Search Engine?** \
-**Semantic Search** is a process that retrieves related articles by contextual similarity of situations described in natural language. A retrieval technique which opens **up new paradigms of information ranking and retrieval**. It is a quite popular choice ***to enhance Large Language Models with a "memory"*** of relevant articles. This project hopes to combine the amenities of a classical SQL database with a vector database and deliver a **useful, scalable and collectively engineered data stream** that is unprecedented.*
-
-
-
-
-![opol](.github/media/banner.jpg)
-
-## Introduction
-
-opol serves as an efficient and scalable resource for semantic search and article recommendations, catering primarily to political news data.
-
-The engine is adaptable to any article/ document, requiring only a sourcing script that outputs the data in the format of a dataframe with the columns: 
-
-**|| url | headline | paragraphs | source ||** < - This is all your script needs to produce
-Once integrated, opol processes these articles using embeddings models of your choice (upcoming, currently hardcoded), stores their vector representations in a Qdrant vector database, and maintains a full copy in a PostgreSQL database. 
-
-Furthermore all articles' text is undergoing Named Entity Recognition (NER) where entities such as geo-political entities, affiliations, persons or organisation names.
-
-The GPE (Geoplolitical Entity) tags are the geoencoded, e.g. for the recognised location "Berlin" it returns the latitude and longitude and passes a geojson file.
-
-**THE FINAL RESULT** is a live postgres database with articles saved using this data schema (as pydantic/sqlmodel model):
-![Basis SQLModel/Pydantic Model](.github/media/opp_base_model.png)
-
-
-PLUS
-
-Multiple query interfaces to retrieve the data. From the main dashboard to (upcoming) numerous rag pipelines and knowledge graph features.
-We aim to provide numerous search entrypoints from Elastic Search, Keyword Matching to Semantic Search and Geospatial Queries.
-![Simple UI](.github/media/opp_dashboard_0.png)
-
-Which yields results like this:
-![Results](.github/media/opol_results_new.png)
-
-Please note that the current classifications are derived from unoptimized prompts and arbitrary scales (some for testing purposes) using Llama 3.1 from Ollama as the classifier. In future updates, the prompt engineering for these classifications will be moved to environment files or similar configurable setups, allowing for easy customization of your system. Additionally, we plan to implement TextGrad as a background engine to automatically optimize prompts, further enhancing the classification process.
-
-
-That can be used in a lot of ways already, have fun!
-
-
-## High Level Diagramm:
-
-![High Level Architecture](.github/media/opol_high_level_diagramm_github.png)
-This diagram is currently outdated. Key updates include:
-- Embeddings are now stored in PostgreSQL using the pgvector extension
-- Named Entity Recognition (NER) and Geocoding processes have been added
-
-Side Note:
-The coordinates of the geocodes are also inserted as a vector (2) column. We aim to use this to enable hybrid query mechanisms for semantic search incorporating geospatial information.
-
-## Introduction
-Before we can make use of our own scraping intelligence brain. Let's install it.
-### Install
-1. Download the source code by cloning the repository.
-    ```bash
-    git clone https://github.com/JimVincentW/opol.git
-    ``` 
-2. Initiate the setup:
-   ```bash
-   cd opol
-   docker-compose up --build
-   ```
-2. Go to the dashboard under
+**Clone the Repository & Boot the Stack** to self-host: \
+*(Needs ~32G of RAM)*
 ```bash
-http://localhost:8089/
+git clone https://github.com/open-politics/opol.git
+cd opol/opol/stack
+mv .env.example .env
+
+# Boot with local Prefect server for orchestration
+docker compose -f compose.local.yml up --build
 ```
-or when inside the same docker network:
-```bash
-http://core_app:8089/
-````
-Here you can trigger the scraping process, overview the redis channels, search the articles and observe the prefect dashboard where the tasks are executed.
 
-![Simple UI](.github/media/opp_dashboard_1.png)
-![Simple UI](.github/media/opp_dashboard_2.png)
+**Use the Python client in your code**
+Just switch mode="local" to connect to your local stack or use the default remote.
 
-
-## EASY! Add any source
-Insert any sourcing or scraping script into the scraper_service/scrapers folder. 
-A simple scraping script can look like this:
 ```python
-import requests
-from bs4 import BeautifulSoup
-import pandas as pd
+from opol import OPOL
 
-def scrape_cnn_articles():
-    base_url = 'https://www.cnn.com'
-    response = requests.get(base_url)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    
-    article_links = [a['href'] for a in soup.find_all('a', href=True) 
-                     if a['href'].startswith('/2024/') and '/politics/' in a['href']]
-    
-    articles = []
-    for link in article_links:
-        article_url = base_url + link
-        article_response = requests.get(article_url)
-        article_soup = BeautifulSoup(article_response.text, 'html.parser')
-        
-        headline = article_soup.find('h1', class_='headline__text')
-        headline_text = headline.text.strip() if headline else 'N/A'
-        
-        paragraphs = article_soup.find_all('div', class_='article__content')
-        article_text = ' '.join([p.text.strip() for p in paragraphs])
-        
-        articles.append({
-            'url': article_url,
-            'headline': headline_text,
-            'paragraphs': article_text,
-            'source': 'cnn'
-        })
-    
-    df = pd.DataFrame(articles)
-    return df
-
-
-# Usage
-cnn_articles_df = scrape_cnn_articles()
-cnn_articles_df.to_csv('cnn_articles.csv', index=False)
+opol = OPOL(mode="local")
+...
 ```
-## Architecture and Storage
-opol's architecture fosters communication through a decoupled microservices design, ensuring scalability and maintainability.Redis stores task queues. The system is composed of the following services:
--  Scraper Service
--  Vectorization/Embedding Service
--  PostgreSQL Service (manages pipelines and has rudimentary search functions)
--  Entity Service (Extracts Entities)
--  Geocoding Service (Geocodes Location Entities to Geocodes)
--  Dashboard (Monitoring and Basic Retrieval)
 
-Services communicate and signal each other by producing flags and pushings tasks and data to Redis queues.
+## Example Usage
+Here are some quick code samples to showcase what Opol can do:
 
-The scrape jobs are parallelized with Celery (fading out), Prefect (fading in) and async functions where possible. 
+**Fetch articles:**
 
-Regarding storage, opol employs PostgreSQL for data retention and Qdrant as a vector storage.
+```python
+from opol import OPOL
 
-A simpler and wholistic data contract solution for project-wide usage would be greatly appreciated.
+opol = OPOL(mode="local")
+articles = opol.articles.get_articles(query="apple")
+for article in articles:
+    print(article) # or print(article['title])
+```
 
+**Render events as GeoJSON for a specified event type:**
 
-## Prefect Orchestration
-You can track and modify the orchestration of the different large-scale flows with prefect. 
-You can for example change the taskrunner in the scraper service from 
-flow(task_runner=SequentialTaskRunner())
-def scrape_data_task(flags):
-    for flag in flags:
-        scrape_single_source.submit(flag)
-        logger.info(f"Scraping data for {flag} complete")
-    logger.info("Scraping complete")
+```python
+geojson = opol.geo.json_by_event("War", limit=5)
+print(geojson)
+# Returns a FeatureCollection with geometry & properties
+**Geocode a location:**
 
-to for example a limited ConcurrentTaskRunner, Keep in mind your hardware capabilities.
-Ray can orchestrate your heavier workflows on a even more distributed level. 
-![prefect flows](.github/media/prefect_flows.png)
+```python
+location = "Berlin"
+coordinates = opol.geo.code(location)["coordinates"]
+# [13.407032, 52.524932]
+print(coordinates)
+```
 
-opol will execute all scripts in the scrapers folder and process the articles. 
-They are vectorized and stored in a Qdrant vector database.
-The API endpoint can be queried for semantic search and article recommendations for your LLM or research project.
+**Fetch Economic Data (OECD):**
 
+```python
+econ_data = opol.scraping.economic("Italy", indicators=["GDP"])
+print(econ_data)
+```
 
-The design philosophy underscores flexibility, allowing integration with any scraper script that aligns with the specified data structure. The infrastructure benefits from each additional source, enriching the system's capability to amass, store, and retrieve news content efficiently.
+**Get Summarized Poll Data:**
 
-## Use Cases:
+```python
+polls = opol.scraping.polls("Germany", summarised=True)
+for poll in polls:
+    print(f"Party: {poll['party']}, Percentage: {poll['percentage']}")
+```
 
-1. Entity Ranking
-Use the provided script to retrieve entities most prominent in your data, here 'NORP' - 'affiliation':
-   ```python
-   import requests
-   from collections import Counter, defaultdict
+## Further Documentation
 
-   def print_sorted_gpe_entities(x):
-       url = 'http://localhost:5434/articles'
-       params = {
-           'geocoding_created': 0,
-           'limit': 200,
-           'embeddings_created': 1,
-           'entities_extracted': 1
-       }
+[**Opol Stack:**](opol/stack/README.md) For details on microservices, flows, environment variables, and more, head to the opol/stack directory.
 
-       entity_type = 'NORP'
-       response = requests.get(url, params=params)
-       if response.status_code == 200:
-           data = response.json()
+[**Data Structure:**](opol/stack/core/models.py) Implementation references for news source content, [classification schemes](opol/stack/core/classification_models.py), entity extraction, etc.
 
-           gpe_counter = Counter()
-           gpe_articles = defaultdict(list)
+[**Notebook Examples:**](opol/python-client/prototype.ipynb) Jupyter Notebook Prototype demonstrating typical usage scenarios.
 
-           for article in data:
-               entities = article['entities']
-               for entity in entities:
-                   if entity['tag'] == entity_type:
-                       entity_name = entity['text']
-                       gpe_counter[entity_name] += 1
-                       if article['headline']:
-                           gpe_articles[entity_name].append(article['headline'])
-                       else:
-                           gpe_articles[entity_name].append(article['url'])
+## Contributing
+We’re building Opol as a community-driven project. Whether you’re a developer, data scientist, political researcher, or simply interested in public intelligence operations, you’re welcome to contribute. Please open an Issue or Pull Request with your ideas and improvements.
 
-           sorted_gpes = gpe_counter.most_common(x)
-           sorted_gpes = list(reversed(sorted_gpes))
-           for gpe, count in sorted_gpes:
-               print(f"{entity_type}: {gpe}, Count: {count}")
-               print("Associated Articles:")
-               for article in set(gpe_articles[gpe]):
-                   print(f" - {article}")
-               print("\n")
-       else:
-           print('API request failed.')
+How you can help:
 
-   print_sorted_gpe_entities(10)
-   ```
+- Add new scrapers for different news sites or legislative data
+- Propose or refine classification prompts
+- Improve data coverage for less represented countries
+- Contribute to documentation, scripts, or code
 
-This script, sorting for NORP (affiliation) will return an output like this:
-````text
+## License
+Opol is released under the MIT License. You’re free to use, modify, and distribute this software in any personal, academic, or commercial project, provided you include the license and its copyright notice.
 
-NORP: Republicans, Count: 17
-Associated Articles:
- - Biden left without an easy solution as campus protests heat up
- - House Democrats announce they would save Speaker Mike Johnson if Marjorie Taylor Greene triggers her effort to oust him
- - Arizona Senate votes to repeal Civil War-era near-total abortion ban
-
-
-NORP: Israeli, Count: 19
-Associated Articles:
- - Blinken met Netanyahu in Israel as US ramps up push for a ceasefire deal
- - Biden left without an easy solution as campus protests heat up
-
-
-NORP: Democratic, Count: 19
-Associated Articles:
- - Biden presents Medal of Freedom to key political allies, civil rights leaders, celebrities and politicians
- - House Democrats announce they would save Speaker Mike Johnson if Marjorie Taylor Greene triggers her effort to oust him
- - Arizona Senate votes to repeal Civil War-era near-total abortion ban
- - Takeaways from Day 10 of the Donald Trump hush money trial
- - Who is Hope Hicks, longtime Trump aide who is testifying in NY hush money case?
- - Biden left without an easy solution as campus protests heat up
-
-
-NORP: Indian, Count: 20
-Associated Articles:
- - Thomas Cup 2024 QF Highlights: Lakshya the solitary winner as India’s title defence ends 1-3 after defeat against China
- - India T20 World Cup Squad Press Conference: Ajit Agarkar says Rinku Singh and Shubman Gill have done ‘nothing wrong’
- - "Daughters Lost": Ex Wrestler After BJP Fields Brij Bhushan's Son In Polls
-````
-You can sort, mix, match and filter over these entitues:
-````json
-    tag_meaning = {
-        'CARDINAL': 'cardinal value',
-        'DATE': 'date value',
-        'EVENT': 'event name',
-        'FAC': 'building name',
-        'GPE': 'geo-political entity',
-        'LANGUAGE': 'language name',
-        'LAW': 'law name',
-        'LOC': 'location name',
-        'MONEY': 'money name',
-        'NORP': 'affiliation',
-        'ORDINAL': 'ordinal value',
-        'ORG': 'organization name',
-        'PERCENT': 'percent value',
-        'PERSON': 'person name',
-        'PRODUCT': 'product name',
-        'QUANTITY': 'quantity value',
-        'TIME': 'time value',
-        'WORK_OF_ART': ''
-    }
-````
-
-
-2. GeoJSON
-
-Produce a set of features derived from the locations present in your data. This can enable visualisations like open politics "Open Globe" interface (with the json intentionally displayed):
-![High Level Architecture](.github/media/opol_globe.png)
-
-
-
-
-
-
-
-### Roadmap
-The project's trajectory includes plans for enhanced service orchestration (with Kubernetes) and expanded scraper support (looking forwards to creating "flavours" of information spaces), all aimed at bolstering the engine's functionality and reach.
-
-- [x] Scraping of arbitrary sourcing scripts
-- [x] Processing into vector representations
-    - [] Custom embedding models
-- [x] Named Entity Recognition (locations, organizations, geo-political entities)
-- [ ] Geocoding of recognized locations
-- [x] Storing and querying of news articles with
-    - [x] Querying by entity
-    - [x] Vector Search
-
-
-### Participation: Script Contributions
-We welcome contributions from passionate activists, enthusiastic data scientists, and dedicated developers. Your expertise can greatly enhance the project, expanding the breadth of our political news coverage. 
-
-
-If you want to use your own embeddings models, you need to change the dim size in the code of the qdrant service and the model name in the nlp service.
-
-## Important Notes
-Current limitations include the limited number of scrapers, alongside the unavailability of querying the postgres database directly.
-
-
-## Licensing
-opol is distributed under the MIT License, with the license document available for reference within the project repository.
