@@ -11,8 +11,8 @@ class Entities(BaseClient):
     def __call__(self, *args, **kwargs):
         return self.get_entities(*args, **kwargs)
     
-    def get_entities(self, location_name: str, skip: int = 0, limit: int = 50) -> dict:
-        endpoint = f"v2/location_entities/{location_name}"
+    def get_entities(self, query: str, skip: int = 0, limit: int = 50) -> dict:
+        endpoint = f"v2/related_entities/{query}"
         params = {"skip": skip, "limit": limit}
         return self.get(endpoint, params)
     
