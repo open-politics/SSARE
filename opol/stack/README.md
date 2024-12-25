@@ -25,7 +25,7 @@ If something is unclear, missing documentation, or unnecessarily hard to get int
 ## Overview
 The `opol/opol/stack` directory is the heart of the application, responsible for orchestrating various microservices and workflows essential for the system's functionality. This folder is ready to use with docker compose for local development.
 
-In it's advanced form it is deployed as a kubnetes cluster deployed with helm.
+*In it's advanced form it is deployed as a kubnetes cluster deployed with helm. For more information look into [here](../../.deployment/README.md)*
 
 ## Directory Structure
 
