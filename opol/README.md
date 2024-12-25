@@ -10,3 +10,6 @@ This directory contains the following components:
   This folder contains the services that constitute the core logic of the application.
   Here lies the microservices application that constitutes the capabilities of Opol.
   The data of the stack is also placed here in `.store` (backups, credentials, data such as articles, geocoding, and Redis).
+
+
+[You most likely want to look into the stack](stack/README.md)
