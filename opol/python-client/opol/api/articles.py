@@ -47,6 +47,6 @@ class Articles(BaseClient):
             return self.get(endpoint, params)
 
     def by_entity(self, entity_name: str, skip: int = 0, limit: int = 10) -> Dict:
-        endpoint = f"contents_by_entity/{entity_name}"
+        endpoint = f"v2/contents_by_entity/{entity_name}"
         params = {"skip": skip, "limit": limit}
         return self.get(endpoint, params)
