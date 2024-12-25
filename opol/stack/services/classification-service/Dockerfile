@@ -9,4 +9,3 @@ COPY ../../core/ ./core
 COPY services/classification-service/ .
 
 CMD ["bash", "start.sh"]
-]

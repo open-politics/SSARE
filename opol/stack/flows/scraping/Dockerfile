@@ -17,6 +17,6 @@ RUN apt-get install -y supervisor
 COPY ../../core/ ./core
 COPY services/scraper-service/ .
 
-COPY flows/scraping/scraping_flow.py .
+COPY flows/scraping/scrape_newssites.py .
 
-CMD ["python", "scraping_flow.py"]
+CMD ["python", "scrape_newssites.py"]
