@@ -10,3 +10,5 @@ google-generativeai
 jsonref
 logfire
 logfire[asyncpg]
+opol==0.1.19
+pytest

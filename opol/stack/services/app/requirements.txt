@@ -11,3 +11,5 @@ pgvector
 sqlmodel
 pydantic
 httpx
+opol
+pytest

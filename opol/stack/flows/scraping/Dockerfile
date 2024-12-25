@@ -18,6 +18,5 @@ COPY ../../core/ ./core
 COPY services/scraper-service/ .
 
 COPY flows/scraping/scraping_flow.py .
-COPY flows/scraping/tasks/ ./tasks
 
 CMD ["python", "scraping_flow.py"]

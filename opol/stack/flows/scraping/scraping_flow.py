@@ -5,6 +5,8 @@ from tasks.processing_tasks import process_scraped_data
 from tasks.redis_tasks import save_contents_to_redis
 import pandas as pd
 import os
+
+
 SCRAPER_TASKS = {
     'cnn': scrape_cnn_articles,
     'dw': scrape_dw_articles,

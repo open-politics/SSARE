@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from core.models import Content
 import json
 import logging
@@ -16,9 +16,7 @@ from prefect_ray import RayTaskRunner
 app = FastAPI()
 config = ServiceConfig()
 token = config.HUGGINGFACE_TOKEN
-model = SentenceTransformer("jinaai/jina-embeddings-v2-base-en", 
-                            use_auth_token=token,
-                            trust_remote_code=True)
+model = TextEmbedding(model="jinaai/jina-embeddings-v2-base-de")
 
 @app.get("/healthz")
 async def healthcheck():
@@ -42,7 +40,9 @@ def process_content(content: Content):
 
     # Only generate embeddings if there's text to encode
     if text_to_encode:
-        embeddings = model.encode(text_to_encode).tolist()
+        embeddings = model.embed(text_to_encode)
+        embeddings_list = [embedding.tolist() for embedding in embeddings]
+        embeddings = embeddings_list[0]
 
         # Update the content with new embeddings
         content.embeddings = embeddings

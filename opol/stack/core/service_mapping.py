@@ -3,7 +3,7 @@ import os
 class ServiceConfig:
     ## Service Ports
 
-    MAIN_CORE_APP_PORT = os.getenv('MAIN_CORE_APP_PORT', '8089')
+    CORE_APP_PORT = os.getenv('CORE_APP_PORT', '8089')
     POSTGRES_SERVICE_PORT = os.getenv('POSTGRES_SERVICE_PORT', '5434')
     EMBEDDING_SERVICE_PORT = os.getenv('EMBEDDING_SERVICE_PORT', '0420')
     QDRANT_SERVICE_PORT = os.getenv('QDRANT_SERVICE_PORT', '6969')
@@ -66,7 +66,7 @@ class ServiceConfig:
     # Service URLs
     if RUNNING_ENV == 'kubernetes':
         service_urls = {
-            "main_core-app": "http://main-core-app",
+            "core-app": "http://core-app",
             "postgres-service": "http://postgres-service",
             "embedding-service": "http://embedding-service",
             "qdrant-service": "http://qdrant-service",
@@ -87,12 +87,11 @@ class ServiceConfig:
             "classification-service": "http://classification-service",
             "semantic-router": "http://semantic-router",
         }
-    else:  # Default to Docker Compose configuration
+    elif RUNNING_ENV == 'compose':
         service_urls = {
-            "main_core-app": f"http://main-core-app:{MAIN_CORE_APP_PORT}",
+            "core-app": f"http://main-core-app:{CORE_APP_PORT}",
             "postgres-service": f"http://postgres-service:{POSTGRES_SERVICE_PORT}",
             "embedding-service": f"http://embedding-service:{EMBEDDING_SERVICE_PORT}",
-            "postgres-service": f"http://postgres-service:{POSTGRES_SERVICE_PORT}",
             "classification-service": f"http://classification-service:{CLASSIFICATION_SERVICE_PORT}",
             "qdrant-service": f"http://qdrant-service:{QDRANT_SERVICE_PORT}",
             "qdrant-storage": f"http://qdrant-storage:{QDRANT_STORAGE_PORT}",
@@ -111,6 +110,19 @@ class ServiceConfig:
             "liteLLM": f"http://liteLLM:{LITELLM_PORT}",
             "classification-service": f"http://classification-service:{CLASSIFICATION_SERVICE_PORT}",
             "semantic-router": f"http://semantic-router:{SEMANTIC_ROUTER_PORT}",
+        }
+    elif RUNNING_ENV == 'local':
+        service_urls = {
+            "core-app": f"http://localhost:{CORE_APP_PORT}",
+            "postgres-service": f"http://localhost:{POSTGRES_SERVICE_PORT}",
+            "embedding-service": f"http://localhost:{EMBEDDING_SERVICE_PORT}",
+            "scraper-service": f"http://localhost:{SCRAPER_SERVICE_PORT}",
+            "entity-service": f"http://localhost:{ENTITY_SERVICE_PORT}",
+            "geo-service": f"http://localhost:{GEO_SERVICE_PORT}",
+            "classification-service": f"http://localhost:{CLASSIFICATION_SERVICE_PORT}",
+            "pelias-placeholder": f"http://localhost:{PELIAS_PLACEHOLDER_PORT}",
+            "redis": f"redis://localhost:{REDIS_PORT}",
+
         }
 
     # Redis channel mappings with explicit types

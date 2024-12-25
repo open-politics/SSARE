@@ -11,6 +11,11 @@ from newspaper import Article
 from core.utils import logger
 from core.service_mapping import get_redis_url
 from prefect.deployments import run_deployment
+from fastapi import APIRouter
+
+from polls.routes import router as polls_router
+from legislation.routes import router as legislation_router
+from economic.routes import router as economic_router
 
 @task
 async def setup_redis_connection():
@@ -32,6 +37,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+app.include_router(polls_router, tags=["polls"])
+app.include_router(legislation_router, tags=["legislation"])
+app.include_router(economic_router, tags=["economic"])
 @task
 async def get_scraper_config():
     with open("scrapers/scrapers_config.json") as f:
@@ -118,3 +126,6 @@ async def scrape_article(url: str = Query(..., description="The URL of the artic
         logger.error(f"Error scraping article {url}: {e}")
         logger.exception("Full traceback:")
         raise HTTPException(status_code=500, detail=f"Error scraping article: {str(e)}")
+
+
+

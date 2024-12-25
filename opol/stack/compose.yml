@@ -5,7 +5,7 @@ services:
       context: .
       dockerfile: ./services/app/Dockerfile
     ports:
-      - "${MAIN_CORE_APP_PORT}:8089"
+      - "${CORE_APP_PORT}:8089"
     volumes:
       - ./.store/backups:/app/backups
     env_file:
@@ -17,6 +17,7 @@ services:
       - scraper-service
       - postgres-service
     networks:
+      - opol-app-stack
       - default
   
   articles_database:
@@ -34,23 +35,25 @@ services:
     ports:
       - "${ARTICLES_DB_PORT}:5432"
     networks:
+      - opol-app-stack
       - default
 
-  classification-service:
-    build: 
-      context: .
-      dockerfile: ./services/classification-service/Dockerfile
-    ports:
-      - "${CLASSIFICATION_SERVICE_PORT}:5688"
-    environment:
-      - LOCAL_LLM=${LOCAL_LLM}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
-    env_file:
-      - .env
-    networks:
-      - default
+  # classification-service:
+  #   build: 
+  #     context: .
+  #     dockerfile: ./services/classification-service/Dockerfile
+  #   ports:
+  #     - "${CLASSIFICATION_SERVICE_PORT}:5688"
+  #   environment:
+  #     - LOCAL_LLM=${LOCAL_LLM}
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #     - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+  #     - PREFECT_API_KEY=${PREFECT_API_KEY}
+  #   env_file:
+  #     - .env
+  #   networks:
+  #     - opol-app-stack
+  #     - default
       
 
   embedding-service:
@@ -68,6 +71,7 @@ services:
     env_file:
       - .env
     networks:
+      - opol-app-stack
       - default
       
 
@@ -84,6 +88,7 @@ services:
       - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
       - PREFECT_API_KEY=${PREFECT_API_KEY}
     networks:
+      - opol-app-stack
       - default
      
 
@@ -93,6 +98,7 @@ services:
       dockerfile: ./services/geo-service/Dockerfile
     restart: no
     networks:
+      - opol-app-stack
       - default
     ports:
       - "${GEO_SERVICE_PORT}:3690"
@@ -166,6 +172,7 @@ services:
     volumes:
       - .store/data/placeholder:/data/placeholder
     networks:
+      - opol-app-stack
       - default
       
 
@@ -183,6 +190,7 @@ services:
     ports:
       - "${POSTGRES_SERVICE_PORT}:5434"
     networks:
+      - opol-app-stack
       - default
       
     
@@ -259,6 +267,7 @@ services:
     ports:
       - "${REDIS_PORT}:${REDIS_PORT}"
     networks:
+      - opol-app-stack
       - default
       
 
@@ -272,12 +281,13 @@ services:
       - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/bb0713a4-8ee0-466d-a215-02f392396cb8/workspaces/befbba42-c4cb-4bce-b539-ab6bb67a99c0
       - PREFECT_API_KEY=${PREFECT_API_KEY}
     networks:
+      - opol-app-stack
       - default
       
 
 ## FLOWS
 
-  flow-embedding:
+  flow-embeddings:
     build: 
       context: .
       dockerfile: ./flows/embeddings/Dockerfile
@@ -288,6 +298,7 @@ services:
     env_file:
       - .env
     networks:
+      - opol-app-stack
       - default
         
 
@@ -302,6 +313,7 @@ services:
     env_file:
       - .env
     networks:
+      - opol-app-stack
       - default
       
 
@@ -316,6 +328,7 @@ services:
     env_file:
       - .env
     networks:
+      - opol-app-stack
       - default
       
 
@@ -330,6 +343,7 @@ services:
     env_file:
       - .env
     networks:
+      - opol-app-stack
       - default
       
 
@@ -344,6 +358,7 @@ services:
     env_file:
       - .env
     networks:
+      - opol-app-stack
       - default
     
   flow-geocoding:
@@ -357,6 +372,7 @@ services:
     env_file:
       - .env
     networks:
+      - opol-app-stack
       - default
       
 
@@ -423,3 +439,5 @@ volumes:
 networks:
   default:
     external: false
+  opol-app-stack:
+    external: true

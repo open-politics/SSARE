@@ -1,7 +1,28 @@
 ![opol](.github/media/opol.png)
 
 On a mission to find the **#NeedleInTheHayStack**
-We are organising methods and infrastructure focusing on political analysis and reasearch.
+
+This repository holds the code for the opol stack.
+
+It includes two core components:
+
+- The python client (which this Readme focuses on)
+- The data stack
+
+The python client provides an interface to interact with the tools of opol.
+If you care about how it's done, want to review it or maybe help us build this project please look into
+[opol/stack](opol/stack/README.md) where you will find more documentation.
+
+
+For more information on how you can use the python client please look into this [Jupyter Notebook](opol/python-client/prototype.ipynb)
+
+You can install opol with 
+```bash 
+pip install opol
+```
+
+
+## This documentation is being reworked, the following is a bit old:
 
 
 This is the *data engine* for Open Politics.
@@ -11,7 +32,7 @@ Please also see:
 - [Blog](https://blog.opol.io)
 
 This repository: 
-**opol** stands for.. surprise: Open Politics 
+**opol** stands for.. surprise: **O**pen **Pol**itics 
 
 It is an
 an open-source self-hostable stack that comfortably orchestrates: \
@@ -115,7 +136,7 @@ http://localhost:8089/
 ```
 or when inside the same docker network:
 ```bash
-http://main_core_app:8089/
+http://core_app:8089/
 ````
 Here you can trigger the scraping process, overview the redis channels, search the articles and observe the prefect dashboard where the tasks are executed.
 

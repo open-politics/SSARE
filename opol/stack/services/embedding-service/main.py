@@ -5,7 +5,7 @@ import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from redis import Redis
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from typing import List
 from core.models import Content, ContentChunk
 from core.service_mapping import ServiceConfig
@@ -17,7 +17,7 @@ from prefect.deployments import run_deployment
 
 nltk.download('punkt')
 
-model = SentenceTransformer('all-MiniLM-L6-v2') 
+model = TextEmbedding(model="all-MiniLM-L6-v2") 
 
 async def lifespan(app):
     yield
@@ -40,11 +40,10 @@ async def healthcheck():
 @app.get("/generate_query_embeddings")
 def generate_query_embedding(query: str):
     try:
-        model = SentenceTransformer(
-            "jinaai/jina-embeddings-v2-base-en",
-            trust_remote_code=True
-        )
-        embeddings = model.encode(query).tolist()
+        model = TextEmbedding(model="jinaai/jina-embeddings-v2-base-en")
+        embeddings = model.embed(query)
+        embeddings_list = [embedding.tolist() for embedding in embeddings]
+        embeddings = embeddings_list[0]
         print(f"Generated embeddings for query: {query}, Embeddings Length: {len(embeddings)}")
         return {"embeddings": embeddings}
     except Exception as e:

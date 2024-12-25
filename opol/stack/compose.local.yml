@@ -108,12 +108,12 @@ services:
       - default
       - opol-network
 
-  main_core_app:
+  core_app:
     build: 
       context: ./opol
       dockerfile: ./app/Dockerfile
     ports:
-      - "${MAIN_CORE_APP_PORT}:8089"
+      - "${CORE_APP_PORT}:8089"
     volumes:
       - ./backups:/app/backups
     env_file:

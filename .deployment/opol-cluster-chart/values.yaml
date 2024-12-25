@@ -24,7 +24,7 @@ image:
   entityService: open-politics-project/entity_service:latest
   geoService: open-politics-project/geo_service:latest
   litellm: ghcr.io/berriai/litellm:main-latest
-  mainCoreApp: open-politics-project/main_core_app:latest
+  mainCoreApp: open-politics-project/core_app:latest
   ollama: open-politics-project/ollama:latest
   peliasPlaceholder: pelias/placeholder:latest
   postgresService: open-politics-project/postgres_service:latest

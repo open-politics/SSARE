@@ -12,5 +12,7 @@ lxml[html_clean]
 pgvector
 sqlmodel
 redis
-playwright
 ray==2.39.0
+matplotlib
+sdmx
+playwright

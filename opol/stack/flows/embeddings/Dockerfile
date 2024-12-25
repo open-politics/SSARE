@@ -11,5 +11,11 @@ RUN apt-get update && apt-get install -y curl
 
 COPY ../../core/ ./core
 
+COPY flows/embeddings/tests/ ./
+
 COPY flows/embeddings/generate_embeddings_onebatch.py .
-CMD ["python", "generate_embeddings_onebatch.py"]
+
+COPY flows/embeddings/start.sh .
+
+RUN chmod +x start.sh
+CMD ["./start.sh"]

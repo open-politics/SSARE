@@ -1,10 +1,10 @@
 from typing import List, Union
 import os
-from prefect import flow, task
+from prefect import flow, task, runtime
 from redis import Redis
 import json
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from core.models import Content
 from core.utils import get_redis_url
 from prefect.task_runners import ConcurrentTaskRunner
@@ -27,21 +27,20 @@ def get_model():
     """
     Returns a singleton instance of the SentenceTransformer model.
     """
-    global model
-    if model is None:
+    if not hasattr(runtime.flow_run, 'model'):
         token = os.getenv("HUGGINGFACE_TOKEN")
-        model = SentenceTransformer(
-            "jinaai/jina-embeddings-v2-base-en",
-            trust_remote_code=True
-        )
-    return model
+        embedding_model = TextEmbedding(model="jinaai/jina-embeddings-v2-base-de")
+        runtime.flow_run.model = embedding_model
+    return runtime.flow_run.model
 
 def encode_text(texts: Union[str, List[str]]) -> Union[List[float], List[List[float]]]:
     """
     Encodes a single text string or a list of text strings into embeddings.
     """
     model = get_model()
-    return model.encode(texts).tolist()
+    embeddings_generator = model.embed(texts)
+    embeddings_list = [embedding.tolist() for embedding in embeddings_generator]
+    return embeddings_list[0]
 
 def semantic_chunking(text: str) -> List[str]:
     """

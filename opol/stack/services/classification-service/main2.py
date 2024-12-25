@@ -1,15 +1,13 @@
 import os
 import json
 import logging
-from typing import List, Optional
+from typing import List, Optional, Type
 from redis import Redis
 from fastapi import FastAPI, HTTPException, Depends
 from contextlib import asynccontextmanager
-from classification_models import ContentEvaluation, ContentRelevance
 from core.utils import UUIDEncoder, logger
-from core.models import Content, ClassificationDimension
+from core.models import Content
 from core.service_mapping import ServiceConfig
-from xclass import XClass
 from pydantic import BaseModel, Field
 import time
 from uuid import UUID
@@ -21,6 +19,8 @@ from sqlalchemy.orm import selectinload
 import google.generativeai as genai
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
+from typing import Union
+from fastclass import FastClass
 
 app = FastAPI()
 config = ServiceConfig()
@@ -32,47 +32,39 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# Initialize ClassificationService
-xclass = XClass()
+# Initialize FastClass
+xclass = FastClass("gemini-1.5-flash-latest")
 
-# Define classification dimension model
-class ClassificationDimensionModel(BaseModel):
-    name: str
-    type: str
-    description: Optional[str] = None
-
-class ClassificationRequest(BaseModel):
-    dimensions: List[ClassificationDimensionModel]
-    text: str
+# Define dynamic classification request model
+class DynamicClassificationRequest(BaseModel):
+    response_type: Union[str, Type[BaseModel]]
+    prompt: str
+    input_text: str
 
 @app.post("/classify")
-async def classify(request: ClassificationRequest):
+async def classify(request: DynamicClassificationRequest):
+    logger.info(f"Classifying request with type: {request.response_type}")
     try:
-        classification_result = xclass.classify(
-            response_model=ContentRelevance,
-            text=request.text,
-            dimensions=request.dimensions
-        )
-        return classification_result.model_dump()
+        classification_result = xclass.infer(request.response_type, request.prompt, request.input_text)
+        return classification_result
     except Exception as e:
         logging.error(f"Classification error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-class DynamicClassificationRequest(BaseModel):
-    dimensions: List[ClassificationDimensionModel]
-    texts: str
+# Example endpoint using Pydantic model directly
+class ClassificationResult(BaseModel):
+    relevant: bool
+    relevance_level: int
 
-@app.post("/classify_dynamic")
-def classify_dynamic(request: DynamicClassificationRequest):
+
+
+@app.post("/classify_model")
+def classify_model(prompt: str, input_text: str):
     try:
-        classification_result = xclass.classify(
-            response_model=ContentEvaluation,
-            text=f"Text: {request.texts}\n\n",
-            dimensions=request.dimensions
-        )
+        classification_result = xclass.infer(ClassificationResult, prompt, input_text)
         return classification_result.model_dump()
     except Exception as e:
-        logging.error(f"Classification error: {e}")
+        logger.error(f"Classification error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 async def retrieve_similar_contents(content_text: str, session: AsyncSession):
@@ -100,10 +92,7 @@ def get_location_from_query(query: str):
         location: str
 
     try:
-        response = xclass.classify_custom(
-            response_model=LocationFromQuery,
-            text=f"The query is: {query}"
-        )
+        response = xclass.infer(LocationFromQuery, "Determine the most relevant location based on the query.", query)
         return response.location
     except Exception as e:
         logger.error(f"Error in location_from_query: {e}")
@@ -157,10 +146,7 @@ def split_query(query: str):
 
     def split_query_task(query: str) -> QueryResult:
         try:
-            response = xclass.classify_custom(
-                response_model=QueryResult,
-                text=f"The query is: {query}"
-            )
+            response = xclass.infer(QueryResult, "Analyze and split the query into its components.", query)
             return response.model_dump()
         except Exception as e:
             logger.error(f"Error splitting query: {e}")

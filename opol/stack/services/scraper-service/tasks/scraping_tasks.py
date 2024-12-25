@@ -1,7 +1,7 @@
 from prefect import task
-from scrapers.cnn import CNNScraper
-from scrapers.dw import DWScraper  # Assume you have this scraper
-from scrapers.bbc import BBCScraper  # If implemented
+from news_sites.cnn import CNNScraper
+from news_sites.dw import DWScraper  # Assume you have this scraper
+from news_sites.bbc import BBCScraper  # If implemented
 
 @task(name="Scrape CNN Articles", retries=3, retry_delay_seconds=60)
 async def scrape_cnn_articles():

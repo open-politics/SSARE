@@ -5,8 +5,7 @@ pandas
 requests
 psycopg2-binary
 redis
-transformers
-sentence-transformers
+fastembed
 prefect
 prefect-ray
 ray

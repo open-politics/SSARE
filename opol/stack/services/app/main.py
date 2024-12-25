@@ -26,6 +26,7 @@ from core.utils import get_redis_url
 templates = Jinja2Templates(directory="templates")
 config = ServiceConfig()
 
+
 # FastAPI Setup
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
