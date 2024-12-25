@@ -116,6 +116,8 @@ for article in articles:
 geojson = opol.geo.json_by_event("War", limit=5)
 print(geojson)
 # Returns a FeatureCollection with geometry & properties
+```
+
 **Geocode a location:**
 
 ```python
