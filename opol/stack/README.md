@@ -23,7 +23,9 @@ If something is unclear, missing documentation, or unnecessarily hard to get int
 - Resources
 
 ## Overview
-The `opol/opol/stack` directory is the heart of the application, responsible for orchestrating various microservices and workflows essential for the system's functionality. It leverages Docker Compose for service management and Prefect for workflow orchestration and observability.
+The `opol/opol/stack` directory is the heart of the application, responsible for orchestrating various microservices and workflows essential for the system's functionality. This folder is ready to use with docker compose for local development.
+
+In it's advanced form it is deployed as a kubnetes cluster deployed with helm.
 
 ## Directory Structure
 
@@ -59,7 +61,7 @@ The stack utilizes Docker Compose to manage and orchestrate multiple services se
 Core services form the backbone of the application, handling functionalities like data scraping, engineering, batch processing and various utitlies centered around opol.
 
 | All these services and packages build services with shared modules from `core`. \
-| Here you can find the shared pydantic models, url mappings, database connections
+| Here you can find the shared pydantic models, service-url-mappings, database connections and more.
 
 | The data scraped is stored in .store
 
