@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opol"
-version = "0.1.28"
+version = "0.1.29"
 description = "Main API client to interact with all OPOL services."
 authors = [
     { name = "Jim Vincent Wagner", email = "jimvw@open-politics.org" }
