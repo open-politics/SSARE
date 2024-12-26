@@ -4,6 +4,7 @@ from .api.geo import Geo
 from .api.classification import Classification
 from .api.scraping import Scraping
 from .api.legislation import Legislation
+from .api.search import Search
 import os
 
 class OPOL:
@@ -17,6 +18,7 @@ class OPOL:
         self.entities = Entities(mode, api_key, timeout=timeout)
         self.scraping = Scraping(mode, api_key, timeout=timeout)
         self.legislation = Legislation(mode, api_key, timeout=timeout)
+        self.search = Search(mode, api_key, timeout=timeout)
         self._classification = None  # Lazy initialization
 
     def classification(self, provider: str = "Google", model_name: str = "models/gemini-1.5-flash-latest", llm_api_key: str = None):

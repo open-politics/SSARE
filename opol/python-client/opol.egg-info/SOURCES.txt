@@ -19,4 +19,5 @@ opol/api/fastclass.py
 opol/api/geo.py
 opol/api/legislation.py
 opol/api/scraping.py
+opol/api/search.py
 opol/api/url_strategy.py
