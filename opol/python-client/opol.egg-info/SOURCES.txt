@@ -22,3 +22,5 @@ opol/api/legislation.py
 opol/api/scraping.py
 opol/api/search.py
 opol/api/url_strategy.py
+opol/api/models/__init__.py
+opol/api/models/searxng.py
