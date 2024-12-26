@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from .client_base import BaseClient
 import numpy as np
 
@@ -22,7 +22,7 @@ class Embeddings(BaseClient):
     def cosine(self, a, b):
         return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
     
-    def rerank_articles(self, query_embedding: List[float], articles: List[Dict], text_field: str = "title") -> List[tuple]:
+    def rerank_articles(self, query_embedding: List[float], articles: List[Dict], text_field: str = "title") -> List[Tuple[Dict, float]]:
         """
         Reranks articles based on the cosine similarity of their embeddings to the query embedding.
 
@@ -32,7 +32,7 @@ class Embeddings(BaseClient):
             text_field (str): The article field to embed ('title', 'content', or 'both').
 
         Returns:
-            List[tuple]: Sorted list of tuples containing articles and their similarity scores.
+            List[Tuple[Dict, float]]: Sorted list of tuples containing articles and their similarity scores.
         """
         if text_field == "title":
             texts = [article.title for article in articles]
@@ -46,8 +46,8 @@ class Embeddings(BaseClient):
         article_embeddings = [self.get_embeddings(text) for text in texts]
 
         ranked_articles = sorted(
-            zip(articles, article_embeddings),
-            key=lambda x: self.cosine(query_embedding, x[1]),
+            ((article, self.cosine(query_embedding, embedding)) for article, embedding in zip(articles, article_embeddings)),
+            key=lambda x: x[1],
             reverse=True
         )
         return ranked_articles

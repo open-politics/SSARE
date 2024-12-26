@@ -24,9 +24,11 @@ class Search(BaseClient):
         super().__init__(mode, api_key=api_key, timeout=timeout, service_name="searxng", port=8021)
 
     def engine(self, query: str, engine: Optional[str] = "google", pretty: Optional[bool] = False,
-               categories: Optional[str] = None, language: Optional[str] = None) -> List[SearXngResults]:
+               categories: Optional[str] = None, language: Optional[str] = None, time_range: Optional[str] = None) -> List[SearXngResults]:
         """
         Perform a search using the specified engine with additional parameters.
+        Time range is one of: [ day, month, year ]
+
         """
         endpoint = "/search"
         params = {
@@ -34,7 +36,8 @@ class Search(BaseClient):
             "format": "json",
             "engine": engine,
             "categories": categories,
-            "language": language
+            "language": language,
+            "time_range": time_range
         }
         response = self.get(endpoint, params={k: v for k, v in params.items() if v is not None})
         articles = [SearXngResults(**article) for article in response["results"]]
