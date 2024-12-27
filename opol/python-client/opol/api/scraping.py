@@ -22,3 +22,8 @@ class Scraping(BaseClient):
         location = location.lower()
         endpoint = f"/economic/{location}"
         return self.get(endpoint)
+    
+    def url(self, url: str) -> dict:
+        endpoint = f"/scrape_article"
+        params = {"url": url}
+        return self.get(endpoint, params)
