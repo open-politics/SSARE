@@ -239,9 +239,9 @@ async def process_content(content):
         logger.error(f"Error: {e}")
         return None
 
-if __name__ == "__main__":
-    asyncio.run(classify_contents_flow.serve(
-        name="classify-contents-deployment",
-        cron="*/10 * * * *", 
-        parameters={"batch_size": 4}
-    ))
+# if __name__ == "__main__":
+#     asyncio.run(classify_contents_flow.serve(
+#         name="classify-contents-deployment",
+#         cron="*/10 * * * *", 
+#         parameters={"batch_size": 4}
+#     ))
