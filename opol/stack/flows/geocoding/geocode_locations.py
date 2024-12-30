@@ -11,9 +11,6 @@ import os
 
 from logging import basicConfig, getLogger
 
-logfire.configure()
-basicConfig(handlers=[logfire.LogfireLoggingHandler()])
-
 logger = getLogger(__name__)
 
 # Function to retrieve contents from Redis
