@@ -1,22 +1,30 @@
 # Base stage
-FROM python:3.11
+FROM python:3.11-slim AS base
 
 WORKDIR /app
 
-COPY services/scraper-service/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+ENV UV_SYSTEM_PYTHON=1
 
-RUN apt-get update && apt-get install -y wget gnupg2
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
-RUN sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list'
-RUN apt-get update && apt-get install -y google-chrome-stable
+RUN apt-get update && apt-get install -y git wget gnupg2 supervisor
+
+RUN pip install uv
+
+# Copy the requirements.txt file
+COPY services/scraper-service/requirements.txt .
+RUN uv pip install --no-cache-dir -r requirements.txt
+
+# Install Google Chrome
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && \
+    sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list' && \
+    apt-get update && apt-get install -y google-chrome-stable
 
 RUN playwright install
-RUN apt-get install -y supervisor
 
+# Copy the core directory
 COPY ../../core/ ./core
+
+# Copy the scraper service files
 COPY services/scraper-service/ .
 
-COPY flows/scraping/scrape_newssites.py .
-
-CMD ["python", "scrape_newssites.py"]
+# Copy the scraping script
+COPY flows/scraping/ .

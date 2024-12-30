@@ -32,8 +32,8 @@ SCRAPER_TASKS = {
 #     }
 # )
 
-@flow(name="Scrape Sources Flow")
-def scrape_sources_flow(flags: list):
+@flow(name="scrape-newssites-flow")
+def scrape_newssites_flow(flags: list):
     logger = get_run_logger()
     futures = []
     for flag in flags:
@@ -49,9 +49,9 @@ def scrape_sources_flow(flags: list):
     contents = process_scraped_data(combined_df)
     save_contents_to_redis(contents)
 
-if __name__ == "__main__":
-    scrape_sources_flow.serve(
-        name="scrape-sources-deployment",
-        parameters={"flags": ["cnn", "dw", "bbc"]},
-        cron="0 * * * *"
-    )
+# if __name__ == "__main__":
+#     scrape_newssites_flow.serve(
+#         name="scrape-newssites-deployment",
+#         parameters={"flags": ["cnn", "dw", "bbc"]},
+#         cron="0 * * * *"
+#     )
