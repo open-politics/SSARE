@@ -11,8 +11,6 @@ import os
 
 from logging import basicConfig, getLogger
 
-import logfire
-
 logfire.configure()
 basicConfig(handlers=[logfire.LogfireLoggingHandler()])
 
