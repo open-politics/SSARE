@@ -2,9 +2,9 @@ import json
 import logging
 from typing import List, Dict, Any
 from redis import Redis
-from core.utils import UUIDEncoder, get_redis_url
 from prefect import task, flow
 from collections import Counter
+from core.utils import UUIDEncoder
 import requests
 from core.service_mapping import config
 import os
@@ -18,13 +18,9 @@ basicConfig(handlers=[logfire.LogfireLoggingHandler()])
 
 logger = getLogger(__name__)
 
-# Helper function to get Redis cache connection
-def get_redis_cache():
-    return Redis.from_url(get_redis_url(), db=5)  # Using db 5 for caching
-
 # Function to retrieve contents from Redis
 def retrieve_contents_from_redis(batch_size: int) -> List[Dict[str, Any]]:
-    redis_conn = Redis.from_url(get_redis_url(), db=3, decode_responses=True)
+    redis_conn = Redis.from_url(os.getenv('REDIS_URL'), db=3, decode_responses=True)
     try:
         batch = redis_conn.lrange('contents_without_geocoding_queue', 0, batch_size - 1)
         redis_conn.ltrim('contents_without_geocoding_queue', batch_size, -1)
@@ -102,14 +98,14 @@ def process_location(location: Dict[str, Any]) -> Dict[str, Any]:
         return geocode_result
     else:
         logger.warning(f"Unable to geocode location: {location_name}")
-        redis_conn = Redis.from_url(get_redis_url(), db=6)
+        redis_conn = Redis.from_url(os.getenv('REDIS_URL'), db=6)
         redis_conn.lpush('failed_geocodes_queue', json.dumps({'name': location_name}))
         return {'name': location_name, 'error': 'Geocoding failed'}
 
 # Function to push geocoded contents to Redis
 @task(log_prints=True)
 def push_geocoded_contents(contents_with_geocoding: List[Dict[str, Any]]):
-    redis_conn = Redis.from_url(get_redis_url(), db=4, decode_responses=True)
+    redis_conn = Redis.from_url(os.getenv('REDIS_URL'), db=4, decode_responses=True)
     try:
         for content in contents_with_geocoding:
             redis_conn.lpush('contents_with_geocoding_queue', json.dumps(content, cls=UUIDEncoder))
@@ -121,7 +117,7 @@ def push_geocoded_contents(contents_with_geocoding: List[Dict[str, Any]]):
 
 # Function to handle failed geocoding attempts
 def handle_failed_geocodes(failed_locations: List[str]):
-    redis_conn = Redis.from_url(get_redis_url(), db=6)  # Using db 6 for failed geocodes
+    redis_conn = Redis.from_url(os.getenv('REDIS_URL'), db=6)  # Using db 6 for failed geocodes
     try:
         for loc in failed_locations:
             redis_conn.lpush('failed_geocodes_queue', json.dumps({'name': loc}))
@@ -134,7 +130,7 @@ def handle_failed_geocodes(failed_locations: List[str]):
 @flow
 def geocode_locations_flow(batch_size: int = 100):
     logger.info("Starting geocoding process for locations")
-    redis_conn = Redis.from_url(get_redis_url(), db=3, decode_responses=True)
+    redis_conn = Redis.from_url(os.getenv('REDIS_URL'), db=3, decode_responses=True)
     try:
         locations_batch = redis_conn.lrange('locations_without_geocoding_queue', 0, batch_size - 1)
         redis_conn.ltrim('locations_without_geocoding_queue', batch_size, -1)
@@ -168,9 +164,8 @@ def geocode_locations_flow(batch_size: int = 100):
         redis_conn.close()
         logger.info("Geocoding process completed.")
 
-if __name__ == "__main__":
-    geocode_locations_flow.serve(
-        name="geocode-locations-deployment",
-        cron="*/6 * * * *",
-        parameters={"batch_size": 50}
-    )
+# -------------------------------------------------------------------
+# OPTIONAL: For local testing only (without Prefect deployment)
+# -------------------------------------------------------------------
+# if __name__ == "__main__":
+#     geocode_locations_flow(batch_size=20)
