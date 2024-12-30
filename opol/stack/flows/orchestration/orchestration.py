@@ -222,36 +222,29 @@ async def create_jobs_flow():
     except Exception as e:
         logger.error(f"Error in create_jobs_flow: {e}")
         raise e
+    
+@flow(name="trigger-processing-flow")
+async def trigger_processing_flow():
+    await create_jobs_flow()
+    await geocode_contents()
+    await extract_entities()
+    await classify_contents()
+
+
+@flow(name="save-all-flows")
+async def save_all_flows():
+    await save_scraped_contents()
+    await save_contents_with_embeddings_flow()
+    await save_contents_with_entities_flow()
+    await save_geocoded_contents_flow()
+    await save_contents_with_classification_flow()
 
 # ======================
 # Deployment Definitions
 # ======================
 
-if __name__ == "__main__":
-    serve(
-        save_scraped_contents.to_deployment(
-            name="save-raw-contents",
-            cron="*/2 * * * *"  # Run every 2 minutes
-        ),
-        save_contents_with_embeddings_flow.to_deployment(
-            name="save-contents-with-embeddings",
-            cron="1-59/2 * * * *"  # Run every 2 minutes, starting at 1 minute past the hour
-        ),
-        save_contents_with_entities_flow.to_deployment(
-            name="save-contents-with-entities",
-            cron="2-59/2 * * * *"  # Run every 2 minutes, starting at 2 minutes past the hour
-        ),
-        save_geocoded_contents_flow.to_deployment(
-            name="save-geocoded-contents",
-            cron="3-59/2 * * * *"  # Run every 2 minutes, starting at 3 minutes past the hour
-        ),
-        save_contents_with_classification_flow.to_deployment(
-            name="save-contents-with-classification",
-            cron="4-59/2 * * * *"  # Run every 2 minutes, starting at 4 minutes past the hour
-        ),
-        create_jobs_flow.to_deployment(
-            name="create-jobs",
-            cron="0 */1 * * *"  # Run every 1 hour
-        )
-    )
-    
+@flow(name="meta-flow")
+async def meta_flow():
+    await create_jobs_flow()
+    await trigger_processing_flow()
+    await save_all_flows()
