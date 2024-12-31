@@ -32,16 +32,14 @@ The `opol/opol/stack` directory is the heart of the application, responsible for
 | File/Directory          | Description                                                                 |
 |-------------------------|-----------------------------------------------------------------------------|
 | **README.md**           | You are here                                                                |
-| **_dockerfiles**        | Utility Dockerfiles, like Ray Worker Nodes                                   |
 | **.store**             | Store for scraped data, geocoding data, and redis queue storage              |
 | **compose.local.yml**   | Compose File using a local Prefect server                                    |
 | **compose.yml**         | Development Compose File                                                    |
+| **flows.compose.yml**   | Compose File for flows                                                     |
+| **prefect.yaml**        | Prefect Configuration File                                                |
 | **core**                | Service package, holding pydantic models, URL mappings, database connections |
-| **flows**               | Batch processing flows: scraping, geocoding                                  |
-| **flows.sh**            | Start all flows                                                             |
+| **flows**               | Batch processing flows: scraping, geocoding, entities, classification, embeddings |
 | **services**            | Services, mostly used for live requests: scraping, geocoding, embeddings .. + a dashboard |
-| **services.sh**         | Start all services                                                          |
-
 
 ## Environment Configuration
 Environment variables are managed through the `.env` file, which is essential for configuring service parameters like API keys, database credentials, and service ports. The `.env.example` file serves as a template, outlining the required variables without exposing sensitive information. Ensure you populate the `.env` file with the necessary configurations before deploying the stack.
@@ -56,6 +54,22 @@ mv opol/stack/.env.example opol/stack/.env
 The stack utilizes Docker Compose to manage and orchestrate multiple services seamlessly.
 - `compose.yml`: Defines the production-ready services, configurations, and dependencies.
 - `compose.local.yml`: Environment-specific compose file for local development.
+- `flows.compose.yml`: Compose File for flows 
+
+# Flows
+If you boot up the stack, the prefect worker will start up and create a workpool. With the deploy-flows.sh:
+```bash
+bash deploy-flows.sh
+```
+You can deploy, i.e. register the flow. If the cron scedule in the prefect.yaml is hit the flow run. It can also be triggered via cli. Which is e.g. what the core-app does to trigger the flows. The max-concurrent setting limits the number of concurrent runs.
+Some flows have specific dependencies, all of this is managed in the flows. The lightweight flows use the worker-base image.
+
+For local development the flows.compose.yml is used:
+```bash
+docker compose -f flows.compose.yml up flow-embeddings --build
+```
+
+
 
 ### Core Services
 Core services form the backbone of the application, handling functionalities like data scraping, engineering, batch processing and various utitlies centered around opol.
