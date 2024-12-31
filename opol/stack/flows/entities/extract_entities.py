@@ -42,6 +42,7 @@ class EntityExtractor:
         text = re.sub(r'\s+', ' ', text)
         return text.strip()
 
+    @task(log_prints=True)
     def predict_entities(self, text: str, labels: List[str]) -> List[Tuple[str, str]]:
         max_length = 512  # Adjust based on model's capabilities
         entities = []
@@ -105,6 +106,7 @@ def process_content(content: Content, extractor: EntityExtractor) -> Tuple[Conte
 
     return content, merged_entities, primary_locations, top_entities_texts
 
+@task(log_prints=True)
 def merge_entities(entities: List[Tuple[str, str]], extractor: EntityExtractor, title_entities_texts: List[str]) -> List[Tuple[str, str]]:
     entity_counts = {}
     for text, label in entities:
@@ -119,6 +121,7 @@ def merge_entities(entities: List[Tuple[str, str]], extractor: EntityExtractor, 
     logger.debug(f"Merged entities count: {len(merged_entities)}")
     return merged_entities
 
+@task(log_prints=True)
 def categorize_entities(merged_entities: List[Tuple[str, str]], title_locations: Set[str]) -> Tuple[Set[str], List[str]]:
     location_counts = {}
     entity_counts = {}
@@ -179,9 +182,9 @@ def extract_entities_flow(batch_size: int = 50):
     push_entities(processed_contents)
     logger.info("Entity extraction flow completed successfully.")
 
-if __name__ == "__main__":
-    extract_entities_flow.serve(
-        name="extract-entities-deployment",
-        cron="0/7 * * * *", # every 7 minutes
-        parameters={"batch_size": 20}
-    )
+# if __name__ == "__main__":
+#     extract_entities_flow.serve(
+#         name="extract-entities-deployment",
+#         cron="0/7 * * * *", # every 7 minutes
+#         parameters={"batch_size": 20}
+#     )
