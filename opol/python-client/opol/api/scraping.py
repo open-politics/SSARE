@@ -5,7 +5,7 @@ import json
 
 class Scraping(BaseClient):
     def __init__(self, mode: str, api_key: str = None, timeout: int = 60):
-        super().__init__(mode, api_key=api_key, timeout=timeout, service_name="scraper-service", port=8081)
+        super().__init__(mode, api_key=api_key, timeout=timeout, service_name="service-scraper", port=8081)
 
     def polls(self, location: str = "Germany", pretty: Optional[bool] = False, latest: Optional[bool] = False, summarised: Optional[bool] = False) -> dict:
         location = location.lower()

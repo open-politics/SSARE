@@ -7,7 +7,7 @@ class URLBuilder(ABC):
 
 class RemoteURLBuilder(URLBuilder):
     def build_base_url(self, service_name: str, port: int) -> str:
-        # remote: https://api.opol.io/geo-service/
+        # remote: https://api.opol.io/service-geo/
         return f"https://api.opol.io/{service_name}/"
 
 class LocalURLBuilder(URLBuilder):

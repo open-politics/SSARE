@@ -9,8 +9,8 @@ class Articles(BaseClient):
     Client to interact with the Articles API endpoints.
     """
     def __init__(self, mode: str, api_key: str = None, timeout: int = 60):
-        # postgres-service at port 5434
-        super().__init__(mode, api_key=api_key, timeout=timeout, service_name="postgres-service", port=5434)
+        # service-postgres at port 5434
+        super().__init__(mode, api_key=api_key, timeout=timeout, service_name="service-postgres", port=5434)
 
     def __call__(self, *args, **kwargs):
         if args:

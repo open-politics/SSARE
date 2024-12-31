@@ -5,7 +5,7 @@ import json
 
 class Legislation(BaseClient):
     def __init__(self, mode: str, api_key: str = None, timeout: int = 60):
-        super().__init__(mode, api_key=api_key, timeout=timeout, service_name="scraper-service", port=8081)
+        super().__init__(mode, api_key=api_key, timeout=timeout, service_name="service-scraper", port=8081)
 
     def legislation(self, location: str = "Germany", pretty: Optional[bool] = False) -> dict:
         location = location.lower()

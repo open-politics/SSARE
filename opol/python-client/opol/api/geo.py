@@ -6,7 +6,7 @@ from .client_base import BaseClient
 
 class Geo(BaseClient):
     def __init__(self, mode: str, api_key: str = None, timeout: int = 60):
-        super().__init__(mode, api_key=api_key, timeout=timeout, service_name="geo-service", port=3690)
+        super().__init__(mode, api_key=api_key, timeout=timeout, service_name="service-geo", port=3690)
 
     class ByIdRequest(BaseModel):
         content_ids: List[str]
