@@ -21,7 +21,7 @@ class Search(BaseClient):
         category : str
     """
     def __init__(self, mode: str, api_key: str = None, timeout: int = 60):
-        super().__init__(mode, api_key=api_key, timeout=timeout, service_name="searxng", port=8021)
+        super().__init__(mode, api_key=api_key, timeout=timeout, service_name="engine-searxng", port=8021)
 
     def engine(self, query: str, engine: Optional[str] = "google", pretty: Optional[bool] = False,
                categories: Optional[str] = None, language: Optional[str] = None, time_range: Optional[str] = None) -> List[SearXngResults]:

@@ -17,7 +17,7 @@ class Classification(BaseClient):
             mode,
             api_key=api_key,
             timeout=timeout,
-            service_name="classification-service",
+            service_name="service-classification",
             port=5688
         )
         
