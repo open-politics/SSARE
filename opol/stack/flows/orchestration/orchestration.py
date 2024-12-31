@@ -21,7 +21,7 @@ async def produce_flags(raise_on_failure=True):
     return response.status_code == 200
 
 @task
-async def create_scrape_jobs(raise_on_failure=True):
+async def scrape_sources(raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
         response = await client.post(f"{config.service_urls['service-scraper']}/create_scrape_jobs", timeout=700)
     if response.status_code != 200 and raise_on_failure:
