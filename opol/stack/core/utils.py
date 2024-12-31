@@ -52,12 +52,12 @@ def get_db_url():
     else:
             return (
                 f"postgresql+asyncpg://{os.getenv('ARTICLES_DB_USER')}:{os.getenv('ARTICLES_DB_PASSWORD')}"
-            f"@articles_database:{os.getenv('ARTICLES_DB_PORT')}/{os.getenv('ARTICLES_DB_NAME')}"
+            f"@database-articles:{os.getenv('ARTICLES_DB_PORT')}/{os.getenv('ARTICLES_DB_NAME')}"
         )
 
 def get_redis_url():
     if os.getenv('REDIS_MODE') == "managed":
         return f"redis://{os.getenv('MANAGED_REDIS_HOST')}:{os.getenv('MANAGED_REDIS_PORT')}"
     else:
-        return f"redis://redis:{os.getenv('REDIS_PORT')}"
+        return f"redis://engine-redis:{os.getenv('REDIS_PORT')}"
 

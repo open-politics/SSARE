@@ -250,4 +250,4 @@ async def process_content(content):
 #         name="classify-contents-deployment",
 #         cron="*/10 * * * *", 
 #         parameters={"batch_size": 4}
-#     ))
+#     ))    

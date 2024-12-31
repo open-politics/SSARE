@@ -1,18 +1,18 @@
 from typing import List, Union
 import os
-from prefect import flow, task, runtime
-from redis import Redis
 import json
 import numpy as np
+import nltk
+import asyncio
+
+from prefect import flow, task, runtime
+from prefect.logging import get_run_logger
+from prefect.task_runners import ConcurrentTaskRunner
+from redis import Redis
 from fastembed import TextEmbedding
+
 from core.models import Content
 from core.utils import get_redis_url
-from prefect.task_runners import ConcurrentTaskRunner
-import nltk
-
-from prefect.logging import get_run_logger
-
-import asyncio
 
 nltk.download('punkt')
 
@@ -44,7 +44,7 @@ def encode_text(texts: Union[str, List[str]]) -> Union[List[float], List[List[fl
 
 def semantic_chunking(text: str) -> List[str]:
     """
-    Splits the input text into semantically coherent chunks based on sentence embeddings.
+    Splits the input text into semantically coherent chunks.
     """
     sentences = nltk.sent_tokenize(text, language='english')
     sentence_embeddings = encode_text(sentences)
@@ -102,7 +102,7 @@ def process_content(content: Content):
             }
             chunk_objects.append(chunk_object)
 
-        # Calculate the overall content embeddings as the mean of chunk embeddings
+        # Overall content embedding = mean of chunk embeddings
         if chunk_embeddings_list:
             content.embeddings = np.mean(chunk_embeddings_list, axis=0).tolist()
 
@@ -110,7 +110,7 @@ def process_content(content: Content):
         content_dict["chunks"] = chunk_objects
         content_dict["id"] = str(content.id)
 
-        print(f"Generated embeddings for content: {content.url}, Number of chunks: {len(chunks)}")
+        print(f"Generated embeddings for content: {content.url}, #chunks: {len(chunks)}")
         return content_dict
     else:
         print(f"No text available to generate embeddings for content: {content.url}")
@@ -136,7 +136,7 @@ def write_contents_to_redis(contents_with_embeddings: List[dict]):
     """
     redis_conn = Redis.from_url(get_redis_url(), db=6, decode_responses=True)
     try:
-        serialized_contents = [json.dumps(content) for content in contents_with_embeddings if content]
+        serialized_contents = [json.dumps(c) for c in contents_with_embeddings if c]
         if serialized_contents:
             redis_conn.lpush('contents_with_embeddings', *serialized_contents)
             print(f"Wrote {len(serialized_contents)} contents with embeddings to Redis")
@@ -148,47 +148,23 @@ def write_contents_to_redis(contents_with_embeddings: List[dict]):
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
 def generate_embeddings_flow(batch_size: int):
     """
-    The main flow that orchestrates the retrieval, processing, and storage of content embeddings.
+    The main flow to retrieve, process, and store content embeddings.
     """
     print("Starting embeddings generation process")
     raw_contents = retrieve_contents_from_redis(batch_size)
-    
-    # # Split raw_contents into 5 sets
-    # sets = [raw_contents[i::5] for i in range(5)]
-    
-    # # Submit only 5 tasks, each processing a set of contents
-    # futures = [process_content_set.submit(content_set) for content_set in sets]
-    
-    # # Collect results from each task
+
     contents_with_embeddings = []
-    # for future in futures:
-    #     contents_with_embeddings.extend(future.result())
-
-    ## One singel batch
-
     for raw_content in raw_contents:
         content_dict = process_content(raw_content)
         if content_dict:
             contents_with_embeddings.append(content_dict)
-    
+
     write_contents_to_redis(contents_with_embeddings)
     print("Embeddings generation process completed")
 
-@task(log_prints=True)
-def process_content_set(content_set: List[Content]) -> List[dict]:
-    """
-    Processes a set of content items by generating embeddings and chunking the text.
-    """
-    contents_with_embeddings = []
-    for content in content_set:
-        content_dict = process_content(content)
-        if content_dict:
-            contents_with_embeddings.append(content_dict)
-    return contents_with_embeddings
-
-if __name__ == "__main__":
-    generate_embeddings_flow.serve(
-        name="generate-embeddings-deployment",
-        cron="*/5 * * * *",
-        parameters={"batch_size": 20}
-    )
+# -------------------------------------------------------------------
+# OPTIONAL: For local testing only (without Prefect deployment)
+# -------------------------------------------------------------------
+# if __name__ == "__main__":
+#     # Just run flow once with some default params
+#     generate_embeddings_flow(batch_size=20)

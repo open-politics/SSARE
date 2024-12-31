@@ -15,7 +15,7 @@ config = ServiceConfig()
 @task
 async def produce_flags(raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
-        response = await client.get(f"{config.service_urls['postgres-service']}/flags")
+        response = await client.get(f"{config.service_urls['service-postgres']}/flags")
     if response.status_code != 200 and raise_on_failure:
         raise Exception("Failed to produce flags")
     return response.status_code == 200
@@ -23,7 +23,7 @@ async def produce_flags(raise_on_failure=True):
 @task
 async def create_scrape_jobs(raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
-        response = await client.post(f"{config.service_urls['scraper-service']}/create_scrape_jobs", timeout=700)
+        response = await client.post(f"{config.service_urls['service-scraper']}/create_scrape_jobs", timeout=700)
     if response.status_code != 200 and raise_on_failure:
         raise Exception("Failed to create scrape jobs")
     return response.status_code == 200
@@ -31,7 +31,7 @@ async def create_scrape_jobs(raise_on_failure=True):
 @task
 async def store_raw_contents(raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
-        response = await client.post(f"{config.service_urls['postgres-service']}/store_raw_contents")
+        response = await client.post(f"{config.service_urls['service-postgres']}/store_raw_contents")
     if response.status_code != 200 and raise_on_failure:
         raise Exception("Failed to store raw contents")
     return response.status_code == 200
@@ -39,7 +39,7 @@ async def store_raw_contents(raise_on_failure=True):
 @task
 async def deduplicate_contents(raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
-        response = await client.post(f"{config.service_urls['postgres-service']}/deduplicate_contents")
+        response = await client.post(f"{config.service_urls['service-postgres']}/deduplicate_contents")
     if response.status_code != 200 and raise_on_failure:
         raise Exception("Failed to deduplicate contents")
     return response.status_code == 200
@@ -47,7 +47,7 @@ async def deduplicate_contents(raise_on_failure=True):
 @task
 async def create_embedding_jobs(raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
-        response = await client.post(f"{config.service_urls['postgres-service']}/create_embedding_jobs")
+        response = await client.post(f"{config.service_urls['service-postgres']}/create_embedding_jobs")
     if response.status_code != 200 and raise_on_failure:
         raise Exception("Failed to create embedding jobs")
     return response.status_code == 200
@@ -56,7 +56,7 @@ async def create_embedding_jobs(raise_on_failure=True):
 async def generate_embeddings(batch_size: int = 50, raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
         response = await client.post(
-            f"{config.service_urls['embedding-service']}/generate_embeddings",
+            f"{config.service_urls['service-embeddings']}/generate_embeddings",
             params={"batch_size": batch_size},
             timeout=700
         )
@@ -67,7 +67,7 @@ async def generate_embeddings(batch_size: int = 50, raise_on_failure=True):
 @task
 async def store_contents_with_embeddings(raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
-        response = await client.post(f"{config.service_urls['postgres-service']}/store_contents_with_embeddings")
+        response = await client.post(f"{config.service_urls['service-postgres']}/store_contents_with_embeddings")
     if response.status_code != 200 and raise_on_failure:
         raise Exception("Failed to store contents with embeddings")
     return response.status_code == 200
@@ -76,7 +76,7 @@ async def store_contents_with_embeddings(raise_on_failure=True):
 async def create_entity_extraction_jobs(raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
         response = await client.post(
-            f"{config.service_urls['postgres-service']}/create_entity_extraction_jobs",
+            f"{config.service_urls['service-postgres']}/create_entity_extraction_jobs",
             timeout=700
         )
     if response.status_code != 200 and raise_on_failure:
@@ -87,7 +87,7 @@ async def create_entity_extraction_jobs(raise_on_failure=True):
 async def extract_entities(batch_size: int = 50, raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
         response = await client.post(
-            f"{config.service_urls['entity-service']}/extract_entities",
+            f"{config.service_urls['service-entities']}/extract_entities",
             params={"batch_size": batch_size},
             timeout=700
         )
@@ -98,7 +98,7 @@ async def extract_entities(batch_size: int = 50, raise_on_failure=True):
 @task
 async def store_contents_with_entities(raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
-        response = await client.post(f"{config.service_urls['postgres-service']}/store_contents_with_entities")
+        response = await client.post(f"{config.service_urls['service-postgres']}/store_contents_with_entities")
     if response.status_code != 200 and raise_on_failure:
         raise Exception("Failed to store contents with entities")
     return response.status_code == 200
@@ -107,7 +107,7 @@ async def store_contents_with_entities(raise_on_failure=True):
 async def create_geocoding_jobs(raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
         response = await client.post(
-            f"{config.service_urls['postgres-service']}/create_geocoding_jobs",
+            f"{config.service_urls['service-postgres']}/create_geocoding_jobs",
             timeout=700
         )
     if response.status_code != 200 and raise_on_failure:
@@ -118,7 +118,7 @@ async def create_geocoding_jobs(raise_on_failure=True):
 async def geocode_contents(batch_size: int = 50, raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
         response = await client.post(
-            f"{config.service_urls['geo-service']}/geocode_contents",
+            f"{config.service_urls['service-geo']}/geocode_contents",
             params={"batch_size": batch_size},
             timeout=700
         )
@@ -129,7 +129,7 @@ async def geocode_contents(batch_size: int = 50, raise_on_failure=True):
 @task
 async def store_contents_with_geocoding(raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
-        response = await client.post(f"{config.service_urls['postgres-service']}/store_contents_with_geocoding")
+        response = await client.post(f"{config.service_urls['service-postgres']}/store_contents_with_geocoding")
     if response.status_code != 200 and raise_on_failure:
         raise Exception("Failed to store contents with geocoding")
     return response.status_code == 200
@@ -138,7 +138,7 @@ async def store_contents_with_geocoding(raise_on_failure=True):
 async def create_classification_jobs(raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
         response = await client.post(
-            f"{config.service_urls['postgres-service']}/create_classification_jobs",
+            f"{config.service_urls['service-postgres']}/create_classification_jobs",
             timeout=700
         )
     if response.status_code != 200 and raise_on_failure:
@@ -160,7 +160,7 @@ async def classify_contents(batch_size: int = 50, raise_on_failure=True):
 @task
 async def store_contents_with_classification(raise_on_failure=True):
     async with httpx.AsyncClient(timeout=1000) as client:
-        response = await client.post(f"{config.service_urls['postgres-service']}/store_contents_with_classification")
+        response = await client.post(f"{config.service_urls['service-postgres']}/store_contents_with_classification")
     if response.status_code != 200 and raise_on_failure:
         raise Exception("Failed to store contents with classification")
     return response.status_code == 200

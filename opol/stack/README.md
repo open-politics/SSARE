@@ -67,7 +67,7 @@ Core services form the backbone of the application, handling functionalities lik
 
 
 Databases & Queues:
-- PostgreSQL Database (`articles_database`)
+- PostgreSQL Database (`database-articles`)
 - Redis Server (`redis`)
 - Prefect Server (`prefect_server`)
 

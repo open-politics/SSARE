@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: geo-service
+  name: service-geo
   namespace: {{ .Values.namespace }}
 spec:
   replicas: {{ .Values.replicaCount.geoService }}
   selector:
     matchLabels:
-      app: geo-service
+      app: service-geo
   template:
     metadata:
       labels:
-        app: geo-service
+        app: service-geo
     spec:
       containers:
-        - name: geo-service
+        - name: service-geo
           image: {{ .Values.image.geoService }}
           ports:
             - containerPort: 3690
@@ -26,7 +26,7 @@ spec:
           expose:
             - 3690
           volumeMounts:
-            - name: geo-service-volume
+            - name: service-geo-volume
               mountPath: /app/data
           resources:
             requests:

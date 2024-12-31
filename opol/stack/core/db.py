@@ -8,7 +8,7 @@ def get_db_url():
         host = config.MANAGED_ARTICLES_DB_HOST
         port = config.MANAGED_ARTICLES_DB_PORT
     else:
-        host = "articles_database"
+        host = "database-articles"
         port = config.ARTICLES_DB_PORT
 
     return (

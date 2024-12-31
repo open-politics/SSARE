@@ -1,6 +1,6 @@
 services:
 
-  app:
+  app-opol-core:
     build: 
       context: .
       dockerfile: ./services/app/Dockerfile
@@ -11,16 +11,16 @@ services:
     env_file:
       - .env
     environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
+      - PREFECT_API_URL=${PREFECT_API_URL}
       - PREFECT_API_KEY=${PREFECT_API_KEY}
     depends_on:
-      - scraper-service
-      - postgres-service
+      - service-scraper
+      - service-postgres
     networks:
       - opol-app-stack
       - default
-  
-  articles_database:
+
+  database-articles:
     image: pgvector/pgvector:pg16
     restart: always
     environment:
@@ -29,7 +29,7 @@ services:
       - POSTGRES_DB=${ARTICLES_DB_NAME}
       - POSTGRES_CONFIG_FILE=/etc/postgresql.conf
     volumes:
-      - ./core/configs/postgres.conf:/etc/postgresql.conf
+      - ./core/configs/postgres/postgres.conf:/etc/postgresql.conf
       - ./.store/data/articles_db_data:/var/lib/postgresql/data
     command: -c shared_preload_libraries='pg_stat_statements' -c pg_stat_statements.max=10000 -c pg_stat_statements.track=all
     ports:
@@ -38,116 +38,7 @@ services:
       - opol-app-stack
       - default
 
-  # classification-service:
-  #   build: 
-  #     context: .
-  #     dockerfile: ./services/classification-service/Dockerfile
-  #   ports:
-  #     - "${CLASSIFICATION_SERVICE_PORT}:5688"
-  #   environment:
-  #     - LOCAL_LLM=${LOCAL_LLM}
-  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
-  #     - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-  #     - PREFECT_API_KEY=${PREFECT_API_KEY}
-  #   env_file:
-  #     - .env
-  #   networks:
-  #     - opol-app-stack
-  #     - default
-      
-
-  embedding-service:
-    build: 
-      context: .
-      dockerfile: ./services/embedding-service/Dockerfile
-    restart: always
-    ports:
-      - "${EMBEDDING_SERVICE_PORT}:0420"
-    depends_on:
-      - postgres-service
-    environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
-    env_file:
-      - .env
-    networks:
-      - opol-app-stack
-      - default
-      
-
-  entity-service:
-    build: 
-      context: .
-      dockerfile: ./services/entity-service/Dockerfile
-    restart: always
-    ports:
-      - "${ENTITY_SERVICE_PORT}:1290"
-    depends_on:
-      - postgres-service
-    environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
-    networks:
-      - opol-app-stack
-      - default
-     
-
-  geo-service:
-    build:
-      context: .
-      dockerfile: ./services/geo-service/Dockerfile
-    restart: no
-    networks:
-      - opol-app-stack
-      - default
-    ports:
-      - "${GEO_SERVICE_PORT}:3690"
-    expose:
-      - "3690"
-    env_file:
-      - .env
-    environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
-
-  # litellm:
-  #   build: 
-  #     context: .
-  #     dockerfile: ./litellm/Dockerfile
-  #   volumes:
-  #     - ./opol/stack/litellm/config.yaml:/app/config.yaml
-  #   ports:
-  #     - "4000:4000"
-  #   command: >
-  #     --config '/app/config.yaml' --debug --host 0.0.0.0 --port 4000 --num_workers 8
-  #   networks:
-  #     - default
-      
-
-  
-      
-
-  # ollama:
-  #   build: 
-  #     context: .
-  #     dockerfile: ./ollama/Dockerfile
-  #   pull_policy: always
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #        devices:
-  #          - driver: nvidia
-  #            capabilities: ["gpu"]
-  #            count: all
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ./data/ollama:/root/.ollama
-  #   networks:
-  #     - default
-      
-
-  pelias-placeholder:
+  engine-pelias-placeholder:
     image: pelias/placeholder
     restart: always
     command: >
@@ -174,15 +65,92 @@ services:
     networks:
       - opol-app-stack
       - default
-      
 
-  postgres-service:
+  engine-redis:
+    image: redis:latest
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - ./core/configs/redis/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./.store/data/redis:/data
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    networks:
+      - opol-app-stack
+      - default
+
+  engine-searxng:
+    image: searxng/searxng
+    ports:
+      - '${SEARXNG_PORT:-8021}:8080'
+    networks:
+      - default
+      - opol-app-stack
+    env_file:
+      - .env
+    volumes:
+      - ./core/configs/searxng/searxng-limiter.toml:/etc/searxng/limiter.toml
+      - ./core/configs/searxng/searxng-settings.yml:/etc/searxng/settings.yml
+      - ./.store/data/searxng:/data
+
+  service-embeddings:
     build: 
       context: .
-      dockerfile: ./services/postgres-service/Dockerfile
+      dockerfile: ./services/service-embeddings/Dockerfile
+    restart: always
+    ports:
+      - "${EMBEDDING_SERVICE_PORT}:0420"
+    depends_on:
+      - service-postgres
+    environment:
+      - PREFECT_API_URL=${PREFECT_API_URL}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - opol-app-stack
+      - default
+
+  service-entities:
+    build: 
+      context: .
+      dockerfile: ./services/service-entities/Dockerfile
+    restart: always
+    ports:
+      - "${ENTITY_SERVICE_PORT}:1290"
+    depends_on:
+      - service-postgres
+    environment:
+      - PREFECT_API_URL=${PREFECT_API_URL}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    networks:
+      - opol-app-stack
+      - default
+
+  service-geo:
+    build:
+      context: .
+      dockerfile: ./services/service-geo/Dockerfile
+    restart: no
+    networks:
+      - opol-app-stack
+      - default
+    ports:
+      - "${GEO_SERVICE_PORT}:3690"
+    expose:
+      - "3690"
+    env_file:
+      - .env
+    environment:
+      - PREFECT_API_URL=${PREFECT_API_URL}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+
+  service-postgres:
+    build: 
+      context: .
+      dockerfile: ./services/service-postgres/Dockerfile
     volumes:
-      - ./services/postgres-service/alembic/versions:/app/alembic/versions
-      - ./.store/credentials/postgres-service-key.json:/app/credentials/postgres-service-key.json
+      - ./services/service-postgres/alembic/versions:/app/alembic/versions
+      - ./.store/credentials/service-postgres-key.json:/app/credentials/service-postgres-key.json
       - cloudsql:/cloudsql
       - ./.store/backups:/app/backups
     env_file:
@@ -192,15 +160,121 @@ services:
     networks:
       - opol-app-stack
       - default
-      
-    
+
+  service-scraper:
+    build: 
+      context: .
+      dockerfile: ./services/service-scraper/Dockerfile
+    ports:
+      - "${SCRAPER_SERVICE_PORT}:8081"
+    environment:
+      - PREFECT_API_URL=${PREFECT_API_URL}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    networks:
+      - opol-app-stack
+      - default
+
+  worker-prefect:
+    image: openpoliticsproject/worker-base:latest
+    command: ["prefect", "worker", "start", "--pool", "docker-pool"]
+    env_file:
+      - .env
+    build:
+      context: flows
+      dockerfile: Dockerfile
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - default
+      - opol-app-stack
+
+  # engine-ray-head:
+  #   build: 
+  #     context: .
+  #     dockerfile: ./images/RayBase.Dockerfile
+  #   command: >
+  #     sh -c "ray start --head --port=6380 --dashboard-host=0.0.0.0 --block"
+  #   ports:
+  #     - "6380:6380"
+  #     - "8265:8265"
+  #     - "10001:10001"
+  #   env_file:
+  #     - .env
+  #   networks:
+  #     - default
+  #   environment:
+  #     - RAY_HEAD_SERVICE_HOST=ray_head
+  #     - RAY_HEAD_SERVICE_PORT=6380
+  #   shm_size: 10.24gb
+
+  # ray_worker:
+  #   build: 
+  #     context: .
+  #     dockerfile: ./images/RayBase.Dockerfile
+  #   command: >
+  #     sh -c "ray start --address=ray_head:6380 --block"
+  #   networks:
+  #     - default
+  #   depends_on:
+  #     - ray_head
+  #   shm_size: 10.24gb
+  # Deprecated. Since the opol package contains basically all the necessary code, we can just use that.
+  # classification-service:
+  #   build: 
+  #     context: .
+  #     dockerfile: ./services/classification-service/Dockerfile
+  #   ports:
+  #     - "${CLASSIFICATION_SERVICE_PORT}:5688"
+  #   environment:
+  #     - LOCAL_LLM=${LOCAL_LLM}
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #     - PREFECT_API_URL=${PREFECT_API_URL}
+  #     - PREFECT_API_KEY=${PREFECT_API_KEY}
+  #   env_file:
+  #     - .env
+  #   networks:
+  #     - opol-app-stack
+  #     - default
+
+  # litellm:
+  #   build: 
+  #     context: .
+  #     dockerfile: ./litellm/Dockerfile
+  #   volumes:
+  #     - ./opol/stack/litellm/config.yaml:/app/config.yaml
+  #   ports:
+  #     - "4000:4000"
+  #   command: >
+  #     --config '/app/config.yaml' --debug --host 0.0.0.0 --port 4000 --num_workers 8
+  #   networks:
+  #     - default
+
+  # ollama:
+  #   build: 
+  #     context: .
+  #     dockerfile: ./ollama/Dockerfile
+  #   pull_policy: always
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #        devices:
+  #          - driver: nvidia
+  #            capabilities: ["gpu"]
+  #            count: all
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ./data/ollama:/root/.ollama
+  #   networks:
+  #     - default
+
   # cloud-sql-proxy:
   #   image: gcr.io/cloud-sql-connectors/cloud-sql-proxy
   #   command:
-  #     - "--credentials-file=/credentials/postgres-service-key.json"
+  #     - "--credentials-file=/credentials/service-postgres-key.json"
   #     - "${CLOUD_SQL_CONNECTION_NAME}"
   #   volumes:
-  #     - ./credentials/postgres-service-key.json:/credentials/postgres-service-key.json:ro
+  #     - ./credentials/service-postgres-key.json:/credentials/service-postgres-key.json:ro
   #     - cloudsql:/cloudsql
 
   # prefect_database:
@@ -221,218 +295,13 @@ services:
   #     retries: 5
   #   networks:
   #     - default
-      
 
-  # ray_head:
-  #   build: 
-  #     context: .
-  #     dockerfile: ./images/RayBase.Dockerfile
-  #   command: >
-  #     sh -c "ray start --head --port=6380 --dashboard-host=0.0.0.0 --block"
-  #   ports:
-  #     - "6380:6380"
-  #     - "8265:8265"
-  #     - "10001:10001"
-  #   env_file:
-  #     - .env
-  #   networks:
-  #     - default
-      
-  #   environment:
-  #     - RAY_HEAD_SERVICE_HOST=ray_head
-  #     - RAY_HEAD_SERVICE_PORT=6380
-  #   shm_size: 10.24gb
-
-  
-  # ray_worker:
-  #   build: 
-  #     context: .
-  #     dockerfile: ./images/RayBase.Dockerfile
-  #   command: >
-  #     sh -c "ray start --address=ray_head:6380 --block"
-  #   networks:
-  #     - default
-      
-  #   depends_on:
-  #     - ray_head
-  #   shm_size: 10.24gb
-    
-
-  redis:
-    image: redis:latest
-    command: redis-server /usr/local/etc/redis/redis.conf
-    volumes:
-      - ./core/configs/redis.conf:/usr/local/etc/redis/redis.conf
-      - ./.store/data/redis:/data
-    ports:
-      - "${REDIS_PORT}:${REDIS_PORT}"
-    networks:
-      - opol-app-stack
-      - default
-      
-
-  scraper-service:
-    build: 
-      context: .
-      dockerfile: ./services/scraper-service/Dockerfile
-    ports:
-      - "${SCRAPER_SERVICE_PORT}:8081"
-    environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/bb0713a4-8ee0-466d-a215-02f392396cb8/workspaces/befbba42-c4cb-4bce-b539-ab6bb67a99c0
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
-    networks:
-      - opol-app-stack
-      - default
-      
-
-## FLOWS
-
-  flow-embeddings:
-    build: 
-      context: .
-      dockerfile: ./flows/embeddings/Dockerfile
-    restart: always
-    environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/bb0713a4-8ee0-466d-a215-02f392396cb8/workspaces/befbba42-c4cb-4bce-b539-ab6bb67a99c0
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
-    env_file:
-      - .env
-    networks:
-      - opol-app-stack
-      - default
-        
-
-  flow-scraping:
-    build: 
-      context: .
-      dockerfile: ./flows/scraping/Dockerfile
-    restart: always
-    environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
-    env_file:
-      - .env
-    networks:
-      - opol-app-stack
-      - default
-      
-
-  flow-entities:
-    build: 
-      context: .
-      dockerfile: ./flows/entities/Dockerfile
-    restart: no
-    environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
-    env_file:
-      - .env
-    networks:
-      - opol-app-stack
-      - default
-      
-
-  flow-classification:
-    build: 
-      context: .
-      dockerfile: ./flows/classification/Dockerfile
-    restart: always
-    environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
-    env_file:
-      - .env
-    networks:
-      - opol-app-stack
-      - default
-      
-
-  flow-pipeline:
-    build: 
-      context: .
-      dockerfile: ./flows/orchestration/Dockerfile
-    restart: always
-    environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY}
-    env_file:
-      - .env
-    networks:
-      - opol-app-stack
-      - default
-    
-  flow-geocoding:
-    build: 
-      context: .
-      dockerfile: ./flows/geocoding/Dockerfile
-    restart: always
-    environment:
-      - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-      - PREFECT_API_KEY=${PREFECT_API_KEY} 
-    env_file:
-      - .env
-    networks:
-      - opol-app-stack
-      - default
-      
-
-  # resolve_entities_flow:
-  #   build: 
-  #     context: .
-  #     dockerfile: ./postgres-service/Dockerfile
-  #   restart: no
-  #   environment:
-  #     - PREFECT_API_URL=https://api.prefect.cloud/api/accounts/${PREFECT_WORKSPACE_ID}/workspaces/${PREFECT_WORKSPACE}
-  #     - PREFECT_API_KEY=${PREFECT_API_KEY}
-  #     - DATABASE_URL= "postgresql://postgres:postgres@postgres-service:5434/postgres"
-  #   volumes:
-  #     - ./opol/stack/postgres-service/alembic/versions:/app/alembic/versions
-  #     - ./credentials/postgres-service-key.json:/app/credentials/postgres-service-key.json
-  #     - cloudsql:/cloudsql
-  #     - ./opol/data/backups:/app/backups
-  #   ports:
-  #     - "7451:7451"
-  #   env_file:
-  #     - .env
-  #   networks:
-  #     - default
-      
-
-  # prometheus:
-  #   image: prom/prometheus:latest
-  #   container_name: prometheus
-  #   volumes:
-  #     - ./opol/stack/core/configs/prometheus.yml:/etc/prometheus/prometheus.yml
-  #   ports:
-  #     - "9090:9090"
-  #   depends_on:
-  #     - resolve_entities_flow 
-  #   networks:
-  #     - default
-      
-  
-  # grafana:
-  #   image: grafana/grafana:latest
-  #   container_name: grafana
-  #   ports:
-  #     - "3000:3000"  # Grafana's default port
-  #   environment:
-  #     - GF_SECURITY_ADMIN_PASSWORD=admin  # Set a secure admin password
-  #   volumes:
-  #     - grafana_data:/var/lib/grafana  # Persist Grafana data
-  #     - ./opol/stack/core/configs/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards  # Mount provisioning
-  #     - ./opol/stack/core/configs/grafana/dashboards:/var/lib/grafana/dashboards  # Mount dashboard JSON files
-  #   depends_on:
-  #     - prometheus
-  #   networks:
-  #     - default
-      
 
 volumes:
   articles_db_data:
   cloudsql:
-  prefect_db_data:
-  grafana_data:
+  # prefect_db_data:
+  # grafana_data:
   prefect_data:
   r2r_db_data:
 
@@ -440,4 +309,5 @@ networks:
   default:
     external: false
   opol-app-stack:
+    driver: bridge
     external: true

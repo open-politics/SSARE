@@ -1,0 +1,168 @@
+services:
+## FLOWS
+  ## This is just for local development purposes. If you want to test a flow
+  flow-embeddings:
+    build: 
+      context: .
+      dockerfile: ./flows/embeddings/Dockerfile
+    command: >
+      sh -c "python -m flows.embeddings.generate_embeddings_onebatch"
+    restart: always
+    environment:
+      - PREFECT_API_URL=${PREFECT_API_URL}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - opol-app-stack
+      - default
+        
+
+  flow-scraping:
+    build: 
+      context: .
+      dockerfile: ./flows/scraping/Dockerfile
+    command: >
+      sh -c "python -m flows.scraping.scrape_newssites"
+    restart: always
+    environment:
+      - PREFECT_API_URL=${PREFECT_API_URL}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - opol-app-stack
+      - default
+      
+
+  flow-entities:
+    build: 
+      context: .
+      dockerfile: ./flows/entities/Dockerfile
+    command: >
+      sh -c "python -m flows.entities.extract_entities"
+    restart: no
+    environment:
+      - PREFECT_API_URL=${PREFECT_API_URL}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - opol-app-stack
+      - default
+      
+
+  flow-classification:
+    build: 
+      context: .
+      dockerfile: ./flows/classification/Dockerfile
+    command: >
+      sh -c "python -m flows.classification.classify_content"
+    restart: always
+    environment:
+      - PREFECT_API_URL=${PREFECT_API_URL}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - opol-app-stack
+      - default
+      
+
+  flow-pipeline:
+    build: 
+      context: .
+      dockerfile: ./flows/orchestration/Dockerfile
+    restart: always
+    environment:
+      - PREFECT_API_URL=${PREFECT_API_URL}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+    env_file:
+      - .env
+    networks:
+      - opol-app-stack
+      - default
+    
+  flow-geocoding:
+    build: 
+      context: .
+      dockerfile: ./flows/geocoding/Dockerfile
+    command: >
+      sh -c "python -m flows.geocoding.geocode_locations"
+    restart: always
+    environment:
+      - PREFECT_API_URL=${PREFECT_API_URL}
+      - PREFECT_API_KEY=${PREFECT_API_KEY} 
+    env_file:
+      - .env
+    networks:
+      - opol-app-stack
+      - default
+      
+
+  resolve_entities_flow:
+    build: 
+      context: .
+      dockerfile: ./service-postgres/Dockerfile
+    command: >
+      sh -c "python -m flows.postgres.resolve_entities"
+    restart: no
+    environment:
+      - PREFECT_API_URL=${PREFECT_API_URL}
+      - PREFECT_API_KEY=${PREFECT_API_KEY}
+      - DATABASE_URL= "postgresql://postgres:postgres@service-postgres:5434/postgres"
+    volumes:
+      - ./opol/stack/service-postgres/alembic/versions:/app/alembic/versions
+      - ./credentials/service-postgres-key.json:/app/credentials/service-postgres-key.json
+      - cloudsql:/cloudsql
+      - ./opol/data/backups:/app/backups
+    ports:
+      - "7451:7451"
+    env_file:
+      - .env
+    networks:
+      - default
+      
+
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: prometheus
+  #   volumes:
+  #     - ./opol/stack/core/configs/prometheus.yml:/etc/prometheus/prometheus.yml
+  #   ports:
+  #     - "9090:9090"
+  #   depends_on:
+  #     - resolve_entities_flow 
+  #   networks:
+  #     - default
+      
+  
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   container_name: grafana
+  #   ports:
+  #     - "3000:3000"  # Grafana's default port
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin  # Set a secure admin password
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana  # Persist Grafana data
+  #     - ./opol/stack/core/configs/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards  # Mount provisioning
+  #     - ./opol/stack/core/configs/grafana/dashboards:/var/lib/grafana/dashboards  # Mount dashboard JSON files
+  #   depends_on:
+  #     - prometheus
+  #   networks:
+  #     - default
+
+
+volumes:
+  articles_db_data:
+  cloudsql:
+  prefect_data:
+  r2r_db_data:
+
+networks:
+  opol-app-stack:
+    driver: bridge
+    external: true
+  default:
+    external: false

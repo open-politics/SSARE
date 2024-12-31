@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: entity-service
+  name: service-entities
   namespace: {{ .Values.namespace }}
 spec:
   replicas: {{ .Values.replicaCount.entityService }}
   selector:
     matchLabels:
-      app: entity-service
+      app: service-entities
   template:
     metadata:
       labels:
-        app: entity-service
+        app: service-entities
     spec:
       containers:
-        - name: entity-service
+        - name: service-entities
           image: {{ .Values.image.entityService }}
           ports:
             - containerPort: 1290

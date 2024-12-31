@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+flair
+redis
+asyncpg
+sqlmodel
+prefect
+prefect-ray
+pgvector
+gliner
+protobuf==3.20.1

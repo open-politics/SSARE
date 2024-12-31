@@ -19,7 +19,7 @@ spec:
           ports:
             - containerPort: 5432
           args:
-            - "--credentials-file=/credentials/postgres-service-key.json"
+            - "--credentials-file=/credentials/service-postgres-key.json"
             - "{{ .Values.cloudSqlProxy.connectionName }}"
           volumeMounts:
             - name: cloud-sql-proxy-credentials

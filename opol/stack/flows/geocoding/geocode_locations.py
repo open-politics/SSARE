@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 from redis import Redis
 from prefect import task, flow
 from collections import Counter
-from core.utils import UUIDEncoder
+from core.utils import UUIDEncoder, get_redis_url
 import requests
 from core.service_mapping import config
 import os
@@ -15,7 +15,7 @@ logger = getLogger(__name__)
 
 # Function to retrieve contents from Redis
 def retrieve_contents_from_redis(batch_size: int) -> List[Dict[str, Any]]:
-    redis_conn = Redis.from_url(os.getenv('REDIS_URL'), db=3, decode_responses=True)
+    redis_conn = Redis.from_url(get_redis_url(), db=3, decode_responses=True)
     try:
         batch = redis_conn.lrange('contents_without_geocoding_queue', 0, batch_size - 1)
         redis_conn.ltrim('contents_without_geocoding_queue', batch_size, -1)
@@ -93,14 +93,14 @@ def process_location(location: Dict[str, Any]) -> Dict[str, Any]:
         return geocode_result
     else:
         logger.warning(f"Unable to geocode location: {location_name}")
-        redis_conn = Redis.from_url(os.getenv('REDIS_URL'), db=6)
+        redis_conn = Redis.from_url(get_redis_url(), db=6)
         redis_conn.lpush('failed_geocodes_queue', json.dumps({'name': location_name}))
         return {'name': location_name, 'error': 'Geocoding failed'}
 
 # Function to push geocoded contents to Redis
 @task(log_prints=True)
 def push_geocoded_contents(contents_with_geocoding: List[Dict[str, Any]]):
-    redis_conn = Redis.from_url(os.getenv('REDIS_URL'), db=4, decode_responses=True)
+    redis_conn = Redis.from_url(get_redis_url(), db=4, decode_responses=True)
     try:
         for content in contents_with_geocoding:
             redis_conn.lpush('contents_with_geocoding_queue', json.dumps(content, cls=UUIDEncoder))
@@ -112,7 +112,7 @@ def push_geocoded_contents(contents_with_geocoding: List[Dict[str, Any]]):
 
 # Function to handle failed geocoding attempts
 def handle_failed_geocodes(failed_locations: List[str]):
-    redis_conn = Redis.from_url(os.getenv('REDIS_URL'), db=6)  # Using db 6 for failed geocodes
+    redis_conn = Redis.from_url(get_redis_url(), db=6)  # Using db 6 for failed geocodes
     try:
         for loc in failed_locations:
             redis_conn.lpush('failed_geocodes_queue', json.dumps({'name': loc}))
@@ -125,7 +125,7 @@ def handle_failed_geocodes(failed_locations: List[str]):
 @flow
 def geocode_locations_flow(batch_size: int = 100):
     logger.info("Starting geocoding process for locations")
-    redis_conn = Redis.from_url(os.getenv('REDIS_URL'), db=3, decode_responses=True)
+    redis_conn = Redis.from_url(get_redis_url(), db=3, decode_responses=True)
     try:
         locations_batch = redis_conn.lrange('locations_without_geocoding_queue', 0, batch_size - 1)
         redis_conn.ltrim('locations_without_geocoding_queue', batch_size, -1)

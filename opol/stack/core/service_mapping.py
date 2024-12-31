@@ -6,22 +6,16 @@ class ServiceConfig:
     CORE_APP_PORT = os.getenv('CORE_APP_PORT', '8089')
     POSTGRES_SERVICE_PORT = os.getenv('POSTGRES_SERVICE_PORT', '5434')
     EMBEDDING_SERVICE_PORT = os.getenv('EMBEDDING_SERVICE_PORT', '0420')
-    QDRANT_SERVICE_PORT = os.getenv('QDRANT_SERVICE_PORT', '6969')
-    QDRANT_STORAGE_PORT = os.getenv('QDRANT_STORAGE_PORT', '6333')
     SCRAPER_SERVICE_PORT = os.getenv('SCRAPER_SERVICE_PORT', '8081')
-    RAG_SERVICE_PORT = os.getenv('RAG_SERVICE_PORT', '4312')
     ENTITY_SERVICE_PORT = os.getenv('ENTITY_SERVICE_PORT', '1290')
     GEO_SERVICE_PORT = os.getenv('GEO_SERVICE_PORT', '3690')
-    RERANKER_SERVICE_PORT = os.getenv('RERANKER_SERVICE_PORT', '6930')
     REDIS_PORT = os.getenv('REDIS_PORT', '6379')
     PREFECT_SERVER_PORT = os.getenv('PREFECT_SERVER_PORT', '4200')
     PELIAS_PLACEHOLDER_PORT = os.getenv('PELIAS_PLACEHOLDER_PORT', '3999')
-    R2R_PORT = os.getenv('R2R_PORT', '8000')
-    NEO4J_HTTP_PORT = os.getenv('NEO4J_HTTP_PORT', '7474')
-    NEO4J_BOLT_PORT = os.getenv('NEO4J_BOLT_PORT', '7687')
-    LITELLM_PORT = os.getenv('LITELLM_PORT', '11435')
-    CLASSIFICATION_SERVICE_PORT = os.getenv('CLASSIFICATION_SERVICE_PORT', '5688')
-    SEMANTIC_ROUTER_PORT = os.getenv('SEMANTIC_ROUTER_PORT', '5689')
+
+
+    # SEARXNG
+    SEARXNG_PORT = os.getenv('SEARXNG_PORT', '8021')
 
     ## OLLAMA
     OLLAMA_PORT = os.getenv('OLLAMA_PORT', '11434')
@@ -66,63 +60,43 @@ class ServiceConfig:
     # Service URLs
     if RUNNING_ENV == 'kubernetes':
         service_urls = {
-            "core-app": "http://core-app",
-            "postgres-service": "http://postgres-service",
-            "embedding-service": "http://embedding-service",
-            "qdrant-service": "http://qdrant-service",
-            "qdrant-storage": "http://qdrant-storage",
-            "scraper-service": "http://scraper-service",
-            "rag-service": "http://rag-service",
-            "entity-service": "http://entity-service",
-            "geo-service": "http://geo-service",
-            "redis": "redis://redis",
-            "prefect-server": "http://prefect-server",
-            "reranker-service": "http://reranker-service",
-            "pelias-placeholder": "http://pelias-placeholder",
-            "r2r": "http://r2r",
-            "neo4j-http": "http://neo4j",
-            "neo4j-bolt": "bolt://neo4j",
-            "ollama": "http://ollama",
-            "liteLLM": "http://liteLLM",
-            "classification-service": "http://classification-service",
-            "semantic-router": "http://semantic-router",
+            "core-app": "http://app-opol-core",
+            "service-postgres": "http://service-postgres",
+            "service-embeddings": "http://service-embeddings",
+            "service-scraper": "http://service-scraper",
+            "service-entities": "http://service-entities",
+            "service-geo": "http://service-geo",
+            "redis": "redis://engine-redis",
+            "prefect-server": "http://engine-prefect-server",
+            "pelias-placeholder": "http://engine-pelias-placeholder",
+            "ollama": "http://engine-ollama",
+            "searxng": f"http://engine-searxng",
         }
     elif RUNNING_ENV == 'compose':
         service_urls = {
-            "core-app": f"http://main-core-app:{CORE_APP_PORT}",
-            "postgres-service": f"http://postgres-service:{POSTGRES_SERVICE_PORT}",
-            "embedding-service": f"http://embedding-service:{EMBEDDING_SERVICE_PORT}",
-            "classification-service": f"http://classification-service:{CLASSIFICATION_SERVICE_PORT}",
-            "qdrant-service": f"http://qdrant-service:{QDRANT_SERVICE_PORT}",
-            "qdrant-storage": f"http://qdrant-storage:{QDRANT_STORAGE_PORT}",
-            "scraper-service": f"http://scraper-service:{SCRAPER_SERVICE_PORT}",
-            "rag-service": f"http://rag-service:{RAG_SERVICE_PORT}",
-            "entity-service": f"http://entity-service:{ENTITY_SERVICE_PORT}",
-            "geo-service": f"http://geo-service:{GEO_SERVICE_PORT}",
-            "redis": f"redis://redis:{REDIS_PORT}",
-            "prefect-server": f"http://prefect-server:{PREFECT_SERVER_PORT}",
-            "reranker-service": f"http://reranker-service:{RERANKER_SERVICE_PORT}",
-            "pelias-placeholder": f"http://pelias-placeholder:{PELIAS_PLACEHOLDER_PORT}",
-            "r2r": f"http://r2r:{R2R_PORT}",
-            "neo4j-http": f"http://neo4j:{NEO4J_HTTP_PORT}",
-            "neo4j-bolt": f"bolt://neo4j:{NEO4J_BOLT_PORT}",
-            "ollama": f"http://ollama:{OLLAMA_PORT}",
-            "liteLLM": f"http://liteLLM:{LITELLM_PORT}",
-            "classification-service": f"http://classification-service:{CLASSIFICATION_SERVICE_PORT}",
-            "semantic-router": f"http://semantic-router:{SEMANTIC_ROUTER_PORT}",
+            "core-app": f"http://app-opol-core:{CORE_APP_PORT}",
+            "service-postgres": f"http://service-postgres:{POSTGRES_SERVICE_PORT}",
+            "service-embeddings": f"http://service-embeddings:{EMBEDDING_SERVICE_PORT}",
+            "service-scraper": f"http://service-scraper:{SCRAPER_SERVICE_PORT}",
+            "service-entities": f"http://service-entities:{ENTITY_SERVICE_PORT}",
+            "service-geo": f"http://service-geo:{GEO_SERVICE_PORT}",
+            "redis": f"redis://engine-redis:{REDIS_PORT}",
+            "prefect-server": f"http://engine-prefect-server:{PREFECT_SERVER_PORT}",
+            "pelias-placeholder": f"http://engine-pelias-placeholder:{PELIAS_PLACEHOLDER_PORT}",
+            "ollama": f"http://engine-ollama:{OLLAMA_PORT}",
+            "searxng": f"http://engine-searxng:{SEARXNG_PORT}",
         }
     elif RUNNING_ENV == 'local':
         service_urls = {
             "core-app": f"http://localhost:{CORE_APP_PORT}",
-            "postgres-service": f"http://localhost:{POSTGRES_SERVICE_PORT}",
-            "embedding-service": f"http://localhost:{EMBEDDING_SERVICE_PORT}",
-            "scraper-service": f"http://localhost:{SCRAPER_SERVICE_PORT}",
-            "entity-service": f"http://localhost:{ENTITY_SERVICE_PORT}",
-            "geo-service": f"http://localhost:{GEO_SERVICE_PORT}",
-            "classification-service": f"http://localhost:{CLASSIFICATION_SERVICE_PORT}",
+            "service-postgres": f"http://localhost:{POSTGRES_SERVICE_PORT}",
+            "service-embeddings": f"http://localhost:{EMBEDDING_SERVICE_PORT}",
+            "service-scraper": f"http://localhost:{SCRAPER_SERVICE_PORT}",
+            "service-entities": f"http://localhost:{ENTITY_SERVICE_PORT}",
+            "service-geo": f"http://localhost:{GEO_SERVICE_PORT}",
             "pelias-placeholder": f"http://localhost:{PELIAS_PLACEHOLDER_PORT}",
             "redis": f"redis://localhost:{REDIS_PORT}",
-
+            "searxng": f"http://localhost:{SEARXNG_PORT}",
         }
 
     # Redis channel mappings with explicit types
@@ -164,7 +138,7 @@ def get_db_url():
     else:
         return (
             f"postgresql+asyncpg://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
-                f"@articles_database:{config.ARTICLES_DB_PORT}/{config.ARTICLES_DB_NAME}"
+                f"@database-articles:{config.ARTICLES_DB_PORT}/{config.ARTICLES_DB_NAME}"
             )
 
 def get_redis_url():
@@ -172,7 +146,7 @@ def get_redis_url():
     if os.getenv('REDIS_MODE') == "managed":
         return f"redis://{config.MANAGED_REDIS_HOST}:{config.MANAGED_REDIS_PORT}"
     else:
-        return f"redis://redis:{config.REDIS_PORT}"
+        return f"redis://engine-redis:{config.REDIS_PORT}"
 
 def get_sync_db_url():
     """Get synchronous database URL for Alembic"""
@@ -184,5 +158,5 @@ def get_sync_db_url():
     else:
             return (
                 f"postgresql://{config.ARTICLES_DB_USER}:{config.ARTICLES_DB_PASSWORD}"
-                f"@articles_database:{config.ARTICLES_DB_PORT}/{config.ARTICLES_DB_NAME}"
+                f"@database-articles:{config.ARTICLES_DB_PORT}/{config.ARTICLES_DB_NAME}"
             )

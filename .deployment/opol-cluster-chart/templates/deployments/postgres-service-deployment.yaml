@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: postgres-service
+  name: service-postgres
   namespace: {{ .Values.namespace }}
 spec:
   replicas: {{ .Values.replicaCount.postgresService }}
   selector:
     matchLabels:
-      app: postgres-service
+      app: service-postgres
   template:
     metadata:
       labels:
-        app: postgres-service
+        app: service-postgres
     spec:
       containers:
-        - name: postgres-service
+        - name: service-postgres
           image: {{ .Values.image.postgresService }}
           ports:
             - containerPort: 5432
@@ -44,4 +44,4 @@ spec:
       volumes:
         - name: postgres-storage
           persistentVolumeClaim:
-            claimName: postgres-service-pvc
+            claimName: service-postgres-pvc

@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: postgres-service-pvc
+  name: service-postgres-pvc
   namespace: {{ .Values.namespace }}
 spec:
   accessModes:
@@ -41,7 +41,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: scraper-service-pvc
+  name: service-scraper-pvc
   namespace: {{ .Values.namespace }}
 spec:
   accessModes:

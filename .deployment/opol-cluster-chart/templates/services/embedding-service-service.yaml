@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: embedding-service
+  name: service-embeddings
   namespace: {{ .Values.namespace }}
 spec:
   type: {{ .Values.service.embeddingService.type }}
@@ -9,4 +9,4 @@ spec:
     - port: {{ .Values.service.embeddingService.port }}
       targetPort: {{ .Values.service.embeddingService.targetPort }}
   selector:
-    app: embedding-service
+    app: service-embeddings

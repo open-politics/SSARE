@@ -1,0 +1,115 @@
+name: opol-flows
+prefect-version: 3.10.0
+
+pull: 
+  - prefect.deployments.steps.git_clone:
+      repository: https://github.com/open-politics/opol.git
+      credentials: "{{ prefect.blocks.github-credentials.opp-github-creds }}"
+  - prefect.deployments.steps.set_working_directory:
+      directory: /app/opol/opol/stack/
+
+deployments:
+  - name: scraping
+    entrypoint: ./flows/scraping/scrape_newssites.py:scrape_newssites_flow
+    parameters:
+      flags: ["cnn", "dw", "bbc"]
+    work_pool:
+      name: docker-pool
+      job_variables:
+        image: openpoliticsproject/flow-scraping:latest
+        env:
+          LOGFIRE_TOKEN: ""
+          REDIS_PORT: "6379"
+          REDIS_URL: "redis://engine-redis:6379"
+          GOOGLE_API_KEY: ""
+          OPOL_API_KEY: ""
+          OPOL_MODE: "container"
+        networks:
+          - opol-app-stack
+    version: "1.0.0"
+    tags: []
+    description: The main flow to scrape newssites.
+    enforce_parameter_schema: true
+    schedules: []
+
+  - name: embeddings
+    entrypoint: ./flows/embeddings/generate_embeddings_onebatch.py:generate_embeddings_flow
+    parameters:
+      batch_size: 40
+    work_pool:
+      name: docker-pool
+      job_variables:
+        image: openpoliticsproject/flow-embeddings:latest
+        env:
+          LOGFIRE_TOKEN: ""
+          REDIS_PORT: "6379"
+          REDIS_URL: "redis://engine-redis:6379"
+        networks:
+          - opol-app-stack
+    version: "1.0.0"
+    tags: []
+    description: The main flow to generate embeddings.
+    enforce_parameter_schema: true
+    schedules: []
+
+  - name: entities
+    entrypoint: ./flows/entities/extract_entities.py:extract_entities_flow
+    work_pool:
+      name: docker-pool
+      job_variables:
+        image: openpoliticsproject/flow-entities:latest
+        env:
+          LOGFIRE_TOKEN: ""
+          REDIS_PORT: "6379"
+          REDIS_URL: "redis://engine-redis:6379"
+          PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION: "python"
+        networks:
+          - opol-app-stack
+    version: "1.0.0"
+    tags: []
+    description: The main flow to extract entities.
+    enforce_parameter_schema: true
+    schedules: []
+
+  - name: geocoding
+    entrypoint: ./flows/geocoding/geocode_locations.py:geocode_locations_flow
+    parameters:
+      batch_size: 200
+    work_pool:
+      name: docker-pool
+      job_variables:
+        image: openpoliticsproject/worker-base:latest
+        env:
+          LOGFIRE_TOKEN: ""
+          REDIS_PORT: "6379"
+          REDIS_URL: "redis://engine-redis:6379"
+        networks:
+          - opol-app-stack
+    version: "1.0.0"
+    tags: []
+    description: The main flow to geocode locations.
+    enforce_parameter_schema: true
+    schedules: []
+
+  - name: classification
+    entrypoint: ./flows/classification/classification_flow.py:classify_contents_flow
+    parameters:
+      batch_size: 20
+    work_pool:
+      name: docker-pool
+      job_variables:
+        image: openpoliticsproject/worker-base:latest
+        env:
+          LOGFIRE_TOKEN: ""
+          REDIS_PORT: "6379"
+          REDIS_URL: "redis://engine-redis:6379"
+          GOOGLE_API_KEY: ""
+          OPOL_API_KEY: ""
+          OPOL_MODE: "container"
+        networks:
+          - opol-app-stack
+    version: "1.0.0"
+    tags: []
+    description: The main flow to classify contents.
+    enforce_parameter_schema: true
+    schedules: []

@@ -146,17 +146,17 @@ ingress:
           pathType: Prefix
           appName: classification-service
           servicePort: 5688
-        - path: /embedding-service
+        - path: /service-embeddings
           pathType: Prefix
-          appName: embedding-service
+          appName: service-embeddings
           servicePort: 420
-        - path: /entity-service
+        - path: /service-entities
           pathType: Prefix
-          appName: entity-service
+          appName: service-entities
           servicePort: 1290
-        - path: /geo-service
+        - path: /service-geo
           pathType: Prefix
-          appName: geo-service
+          appName: service-geo
           servicePort: 3690
         - path: /litellm
           pathType: Prefix
@@ -174,9 +174,9 @@ ingress:
           pathType: Prefix
           appName: pelias-placeholder
           servicePort: 4434
-        - path: /scraper-service
+        - path: /service-scraper
           pathType: Prefix
-          appName: scraper-service
+          appName: service-scraper
           servicePort: 8081
   tls:
     - hosts:

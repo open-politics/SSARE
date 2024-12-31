@@ -28,6 +28,6 @@ async def get_session() -> AsyncSession:
     
 def get_redis_url():
     if config.REDIS_MODE == "managed":
-        return f"redis://{config.MANAGED_REDIS_HOST}:{config.MANAGED_REDIS_PORT}"
+        return f"engine-redis://{config.MANAGED_REDIS_HOST}:{config.MANAGED_REDIS_PORT}"
     else:
-        return f"redis://redis:{config.REDIS_PORT}"
+        return f"redis://engine-redis:{config.REDIS_PORT}"

@@ -11,5 +11,7 @@ pgvector
 sqlmodel
 pydantic
 httpx
-opol
+opol==0.1.34
 pytest
+google-generativeai
+instructor

@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y git wget gnupg2 supervisor
 RUN pip install uv
 
 # Copy the requirements.txt file
-COPY services/scraper-service/requirements.txt .
+COPY services/service-scraper/requirements.txt .
 RUN uv pip install --no-cache-dir -r requirements.txt
 
 # Install Google Chrome
@@ -24,7 +24,7 @@ RUN playwright install
 COPY ../../core/ ./core
 
 # Copy the scraper service files
-COPY services/scraper-service/ .
+COPY services/service-scraper/ .
 
 # Copy the scraping script
 COPY flows/scraping/ .

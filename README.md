@@ -1,4 +1,4 @@
-![SSARE](.github/media/opol.png)
+![opol](.github/media/opol.png)
 
 **On a mission to find the #NeedleInTheHayStack**
 

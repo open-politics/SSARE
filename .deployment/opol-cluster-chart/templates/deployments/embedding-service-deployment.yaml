@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: embedding-service
+  name: service-embeddings
   namespace: {{ .Values.namespace }}
 spec:
   replicas: {{ .Values.replicaCount.embeddingService }}
   selector:
     matchLabels:
-      app: embedding-service
+      app: service-embeddings
   template:
     metadata:
       labels:
-        app: embedding-service
+        app: service-embeddings
     spec:
       containers:
-        - name: embedding-service
+        - name: service-embeddings
           image: {{ .Values.image.embeddingService }}
           ports:
             - containerPort: 420
@@ -35,4 +35,4 @@ spec:
               value: "{{ .Values.env.config.PREFECT_API_URL }}"
             # Add other environment variables as needed
           dependsOn:
-            - postgres-service
+            - service-postgres

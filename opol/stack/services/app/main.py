@@ -22,6 +22,9 @@ from jinja2 import Environment, FileSystemLoader
 from core.service_mapping import ServiceConfig
 from core.utils import get_redis_url
 
+from flows.orchestration import produce_flags, create_embedding_jobs, create_entity_extraction_jobs, create_geocoding_jobs, create_classification_jobs
+from flows.orchestration import store_raw_contents, store_contents_with_embeddings, store_contents_with_entities, store_contents_with_geocoding, store_contents_with_classification
+
 
 templates = Jinja2Templates(directory="templates")
 config = ServiceConfig()
@@ -50,17 +53,13 @@ async def healthcheck():
 async def service_health(request: Request):
     health_status = {}
     services_to_check = [
-        "app",
-        "postgres-service",
-        "embedding-service",
-        "scraper-service",
-        "r2r",
-        "rag-service",
-        "entity-service",
-        "geo-service",
+        "app-opol-core",
+        "service-postgres",
+        "service-embeddings",
+        "service-scraper",
+        "service-entities",
+        "service-geo",
         "ollama",
-        "liteLLM",
-        "classification-service"
     ]
     async with httpx.AsyncClient() as client:
         for service in services_to_check:
@@ -98,7 +97,7 @@ async def read_root(request: Request):
 @app.get("/dashboardx", response_class=HTMLResponse)
 async def read_root(background_tasks: BackgroundTasks, request: Request, query: str = "culture and arts"):
     try:
-        postgres_service_url = f"{config.service_urls['postgres-service']}/contents"
+        postgres_service_url = f"{config.service_urls['service-postgres']}/contents"
         
         # Add the query task to the background
         background_tasks.add_task(fetch_contents, postgres_service_url, query, request)
@@ -152,7 +151,7 @@ async def search_contents(
     skip: int = 0,
     limit: int = 10
 ):
-    postgres_service_url = f"{config.service_urls['postgres-service']}/contents"
+    postgres_service_url = f"{config.service_urls['service-postgres']}/contents"
     async with httpx.AsyncClient() as client:
         response = await client.get(
             postgres_service_url,
@@ -174,7 +173,7 @@ async def search_contents(
 async def outward_irrelevant_articles(request: Request):
     """Fetch and display articles marked as outward/irrelevant."""
     try:
-        postgres_service_url = f"{config.service_urls['postgres-service']}/outward_irrelevant"
+        postgres_service_url = f"{config.service_urls['service-postgres']}/outward_irrelevant"
         async with httpx.AsyncClient() as client:
             response = await client.get(postgres_service_url)
 
@@ -197,7 +196,7 @@ async def get_pipeline(request: Request, pipeline_name: str):
             "output": "Raw Contents",
             "steps": [
                 {"name": "produce_flags", "label": "1. Produce Flags"},
-                {"name": "create_scrape_jobs", "label": "2. Scrape"},
+                {"name": "scrape_sources", "label": "2. Scrape"},
                 {"name": "store_raw_contents", "label": "3. Store Raw Contents"}
             ]
         },
@@ -271,50 +270,64 @@ from flows.orchestration import geocode_contents
 async def trigger_step(step_name: str, batch_size: int = Query(50, ge=1, le=100)):
     try:
         # Add context initialization
+        logger.info(f"Triggering step: {step_name}")
         redis_conn = await setup_redis_connection()
 
-        # Only relevant flows
         saving_steps = {
-            "store_raw_contents": "save-raw-contents-flow/save-raw-contents",
-            "store_contents_with_embeddings": "save-contents-with-embeddings-flow/save-contents-with-embeddings",
-            "store_contents_with_entities": "save-contents-with-entities-flow/save-contents-with-entities",
-            "store_contents_with_geocoding": "save-geocoded-contents-flow/save-geocoded-contents",
-            "store_contents_with_classification": "save-contents-with-classification-flow/save-contents-with-classification"
+            "store_raw_contents": store_raw_contents,
+            "store_contents_with_embeddings": store_contents_with_embeddings,
+            "store_contents_with_entities": store_contents_with_entities,
+            "store_contents_with_geocoding": store_contents_with_geocoding,
+            "store_contents_with_classification": store_contents_with_classification
         }
 
-
-        # Let all creation steps call the aggregated one
         job_creation_steps = {
-            "produce_flags": "produce-flags-flow/produce-flags-deployment",
-            "create_scrape_jobs": "scrape-sources-deployment",
-            "create_embedding_jobs": "create-embedding-jobs",
-            "create_entity_extraction_jobs": "create-entity-extraction-jobs",
-            "create_geocoding_jobs": "create-geocoding-jobs",
-            "create_classification_jobs": "create-classification-jobs"
+            "produce_flags": produce_flags,
+            "create_embedding_jobs": create_embedding_jobs,
+            "create_entity_extraction_jobs": create_entity_extraction_jobs,
+            "create_geocoding_jobs": create_geocoding_jobs,
+            "create_classification_jobs": create_classification_jobs
         }
-
+    
         process_steps = {
-            "scrape_sources": "Scrape Sources Flow/scrape-sources-deployment",
-            "generate_embeddings": "generate-embeddings-flow/generate-embeddings-deployment",
-            "extract_entities": "extract-entities-flow/extract-entities-deployment",
-            "classify_contents": "classify-contents-deployment",
-            "geocode_contents": "geocode-locations-flow/geocode-locations-deployment"
+            "scrape_sources": "scrape-newssites-flow/scraping",
+            "generate_embeddings": "generate-embeddings-flow/embeddings",
+            "extract_entities": "extract-entities-flow/entities",
+            "classify_contents": "classify-contents-flow/classification",
+            "geocode_contents": "geocode-locations-flow/geocoding"
         }
 
-        if step_name in saving_steps:
-            deployment_name = saving_steps[step_name]
-        elif step_name in job_creation_steps:
-            # Always create jobs for all
-            deployment_name = "create-jobs-flow/create-jobs"
+        if step_name in job_creation_steps:
+            job_creation_function = job_creation_steps[step_name]
+            await job_creation_function()
+            response_message = f"Function '{job_creation_function.__name__}' executed successfully."
+            deployment_id = None
+        elif step_name in saving_steps:
+            # Directly call the Python function
+            saving_function = saving_steps[step_name]
+            await saving_function()  # Ensure the function is awaitable if it's async
+            response_message = f"Function '{saving_function.__name__}' executed successfully."
+            deployment_id = None
         elif step_name in process_steps:
             deployment_name = process_steps[step_name]
-        
-        exec = subprocess.run(["prefect", "deployment", "run", deployment_name], check=True)
-    
+            subprocess.run(["prefect", "deployment", "run", deployment_name], check=True)
+            response_message = f"Prefect deployment '{deployment_name}' triggered successfully."
+            deployment_id = None
+        else:
+            raise HTTPException(status_code=404, detail=f"Invalid step name: {step_name}")
 
         await redis_conn.aclose()  # Clean up
-        return {"message": f"Step '{step_name}' completed successfully", "deployment_id": exec.id}
+        
+        return {
+            "message": response_message,
+            "deployment_id": deployment_id  # This can be updated based on actual Prefect response
+        }
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Prefect command failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to trigger Prefect deployment: {e}")
     except Exception as e:
+        logger.error(f"Error in trigger_step: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 ## Redis Channel Management

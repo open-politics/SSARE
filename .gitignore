@@ -24,11 +24,13 @@ package.json
 skaffold.yaml
 opol/textgrad
 .env
+.env.local
 backups/
 credentials/
-commands.txt
+commands.sh
 helm/values.yaml
 z_dev_scripts
+prefect.yaml
 
 opol/opol/stack/services.sh
 opol/opol/stack/flows.sh

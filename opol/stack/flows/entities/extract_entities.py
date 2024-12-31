@@ -1,185 +1,187 @@
 import json
 import logging
-from typing import List, Tuple
+import re
+import string
+from typing import List, Tuple, Set
+
 from redis import Redis
-from core.utils import logger, UUIDEncoder, get_redis_url
+from prefect import flow, task
+from redis.exceptions import RedisError
+
 from core.models import Content
-from prefect import task, flow
-from flair.data import Sentence
-from flair.models import SequenceTagger
-from rich.console import Console
-from rich.table import Table
-import os
-import re  # Import regex for normalization
+from core.utils import logger, UUIDEncoder, get_redis_url
 from gliner import GLiNER
 
-# Global variable to store the NER model
-ner_tagger = None
-console = Console()
+# Initialize logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class EntityExtractor:
+    def __init__(self, model_name: str = "EmergentMethods/gliner_medium_news-v2.1"):
+        self.ner_tagger = self.load_model(model_name)
+        logger.info("EntityExtractor initialized successfully.")
+
+    @staticmethod
+    def load_model(model_name: str) -> GLiNER:
+        try:
+            logger.info(f"Loading NER model: {model_name}")
+            return GLiNER.from_pretrained(model_name)
+        except Exception as e:
+            logger.error(f"Failed to load NER model '{model_name}': {e}")
+            raise
+
+    @staticmethod
+    def normalize_entity(text: str) -> str:
+        """Normalize entity text by removing possessive endings."""
+        return re.sub(r"’s$|\'s$", "", text).strip()
+
+    @staticmethod
+    def clean_text(text: str) -> str:
+        """Remove unwanted characters and normalize whitespace."""
+        text = text.translate(str.maketrans('', '', string.punctuation))
+        text = re.sub(r'\s+', ' ', text)
+        return text.strip()
+
+    def predict_entities(self, text: str, labels: List[str]) -> List[Tuple[str, str]]:
+        max_length = 512  # Adjust based on model's capabilities
+        entities = []
+
+        logger.debug(f"Starting NER prediction on text of length {len(text)}")
+
+        for start in range(0, len(text), max_length):
+            chunk = text[start:start + max_length]
+            chunk_entities = self.ner_tagger.predict_entities(chunk, labels)
+            logger.debug(f"Chunk {start//max_length + 1}: Extracted {len(chunk_entities)} entities.")
+            entities.extend(chunk_entities)
+
+        # Directly return all extracted entities without filtering
+        all_entities = [
+            (entity["text"], entity["label"])
+            for entity in entities
+        ]
+
+        logger.debug(f"Total entities extracted: {len(all_entities)}")
+        return all_entities
 
 @task(retries=3, retry_delay_seconds=60, log_prints=True, cache_policy=None)
-def retrieve_contents_from_redis(batch_size: int) -> List[Content]:
-    redis_conn = Redis.from_url(get_redis_url(), db=2, decode_responses=True)
+def retrieve_contents(batch_size: int) -> List[Content]:
     try:
+        redis_conn = Redis.from_url(get_redis_url(), db=2, decode_responses=True)
         batch = redis_conn.lrange('contents_without_entities_queue', 0, batch_size - 1)
+        if not batch:
+            logger.info("No contents found in the queue.")
+            return []
         redis_conn.ltrim('contents_without_entities_queue', batch_size, -1)
-        return [Content(**json.loads(content)) for content in batch]
+        contents = [Content(**json.loads(content)) for content in batch]
+        logger.info(f"Retrieved {len(contents)} contents from Redis.")
+        return contents
+    except RedisError as e:
+        logger.error(f"Redis error: {e}")
+        return []
     finally:
         redis_conn.close()
 
-def normalize_entity(text: str) -> str:
-    """Normalize entity text by removing possessive endings."""
-    return re.sub(r"’s$|\'s$", "", text).strip()
-
 @task(log_prints=True)
-def predict_ner_tags(text: str) -> List[Tuple[str, str]]:
-    global ner_tagger
-    if ner_tagger is None:
-        ner_tagger = GLiNER.from_pretrained("EmergentMethods/gliner_medium_news-v2.1")
-    
-    labels = ["person", "location", "geopolitical_entity", "event", "organization"]
-    
-    max_length = 512  # Adjust this based on your model's capabilities and requirements
-    entities = []
-    
-    # Process text in chunks manually
-    for i in range(0, len(text), max_length):
-        chunk = text[i:i + max_length]
-        chunk_entities = ner_tagger.predict_entities(chunk, labels)
-        entities.extend(chunk_entities)
-    
-    filtered_entities = [
-        (entity["text"], entity["label"]) 
-        for entity in entities 
-        if entity["label"] in ["person", "geopolitical_entity", "organization"]
-    ]
-    
-    return filtered_entities
+def process_content(content: Content, extractor: EntityExtractor) -> Tuple[Content, List[Tuple[str, str]], Set[str], List[str]]:
+    title = extractor.clean_text(content.title) if content.title else ""
+    text_content = extractor.clean_text(content.text_content) if content.text_content else ""
+    full_text = f"{title}. {text_content}".strip()
+    logger.debug(f"Processing Content ID: {content.id} with text length: {len(full_text)}")
 
-@task(log_prints=True)
-def merge_similar_entities(entities: List[Tuple[str, str]], title_entities_texts: List[str]) -> List[Tuple[str, str]]:
-    merged_entities = {}
+    entities = extractor.predict_entities(full_text, labels=["person", "location", "geopolitical_entity", "organization"])
+    logger.debug(f"Extracted Entities: {entities}")
+
+    title_entities = extractor.predict_entities(title, labels=["location", "geopolitical_entity"]) if title else []
+    logger.debug(f"Title Entities: {title_entities}")
+
+    title_locations = {extractor.normalize_entity(text) for text, label in title_entities if label in {"location", "geopolitical_entity"}}
+    title_entities_texts = [text for text, _ in title_entities]
+
+    merged_entities = merge_entities(entities, extractor, title_entities_texts)
+    logger.debug(f"Merged Entities: {merged_entities}")
+
+    primary_locations, top_entities_texts = categorize_entities(merged_entities, title_locations)
+    logger.debug(f"Primary Locations: {primary_locations}, Top Entities: {top_entities_texts}")
+
+    return content, merged_entities, primary_locations, top_entities_texts
+
+def merge_entities(entities: List[Tuple[str, str]], extractor: EntityExtractor, title_entities_texts: List[str]) -> List[Tuple[str, str]]:
+    entity_counts = {}
     for text, label in entities:
-        normalized_text = normalize_entity(text)
+        normalized_text = extractor.normalize_entity(text)
         key = (normalized_text, label)
-        if key in merged_entities:
-            merged_entities[key] += 1
-        else:
-            merged_entities[key] = 1
-    # Filter out entities that appear only once unless they're in the headline
-    filtered_entities = [
-        (entity, label) for (entity, label), count in merged_entities.items() 
-        if count > 1 or entity in title_entities_texts
+        entity_counts[key] = entity_counts.get(key, 0) + 1
+
+    # Remove filtering conditions; include all entities
+    merged_entities = [
+        (entity, label) for (entity, label), count in entity_counts.items()
     ]
-    return filtered_entities
+    logger.debug(f"Merged entities count: {len(merged_entities)}")
+    return merged_entities
 
-@task(log_prints=True)
-def process_content(content: Content) -> Tuple[Content, List[Tuple[str, str]], set, List[str]]:
-    full_text = ""
-    if content.title:
-        full_text += content.title + " "
-    if content.text_content:
-        full_text += content.text_content
-    entities = predict_ner_tags(full_text.strip())
-    
-    # Automatically include locations from the title as top locations
-    title_entities = predict_ner_tags(content.title.strip()) if content.title else []
-    title_locations = {entity[0] for entity in title_entities if entity[1] in ['location', 'geopolitical_entity']}
-    title_entities_texts = [entity[0] for entity in title_entities]
-
-    # Merge similar entities
-    entities = merge_similar_entities(entities, title_entities_texts)
-    
-    # Count occurrences of location entities and all entities
+def categorize_entities(merged_entities: List[Tuple[str, str]], title_locations: Set[str]) -> Tuple[Set[str], List[str]]:
     location_counts = {}
     entity_counts = {}
-    for entity in entities:
-        if entity[1] in ['location', 'geopolitical_entity']:
-            location_counts[entity[0]] = location_counts.get(entity[0], 0) + 1
-        # Count all entities for top_entities
-        entity_counts[entity[0]] = entity_counts.get(entity[0], 0) + 1
-    
-    # Ensure title locations are included in location counts with higher priority
+
+    for entity, label in merged_entities:
+        if label in {"location", "geopolitical_entity"}:
+            location_counts[entity] = location_counts.get(entity, 0) + 1
+        entity_counts[entity] = entity_counts.get(entity, 0) + 1
+
     for loc in title_locations:
-        location_counts[loc] = location_counts.get(loc, 0) + 10  # Adding a weight of 10 for title locations
+        location_counts[loc] = location_counts.get(loc, 0) + 10  # Boost title locations
 
-    # Sort locations by count and prioritize those in the title
-    top_locations_sorted = sorted(location_counts.items(), key=lambda item: (item[0] in title_locations, item[1]), reverse=True)
-    primary_locations = set()
-    for loc, _ in top_locations_sorted:
-        if loc in title_locations:
-            primary_locations.add(loc)
-    for loc, _ in top_locations_sorted:
-        if len(primary_locations) < 2:
-            primary_locations.add(loc)
-        else:
-            break
+    sorted_locations = sorted(location_counts.items(), key=lambda item: (item[0] in title_locations, item[1]), reverse=True)
+    primary_locations = {loc for loc, _ in sorted_locations[:2]}
 
-    # Identify top entities (e.g., top 5), prioritizing title entities
-    top_entities = [entity for entity in title_entities_texts if entity in entity_counts]
-    # Add entities that have a count greater than 1
-    additional_top_entities = [
-        entity for entity, count in entity_counts.items() 
+    top_entities = list(dict.fromkeys([
+        entity for entity in title_locations if entity in entity_counts
+    ]))
+    additional_entities = [
+        entity for entity, count in entity_counts.items()
         if count > 1 and entity not in top_entities
     ]
-    top_entities.extend(sorted(additional_top_entities, key=lambda e: entity_counts[e], reverse=True)[:5 - len(top_entities)])
-
-    # Remove duplicates and ensure entities exist in entity_counts
-    top_entities_texts = list(dict.fromkeys(top_entities))  # Preserves order and removes duplicates
-
-    return (content, entities, primary_locations, top_entities_texts)
+    top_entities.extend(sorted(additional_entities, key=lambda e: entity_counts[e], reverse=True)[:5 - len(top_entities)])
+    logger.debug(f"Primary Locations: {primary_locations}, Top Entities: {top_entities}")
+    return primary_locations, top_entities
 
 @task(log_prints=True, cache_policy=None)
-def push_contents_with_entities(contents_with_entities: List[Tuple[Content, List[Tuple[str, str]], set, List[str]]]):
-    redis_conn = Redis.from_url(get_redis_url(), db=2, decode_responses=True)
+def push_entities(contents_with_entities: List[Tuple[Content, List[Tuple[str, str]], Set[str], List[str]]]):
     try:
+        redis_conn = Redis.from_url(get_redis_url(), db=2, decode_responses=True)
+        pipe = redis_conn.pipeline()
         for content, entities, primary_locations, top_entities_texts in contents_with_entities:
-            entities_data = [{"text": entity[0], "tag": entity[1]} for entity in entities]
-            content_dict = content.dict()
-            content_dict['entities'] = entities_data
-            content_dict['top_locations'] = list(primary_locations)
-            content_dict['top_entities'] = top_entities_texts
-            redis_conn.lpush('contents_with_entities_queue', json.dumps(content_dict, cls=UUIDEncoder))
-            logger.info(f"Content with entities pushed to queue: {content.url}")
-    except Exception as e:
-        logger.error(f"Error pushing contents with entities to queue: {str(e)}")
+            content_data = content.model_dump()
+            content_data.update({
+                'entities': [{"text": text, "tag": label} for text, label in entities],
+                'top_locations': list(primary_locations),
+                'top_entities': top_entities_texts
+            })
+            pipe.lpush('contents_with_entities_queue', json.dumps(content_data, cls=UUIDEncoder))
+            logger.info(f"Pushed Content ID {content.id} to Redis queue.")
+        pipe.execute()
+    except RedisError as e:
+        logger.error(f"Redis error while pushing entities: {e}")
     finally:
         redis_conn.close()
 
 @flow(log_prints=True)
 def extract_entities_flow(batch_size: int = 50):
-    logger.info("Starting entity extraction process")
-    contents = retrieve_contents_from_redis(batch_size=batch_size)
-    if contents:
-        # futures = [process_content(content) for content in contents]
-        # contents_with_entities = [future.result() for future in futures]
-        
-        contents_with_entities = [process_content(content) for content in contents]
-        push_contents_with_entities(contents_with_entities)
+    logger.info("Starting entity extraction flow.")
+    contents = retrieve_contents(batch_size=batch_size)
+    if not contents:
+        logger.info("No contents to process. Exiting flow.")
+        return
 
-        # Rich log the headlines, top entities, and locations
-        table = Table(title="Entity Extraction Results")
-        table.add_column("Headline", style="cyan")
-        table.add_column("Top Entities", style="magenta")
-        table.add_column("Primary Locations", style="yellow")
-        
-        for content, _, primary_locations, top_entities_texts in contents_with_entities:
-            headline = content.title if content.title else "No Title"
-            top_entities_str = ", ".join(top_entities_texts)
-            primary_locations_str = ", ".join(primary_locations)
-            table.add_row(headline, top_entities_str, primary_locations_str)
-        
-        console.print(table)
-        
-        logger.info(f"Entities extracted for {len(contents)} contents.")
-    else:
-        logger.info("No contents found in the queue.")
-    logger.info("Entity extraction process completed")
-    return {"message": "Entity extraction completed"}
+    extractor = EntityExtractor()
+    processed_contents = [process_content(content, extractor) for content in contents]
+    logger.error(f"Processed contents: {processed_contents[:2]}")
+    push_entities(processed_contents)
+    logger.info("Entity extraction flow completed successfully.")
 
 if __name__ == "__main__":
     extract_entities_flow.serve(
         name="extract-entities-deployment",
         cron="0/7 * * * *", # every 7 minutes
-        parameters={"batch_size": 50}
+        parameters={"batch_size": 20}
     )

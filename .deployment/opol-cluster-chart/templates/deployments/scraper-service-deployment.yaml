@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: scraper-service
+  name: service-scraper
   namespace: {{ .Values.namespace }}
 spec:
   replicas: {{ .Values.replicaCount.scraperService }}
   selector:
     matchLabels:
-      app: scraper-service
+      app: service-scraper
   template:
     metadata:
       labels:
-        app: scraper-service
+        app: service-scraper
     spec:
       containers:
-        - name: scraper-service
+        - name: service-scraper
           image: {{ .Values.image.scraperService }}
           ports:
             - containerPort: 8081

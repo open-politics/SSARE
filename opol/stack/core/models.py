@@ -1,5 +1,5 @@
 from typing import List, Optional, Union, Literal
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlmodel import Field, SQLModel, Relationship
 from sqlalchemy import Column, Text, ARRAY
 from pgvector.sqlalchemy import Vector
@@ -55,7 +55,7 @@ class Content(BaseModel, table=True):
     text_content: Optional[str] = Field(default=None, sa_column=Column(Text))
 
     ## Content Metadata
-    insertion_date: str = Field(default_factory=lambda: datetime.utcnow().isoformat(), index=True)
+    insertion_date: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat(), index=True)
     content_language: Optional[str] = Field(default=None, index=True)
     author: Optional[str] = Field(default=None, index=True)
     publication_date: Optional[str] = Field(default=None, index=True)
@@ -65,7 +65,7 @@ class Content(BaseModel, table=True):
     meta_summary: Optional[str] = Field(default=None, sa_column=Column(Text))
 
     # Embeddings at the content level
-    embeddings: Optional[List[float]] = Field(default=None, sa_column=Column(Vector(768)))
+    embeddings: Optional[List[float]] = Field(default=None, sa_column=Column(Vector(384)))
 
     # Separate Relationships
     entities: List["Entity"] = Relationship(
@@ -115,7 +115,7 @@ class VideoFrame(SQLModel, table=True):
     frame_number: int = Field(primary_key=True)
     frame_url: str = Field(unique=True, index=True)
     timestamp: float = Field(index=True)
-    embeddings: Optional[List[float]] = Field(default=None, sa_column=Column(Vector(768)))
+    embeddings: Optional[List[float]] = Field(default=None, sa_column=Column(Vector(384)))
 
     # Relationships
     media_details: MediaDetails = Relationship(back_populates="video_frames")
@@ -125,7 +125,7 @@ class Image(SQLModel, table=True):
     media_details_id: uuid.UUID = Field(foreign_key="mediadetails.id", index=True)
     image_url: str = Field(unique=True, index=True)
     caption: Optional[str] = Field(default=None)
-    embeddings: Optional[List[float]] = Field(default=None, sa_column=Column(Vector(768)))
+    embeddings: Optional[List[float]] = Field(default=None, sa_column=Column(Vector(384)))
 
     # Relationships
     media_details: MediaDetails = Relationship(back_populates="images")
@@ -135,7 +135,7 @@ class ContentChunk(SQLModel, table=True):
     content_id: uuid.UUID = Field(foreign_key="content.id", index=True)
     chunk_number: int = Field(index=True)
     text: str = Field(sa_column=Column(Text))
-    embeddings: Optional[List[float]] = Field(default=None, sa_column=Column(Vector(768)))
+    embeddings: Optional[List[float]] = Field(default=None, sa_column=Column(Vector(384)))
 
     # Relationships
     content: Content = Relationship(back_populates="chunks")

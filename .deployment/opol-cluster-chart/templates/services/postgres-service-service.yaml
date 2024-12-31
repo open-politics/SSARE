@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: postgres-service
+  name: service-postgres
   namespace: {{ .Values.namespace }}
 spec:
   type: {{ .Values.service.postgresService.type }}
@@ -9,4 +9,4 @@ spec:
     - port: {{ .Values.service.postgresService.port }}
       targetPort: {{ .Values.service.postgresService.targetPort }}
   selector:
-    app: postgres-service
+    app: service-postgres

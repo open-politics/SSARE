@@ -2,20 +2,21 @@ FROM python:3.11-slim AS base
 
 WORKDIR /app
 
-COPY services/embedding-service/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+ENV UV_SYSTEM_PYTHON=1
 
-ENV PYTHONPATH=/.
+RUN apt-get update && apt-get install -y curl git
 
-RUN apt-get update && apt-get install -y curl
+RUN pip install uv
+
+COPY services/service-embeddings/requirements.txt .
+RUN uv pip install --no-cache-dir -r requirements.txt
 
 COPY ../../core/ ./core
 
-COPY flows/embeddings/tests/ ./
+COPY flows/embeddings/ .
 
-COPY flows/embeddings/generate_embeddings_onebatch.py .
+COPY flows/embeddings/tests/ ./
 
 COPY flows/embeddings/start.sh .
 
 RUN chmod +x start.sh
-CMD ["./start.sh"]
