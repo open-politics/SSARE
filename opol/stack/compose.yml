@@ -178,6 +178,7 @@ services:
   worker-prefect:
     image: openpoliticsproject/worker-base:latest
     command: ["prefect", "worker", "start", "--pool", "docker-pool"]
+    restart: always
     env_file:
       - .env
     build:

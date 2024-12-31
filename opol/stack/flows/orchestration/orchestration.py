@@ -214,7 +214,6 @@ async def create_jobs_flow():
     try:
         # Schedule all job creations
         await produce_flags()
-        await create_scrape_jobs()
         await create_embedding_jobs()
         await create_entity_extraction_jobs()
         await create_geocoding_jobs()
@@ -223,21 +222,17 @@ async def create_jobs_flow():
         logger.error(f"Error in create_jobs_flow: {e}")
         raise e
     
-@flow(name="trigger-processing-flow")
-async def trigger_processing_flow():
-    await create_jobs_flow()
-    await geocode_contents()
-    await extract_entities()
-    await classify_contents()
-
-
 @flow(name="save-all-flows")
 async def save_all_flows():
-    await save_scraped_contents()
-    await save_contents_with_embeddings_flow()
-    await save_contents_with_entities_flow()
-    await save_geocoded_contents_flow()
-    await save_contents_with_classification_flow()
+    try:
+        await save_scraped_contents()
+        await save_contents_with_embeddings_flow()
+        await save_contents_with_entities_flow()
+        await save_geocoded_contents_flow()
+        await save_contents_with_classification_flow()
+    except Exception as e:
+        logger.error(f"Error in save_all_flows: {e}")
+        raise e
 
 # ======================
 # Deployment Definitions
@@ -246,5 +241,4 @@ async def save_all_flows():
 @flow(name="meta-flow")
 async def meta_flow():
     await create_jobs_flow()
-    await trigger_processing_flow()
     await save_all_flows()
