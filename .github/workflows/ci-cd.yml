@@ -101,10 +101,10 @@ jobs:
       - name: Build and Push Scraper Service
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/service-scraping:${{ github.sha }} -f ./services/service-scraping/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/service-scraping:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/service-scraping:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/service-scraping:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/service-scraping:latest
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/service-scraper:${{ github.sha }} -f ./services/service-scraper/Dockerfile .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/service-scraper:${{ github.sha }}
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/service-scraper:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/service-scraper:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/service-scraper:latest
       
 
 
