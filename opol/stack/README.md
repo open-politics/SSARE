@@ -69,6 +69,10 @@ For local development the flows.compose.yml is used:
 docker compose -f flows.compose.yml up flow-embeddings --build
 ```
 
+You can use your docker images or start building your own and adding your flow code definitions in the flows folder.
+Invoke them in the prefect.yaml. 
+Make sure that how the file is mounted in the docker container e.g. "flows/classification/classification_flow.py" is identical to from where locally the prefect.yaml is executed/ deployed from (run bash deploy-flows.sh from opol/stack).
+
 
 
 ### Core Services
