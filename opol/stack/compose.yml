@@ -16,6 +16,7 @@ services:
     depends_on:
       - service-scraper
       - service-postgres
+      - service-geo
     networks:
       - opol-app-stack
       - default

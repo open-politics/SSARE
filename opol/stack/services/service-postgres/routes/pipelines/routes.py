@@ -315,11 +315,22 @@ async def store_contents_with_entities(session: AsyncSession = Depends(get_sessi
                                 entity = result.scalar_one_or_none()
                                 
                                 if not entity:
-                                    entity = Entity(name=entity_name, entity_type="unknown")  # Default type if not known
+                                    entity = Entity(name=entity_name, entity_type="unknown")
                                     session.add(entity)
                                     await session.flush()
                                 
-                                # Link top entities
+                                # Check if the top content entity already exists
+                                existing_top_content_entity = await session.execute(
+                                    select(TopContentEntity).where(
+                                        TopContentEntity.content_id == content.id,
+                                        TopContentEntity.entity_id == entity.id
+                                    )
+                                )
+                                if existing_top_content_entity.scalar_one_or_none():
+                                    logger.info(f"TopContentEntity for content {content.url} and entity {entity.name} already exists. Skipping insertion.")
+                                    continue
+
+                                # Insert new top content entity
                                 content_entity = TopContentEntity(content_id=content.id, entity_id=entity.id)
                                 session.add(content_entity)
 
