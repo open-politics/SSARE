@@ -76,7 +76,7 @@ jobs:
       - name: Build and Push Geo Service
         run: |
           cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/service-geo:${{ github.sha }} -f ./services/service-geocoding/Dockerfile .
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/service-geo:${{ github.sha }} -f ./services/service-geo/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/service-geo:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/service-geo:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/service-geo:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/service-geo:latest
