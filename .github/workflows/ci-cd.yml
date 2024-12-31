@@ -55,23 +55,7 @@ jobs:
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-entities:${{ github.sha }}
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flow-entities:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flow-entities:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-entities:latest
-      
-      
-      - name: Build and Push Orchestration Flow
-        run: |
-          cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flow-orchestration:${{ github.sha }} -f ./flows/orchestration/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-orchestration:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flow-orchestration:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flow-orchestration:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-orchestration:latest
 
-      - name: Build and Push Classification Flow
-        run: |
-          cd opol/stack
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/flow-classification:${{ github.sha }} -f ./flows/classification/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-classification:${{ github.sha }}
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/flow-classification:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/flow-classification:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/flow-classification:latest
 
       # - name: Build and Push Custom LiteLLM
       #   run: |
